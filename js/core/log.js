@@ -21,6 +21,11 @@ function safeJson(v) {
 }
 
 export function installLog(version) {
+  const origInfo = console.info.bind(console);
+  console.info = (...args) => {
+    origInfo(...args);
+    if (typeof args[0] === 'string' && args[0].startsWith('[fusion]')) write('info', args);
+  };
   for (const level of ['error', 'warn']) {
     const orig = console[level].bind(console);
     console[level] = (...args) => {

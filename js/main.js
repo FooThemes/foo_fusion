@@ -83,7 +83,7 @@ async function boot() {
 
   await view.load();
   document.body.classList.add('ready');
-  logInfo(`ready in ${Math.round(performance.now() - t0)} ms, ${innerWidth}x${innerHeight} @${devicePixelRatio}x: ${view.playlist?.name} (${view.playlist?.trackCount} tracks, ${view.groups.length} groups)`);
+  logInfo(`ready in ${Math.round(performance.now() - t0)} ms, ${innerWidth}x${innerHeight} @${devicePixelRatio}x: ${view.playlist?.name} (${view.playlist?.trackCount} tracks, ${view.groups.length} groups)`, view.playlist);
   tryCall('window.setTitle', { title: 'foobar2000' });
 }
 

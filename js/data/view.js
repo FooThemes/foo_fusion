@@ -131,10 +131,18 @@ class View extends Emitter {
       if (!pl.isLocked) {
         await tryCall('playlist.sort', { playlist: pl.index, pattern, descending: desc });
         store.update('appliedSort', { [pl.guid]: sortKey + (desc ? ':desc' : '') });
-      } else if (await this.#resortAutoplaylist(pl, pattern)) {
-        store.update('appliedSort', { [pl.guid]: sortKey });
+        this.#ownSortUntil = performance.now() + 600;
+      } else {
+        // foobar2000 refills a re-created autoplaylist in the background; let
+        // its change events trigger the reload instead of ignoring them.
+        this.#ownSortUntil = 0;
+        if (await this.#resortAutoplaylist(pl, pattern)) {
+          store.update('appliedSort', { [pl.guid]: sortKey });
+          // The refill doesn't always announce itself; look again shortly.
+          setTimeout(() => this.load(), 400);
+          setTimeout(() => this.load(), 1500);
+        }
       }
-      this.#ownSortUntil = performance.now() + 600;
     }
     // Autoplaylists are locked against reordering, so "descending" is applied
     // to what we show rather than to the playlist itself.
@@ -196,8 +204,12 @@ class View extends Emitter {
     const query = pl.name === COLLECTION ? 'ALL' : pl.name === FAVORITES ? store.get('favouritesQuery') : null;
     if (!query) return false;
     const released = await tryCall('playlist.removeAutoplaylist', { playlist: pl.index });
-    if (!released || released.source === 'dui') return false;
-    const res = await tryCall('playlist.convertToAutoplaylist', { playlist: pl.index, query, sort: pattern, keepSorted: false });
+    if (!released || released.source === 'dui') {
+      console.warn('[fusion] could not release autoplaylist for sorting:', released);
+      return false;
+    }
+    const res = await tryCall('playlist.convertToAutoplaylist', { playlist: pl.index, query, sort: pattern, keepSorted: true });
+    if (!res) console.warn('[fusion] could not re-create autoplaylist', pl.name);
     return !!res;
   }
 

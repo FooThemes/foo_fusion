@@ -69,7 +69,10 @@ const DEFAULTS = {
   selectionBar: true,
   smoothScroll: true,
   waveformSeekbar: false,
-  sortOnOpen: true, // sort Collection/Favorites by the view's sort when opened
+  showRemaining: false, // player bar shows -time remaining instead of the length
+  dimEditionTags: true, // grey out '(Single)', '(Deluxe Edition)'… at the end of titles
+  dimWords: 'Single, EP, Deluxe, Edition, Remaster, Remastered, Live, Bonus, Expanded, Anniversary, Reissue, Demo, Acoustic, Instrumental, Mono, Version, Remix, Radio Edit',
+  sortOnOpen: true, // sort Collection/Favourites by the view's sort when opened
   favouritesQuery: 'MOOD IS "Like it"',
   folders: [], // [{ id, name, collapsed, items: [playlist GUID] }]
   autoplaylists: {}, // GUID -> { query, sort, keepSorted } for autoplaylists made or edited in Fusion
@@ -126,4 +129,9 @@ export function reset() {
   data = structuredClone(DEFAULTS);
   save();
   for (const k of Object.keys(data)) for (const fn of listeners) fn(k, data[k]);
+}
+
+/** Default value of a setting (e.g. for a "Defaults" button). */
+export function defaultOf(key) {
+  return structuredClone(DEFAULTS[key]);
 }

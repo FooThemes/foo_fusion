@@ -165,7 +165,7 @@ function showDialog(opts) {
     let mode = opts.tabs ? opts.tab || 'playlist' : 'auto';
     const name = el('input.dialog-input', { type: 'text', value: opts.name, spellcheck: false, disabled: !!opts.nameLocked });
     const query = el('input.dialog-input.mono', { type: 'text', value: opts.query, spellcheck: false, placeholder: 'e.g. GENRE HAS rock AND %rating% GREATER 3' });
-    // Collection and Favorites are kept in the view's order by Fusion's Sort
+    // Collection and Favourites are kept in the view's order by Fusion's Sort
     // menu, so their sort fields are shown but not editable here.
     const managed = !!opts.playlist && playlists.isSpecial(opts.playlist);
     const sort = el('input.dialog-input.mono', { type: 'text', value: managed ? '' : opts.sort, spellcheck: false, disabled: managed, placeholder: managed ? 'Set by the Sort menu above the albums' : 'Optional, e.g. %album artist% | %date% | %album%' });

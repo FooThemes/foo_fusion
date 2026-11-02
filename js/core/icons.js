@@ -18,8 +18,9 @@ const P = {
   more: '<circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
   heart: '<path d="M12 19.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z"/>',
   heartFill: '<path d="M12 19.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z" fill="currentColor"/>',
-  // Two filled halves split along a zigzag and tipped apart from the point.
-  heartBroken: '<defs><clipPath id="hb-l"><path d="M0 0H12V7.8L10.4 11.4L13.2 13.6L11 16.6L12 24H0z"/></clipPath><clipPath id="hb-r"><path d="M12 0H24V24H12L11 16.6L13.2 13.6L10.4 11.4L12 7.8z"/></clipPath></defs><path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z" fill="currentColor" stroke="none" clip-path="url(#hb-l)" transform="rotate(-9 12 20) translate(-0.6 0)"/><path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z" fill="currentColor" stroke="none" clip-path="url(#hb-r)" transform="rotate(9 12 20) translate(0.6 0)"/>',
+  // Two filled halves with a zigzag crack, pushed apart. Plain paths (no
+  // clip-path/mask ids), so every copy renders even inside hidden rows.
+  heartBroken: '<path d="M12 7.8A4.2 4.2 0 0 0 4.5 10c0 5.4 7.5 10 7.5 10L10.6 16.4l2.6-3-3-2.4z" fill="currentColor" stroke="none" transform="rotate(-7 12 20) translate(-1.1 0)"/><path d="M12 7.8a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10L10.6 16.4l2.6-3-3-2.4z" fill="currentColor" stroke="none" transform="rotate(7 12 20) translate(1.1 0)"/>',
   // Cog: eight teeth around a ring with a hub.
   settings: '<path d="M10.3 3.5h3.4l.5 2.4 1.6.9 2.3-.8 1.7 2.9-1.8 1.6v1.9l1.8 1.6-1.7 2.9-2.3-.8-1.6.9-.5 2.4h-3.4l-.5-2.4-1.6-.9-2.3.8-1.7-2.9 1.8-1.6v-1.9L3.7 8.9l1.7-2.9 2.3.8 1.6-.9z"/><circle cx="12" cy="12" r="2.6"/>',
   palette: '<path d="M12 4a8 8 0 1 0 0 16c1.1 0 1.6-.7 1.6-1.5 0-1-.9-1.4-.9-2.3 0-.9.7-1.4 1.6-1.4h1.9A3.8 3.8 0 0 0 20 11c0-3.9-3.6-7-8-7z"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="10.5" cy="7.8" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="7.8" r="1" fill="currentColor" stroke="none"/>',

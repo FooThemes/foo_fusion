@@ -391,3 +391,9 @@ button.heart.hate {
     animation: none;
   }
 }
+
+/* Edition tags at the end of titles: "(Single)", "(Deluxe Edition)"… */
+.dim-tag {
+  opacity: 0.5;
+  font-weight: inherit;
+}

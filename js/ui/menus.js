@@ -90,13 +90,16 @@ export function folderMenuItems(targets) {
   const guids = targets.map((t) => t.guid);
   const current = folders.folderOf(guids[0]);
   return [
-    ...folders.list.map((f) => ({ label: f.name, checked: current?.id === f.id, run: () => folders.move(guids, f.id) })),
+    ...folders.list
+      .map((f) => ({ f, path: folders.path(f.id) }))
+      .sort((a, b) => a.path.localeCompare(b.path))
+      .map(({ f, path }) => ({ label: path, checked: current?.id === f.id, run: () => folders.move(guids, f.id) })),
     folders.list.length ? '-' : null,
     {
       label: 'New folder…',
       run: async () => {
         const name = await promptText('Name this folder', 'New folder');
-        if (name) await folders.create(name, guids);
+        if (name) await folders.create(name, guids, current?.id || null);
       },
     },
     { label: 'Remove from folder', enabled: !!current, run: () => folders.move(guids, null) },
@@ -110,8 +113,24 @@ export function folderMenu(f) {
       const name = await promptText('Rename folder', f.name);
       if (name) folders.rename(f.id, name);
     } },
+    { label: 'New subfolder…', run: async () => {
+      const name = await promptText('Name this folder', 'New folder');
+      if (name) folders.create(name, [], f.id);
+    } },
+    {
+      label: 'Move to',
+      submenu: [
+        { label: 'Top level', checked: !f.parent, run: () => folders.moveFolder(f.id, null) },
+        '-',
+        ...folders.list
+          .filter((x) => x.id !== f.id && !folders.ancestors(x.id).some((a) => a.id === f.id))
+          .map((x) => ({ x, path: folders.path(x.id) }))
+          .sort((a, b) => a.path.localeCompare(b.path))
+          .map(({ x, path }) => ({ label: path, checked: f.parent === x.id, run: () => folders.moveFolder(f.id, x.id) })),
+      ],
+    },
     '-',
-    { label: 'Delete folder (keeps its playlists)', run: () => folders.remove(f.id) },
+    { label: 'Delete folder (keeps its contents)', run: () => folders.remove(f.id) },
   ]);
 }
 

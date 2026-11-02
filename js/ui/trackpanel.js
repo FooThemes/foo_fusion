@@ -5,6 +5,9 @@
 // section (header with DISCSUBTITLE, its own cover thumbnail), and picking a
 // disc shows just that one with its cover in the big art slot.
 
+import { setTitle } from './titles.js';
+import { albumColours } from '../data/albumcolours.js';
+import { splitValues } from '../data/view.js';
 import { el, clear, formatTime, formatDuration, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
@@ -158,12 +161,24 @@ export class TrackPanel {
     if (!group || group !== this.group) return;
     const head = group.head;
     const [artist, album] = group.key.split('|');
-    this.title.textContent = head?.title || album || '';
+    setTitle(this.title, head?.title || album || '');
     const total = this.#totalLength(this.rows);
     const discs = this.multiDisc ? plural(this.discs.length, 'disc') : null;
-    this.meta.textContent = [head?.artist || artist, head?.year, head?.genre, discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null].filter(Boolean).join(' · ');
-    if (head?.handle && store.get('listBackground') !== 'plain') bindArt(this.bg, head.handle, 160, ['parent', 'front']);
+    // Artist and genres link to their own pages; blank genres are left out.
+    const link = (kind, value) =>
+      el('button.tp-link', { text: value, title: kind === 'artists' ? `Show ${value}'s albums` : `Show ${value} albums`, onclick: () => view.showValue(kind, value) });
+    const parts = [];
+    const who = head?.artist || artist;
+    if (who) parts.push(link('artists', who));
+    if (head?.date || head?.year) parts.push(head.date || head.year);
+    for (const g of splitValues(head?.genre || '')) parts.push(link('genres', g));
+    for (const t of [discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null]) if (t) parts.push(t);
+    clear(this.meta);
+    parts.forEach((p, i) => this.meta.append(...(i ? [' · '] : []), p));
+    const mode = store.get('listBackground');
+    if (head?.handle && mode === 'blur') bindArt(this.bg, head.handle, 160, ['parent', 'front']);
     this.#renderCover();
+    this.#applyColours(mode === 'art' ? head?.handle : null);
     const rows = () => this.visibleRows();
     clear(this.buttons).append(
       btn('play', 'Play', () => view.play(rows()[0])),
@@ -171,6 +186,22 @@ export class TrackPanel {
       btn('queue', 'Add to queue', () => view.queueRows(rows())),
       btn('close', 'Close', () => this.grid.collapse()),
     );
+  }
+
+  // "Album colours": background and text colours taken from the cover.
+  async #applyColours(handle) {
+    const st = this.node.style;
+    const clearVars = () => ['--list-bg', '--list-text', '--list-text2', '--accent', '--accent-text'].forEach((v) => st.removeProperty(v));
+    if (!handle) return clearVars();
+    const group = this.group;
+    const pal = await albumColours(handle, this.cover);
+    if (this.group !== group) return;
+    if (!pal) return clearVars();
+    st.setProperty('--list-bg', pal.bg);
+    st.setProperty('--list-text', pal.text);
+    st.setProperty('--list-text2', pal.text2);
+    st.setProperty('--accent', pal.accent);
+    st.setProperty('--accent-text', pal.accentText);
   }
 
   #renderCover() {
@@ -330,7 +361,7 @@ function trackRow(r, t, albumArtist) {
     el('span.tp-len', { text: t ? formatTime(t.duration) : '' }),
   );
   if (t) {
-    name.textContent = t.title || t.handle.split('\\').pop();
+    setTitle(name, t.title || t.handle.split('\\').pop());
     if (t.artist && albumArtist && t.artist.toLowerCase() !== albumArtist.toLowerCase()) name.append(el('span.tp-artist', { text: ` · ${t.artist}` }));
     name.title = name.textContent;
   }

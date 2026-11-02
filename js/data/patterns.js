@@ -21,7 +21,9 @@ export const TF = {
   albumDiscTitle: "$if(%album%,%album%$if($or($greater(%totaldiscs%,1),$greater(%discnumber%,1)),' (Disc '%discnumber%[': '%discsubtitle%]')',),$if(%album artist%,'Single(s)','Unknown Album'))",
   albumArtist: "$if2(%album artist%,'Unknown Artist')",
   year: '$year(%date%)',
-  genre: "$if2(%genre%,'Unknown Genre')",
+  // Raw values for the expanded album's line: every genre (blank if none) and the full date.
+  genre: "[$meta_sep(genre,'|||')]",
+  date: '[%date%]',
 
   // Track rows.
   trackNumber: "$if2(%tracknumber%,'')",

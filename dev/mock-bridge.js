@@ -46,7 +46,7 @@ function buildLibrary() {
             album,
             albumArtist: artist,
             genre: ai % 7 === 3 ? '' : r() < 0.1 ? `${genre}; ${pick(GENRES)}` : genre,
-            date: year,
+            date: r() < 0.5 ? `${year}-0${1 + Math.floor(r() * 9)}-1${Math.floor(r() * 9)}` : year,
             trackNumber: t,
             discNumber: d,
             totalDiscs: discs,
@@ -87,7 +87,8 @@ function tfEval(pattern, t) {
     [TF.albumDiscTitle]: () => (t.totalDiscs > 1 ? `${al} (Disc ${t.discNumber})` : al),
     [TF.albumArtist]: () => aa,
     [TF.year]: () => t.date.slice(0, 4),
-    [TF.genre]: () => t.genre || 'Unknown Genre',
+    [TF.genre]: () => (t.genre || '').split(/;\s*/).filter(Boolean).join('|||'),
+    [TF.date]: () => t.date,
     [TF.trackNumber]: () => String(t.trackNumber).padStart(2, '0'),
   };
   if (map[pattern]) return map[pattern]();
@@ -335,6 +336,17 @@ export async function installMock() {
       (p.tracks || [p.track]).forEach((r) => queue.push({ ...pl.items[r], playlist: i, playlistItem: r }));
       emit('playback:queueChanged', { count: queue.length });
       return { addedCount: p.tracks?.length || 1, queueCount: queue.length };
+    },
+    'queue.setContents': (p) => {
+      const next = p.items.map((it) => {
+        if (it.queueIndex != null) return queue[it.queueIndex];
+        const [pl, i] = getPl({ playlistGuid: it.playlistGuid, playlist: it.playlist });
+        return { ...pl.items[it.item], playlist: i, playlistItem: it.item };
+      });
+      queue.length = 0;
+      queue.push(...next.filter(Boolean));
+      emit('playback:queueChanged', { count: queue.length });
+      return { queueCount: queue.length };
     },
     'queue.get': () => ({ items: queue.map((t, n) => ({ ...t, queueIndex: n })), count: queue.length }),
     'queue.getCount': () => ({ count: queue.length, hasItems: queue.length > 0 }),

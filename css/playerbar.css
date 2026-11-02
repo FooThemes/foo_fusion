@@ -274,8 +274,11 @@ body.no-sidebar #playerbar {
   flex: none;
   width: calc(var(--sidebar-w) - 40px);
   height: calc(var(--sidebar-w) - 40px);
-  margin: 12px 20px 20px;
+  margin: 20px;
   cursor: pointer;
+  /* Sits on the player bar's colour, so it reads as part of the player and
+     not as another item in the playlist list. */
+  box-shadow: 0 0 0 20px var(--bar-bg);
 }
 
 @media (max-width: 800px) {
@@ -286,4 +289,75 @@ body.no-sidebar #playerbar {
   .pb-order {
     display: none !important;
   }
+}
+
+/* Bigger like/dislike button in the player bar. */
+button.heart.pb-heart {
+  width: 36px;
+  height: 36px;
+}
+
+button.heart.pb-heart .icon {
+  width: 22px;
+  height: 22px;
+}
+
+button.heart.pb-heart.hate {
+  color: var(--bar-title);
+}
+
+/* Long title/artist: scroll to the end and back, with pauses. */
+.mq-box {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.mq-box.marquee .mq {
+  display: inline-block;
+}
+
+.mq-box:not(.marquee) {
+  text-overflow: ellipsis;
+}
+
+.mq-box.marquee .mq {
+  animation: mq var(--mq-dur, 10s) ease-in-out infinite;
+}
+
+@keyframes mq {
+  0%,
+  20% {
+    transform: translateX(0);
+  }
+  50%,
+  70% {
+    transform: translateX(var(--mq-dist));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mq-box.marquee .mq {
+    animation: none;
+  }
+}
+
+.pb-time:last-child {
+  cursor: pointer;
+}
+
+.pb-tip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 420px;
+  padding: 8px 12px;
+  background: var(--menu-bg);
+  color: #eee;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-line;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
 }

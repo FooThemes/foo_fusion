@@ -1,6 +1,7 @@
 // "Songs" view: every track of the playlist in a virtualised list with columns.
 // Rows are fetched from foobar2000 a page at a time as they scroll into view.
 
+import { setTitle } from './titles.js';
 import { el, rafThrottle, formatTime, debounce } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { view } from '../data/view.js';
@@ -119,7 +120,7 @@ export class SongList {
     node.dataset.row = row;
     const t = view.cachedTrack(row);
     const c = node.children;
-    c[1].textContent = t ? t.title || t.handle.split('\\').pop() : '';
+    setTitle(c[1], t ? t.title || t.handle.split('\\').pop() : '');
     c[2].textContent = t?.artist || '';
     c[3].textContent = t?.album || '';
     c[4].textContent = t ? (t.date || '').slice(0, 4) : '';

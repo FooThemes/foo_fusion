@@ -10,7 +10,8 @@ import { debounce } from '../core/util.js';
 import * as store from '../core/store.js';
 
 export const COLLECTION = 'Collection';
-export const FAVORITES = 'Favorites';
+export const FAVORITES = 'Favourites';
+const OLD_FAVORITES = 'Favorites'; // name used by earlier Fusion builds; renamed on start
 // Plays the Songs view of an autoplaylist in the order it's shown (foobar2000
 // can't reorder a locked playlist). Kept out of Fusion's playlist lists.
 export const PLAYBACK = 'Fusion playback';
@@ -44,6 +45,12 @@ class Playlists extends Emitter {
     await this.refresh();
     // First run: create the library playlist and show it, as the original did.
     if (!this.byName(COLLECTION)) await this.ensureCollection(true);
+    // Earlier builds spelt it "Favorites"; rename it in place (keeps its GUID).
+    const old = this.byName(OLD_FAVORITES);
+    if (old && !this.byName(FAVORITES)) {
+      await tryCall('playlist.rename', { playlist: old.index, name: FAVORITES });
+      await this.refresh();
+    }
     const refresh = debounce(() => this.refresh(), 60);
     onAny(
       ['playlist:created', 'playlist:removed', 'playlist:renamed', 'playlist:reordered', 'playlist:lockChanged', 'playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReplaced', 'playback:trackChanged', 'playback:stopped'],

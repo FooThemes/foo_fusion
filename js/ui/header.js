@@ -9,6 +9,7 @@ import { view } from '../data/view.js';
 import { player, ORDER_LABELS } from '../data/player.js';
 import { playlists } from '../data/playlists.js';
 import { showMenu, addToItems, renamePlaylist, deletePlaylist } from './menus.js';
+import { editAutoplaylist } from './autoplaylist.js';
 
 const TABS = [
   ['albums', 'Albums'],
@@ -52,6 +53,7 @@ export function mountHeader(root, app) {
       actions.append(textBtn('play', 'Play all', () => view.play(view.rowAt(0)), !has || view.total === 0));
       actions.append(textBtn('shuffle', 'Shuffle all', shuffleAll, !has));
       if (view.total) actions.append(textBtn('add', 'Add to', () => addAll(), !has));
+      if (pl.isAutoplaylist) actions.append(textBtn('autoplaylist', 'Properties', () => editAutoplaylist(pl)));
       if (!playlists.isSpecial(pl)) {
         actions.append(textBtn('rename', 'Rename', () => renamePlaylist(pl)));
         actions.append(textBtn('delete', 'Delete', () => deletePlaylist(pl)));

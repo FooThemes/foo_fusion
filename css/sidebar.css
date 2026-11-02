@@ -238,10 +238,18 @@ body.side-collapsed .side-manage {
 }
 
 /* Playlist folders */
+/* Folders: the arrow sits in the left margin, so a folder's icon lines up
+   with the playlists around it; contents indent one step per level. */
+#sidebar .pl-item {
+  position: relative;
+  padding-left: calc(18px + var(--depth, 0) * 20px);
+}
+
 .pl-folder .chev {
+  position: absolute;
+  left: calc(2px + var(--depth, 0) * 20px);
   width: 14px !important;
   height: 14px !important;
-  margin-right: -8px;
   color: var(--side-text2);
 }
 
@@ -249,9 +257,7 @@ body.side-collapsed .side-manage {
   font-weight: 600;
 }
 
-.pl-item.nested {
-  padding-left: 40px;
-}
+
 
 .pl-folder .dot {
   width: 8px;
@@ -260,6 +266,10 @@ body.side-collapsed .side-manage {
   background: var(--accent);
 }
 
-body.side-collapsed .pl-item.nested {
+body.side-collapsed #sidebar .pl-item {
   padding-left: 0;
+}
+
+body.side-collapsed .pl-folder .chev {
+  display: none;
 }

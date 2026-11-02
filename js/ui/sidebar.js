@@ -9,7 +9,7 @@ import { view } from '../data/view.js';
 import { playlistMenu, promptText, folderMenu } from './menus.js';
 import { folders } from '../data/folders.js';
 import { newPlaylistDialog } from './autoplaylist.js';
-import { draggablePlaylist, playlistDropTarget, folderDropTarget } from './dnd.js';
+import { draggablePlaylist, playlistDropTarget, folderDropTarget, draggableFolder } from './dnd.js';
 
 export function mountSidebar(root, app) {
   const search = el('input.search-input', {
@@ -24,7 +24,7 @@ export function mountSidebar(root, app) {
     if (view.mode === 'nowplaying') view.setMode(store.get('view'));
     playlists.ensureCollection();
   });
-  const navFavorites = navItem('heart', 'Favorites', () => {
+  const navFavorites = navItem('heart', 'Favourites', () => {
     if (view.mode === 'nowplaying') view.setMode(store.get('view'));
     playlists.ensureFavorites();
   });
@@ -104,9 +104,13 @@ export function mountSidebar(root, app) {
       playlistDropTarget(row, () => playlists.list.find((x) => x.guid === p.guid));
       return row;
     };
-    for (const node of folders.tree()) {
+    for (const node of folders.rows()) {
       if (node.type === 'playlist') {
-        if (!playlists.isSpecial(node.p)) list.append(item(node.p, false));
+        if (!playlists.isSpecial(node.p)) {
+          const row = item(node.p, node.depth > 0);
+          row.style.setProperty('--depth', node.depth);
+          list.append(row);
+        }
         continue;
       }
       const f = node.folder;
@@ -118,9 +122,10 @@ export function mountSidebar(root, app) {
         el('span.label.ellipsis', { text: f.name }),
         node.members.some((m) => m.isPlaying) ? el('span.dot') : null,
       );
+      head.style.setProperty('--depth', node.depth);
+      draggableFolder(head, f);
       folderDropTarget(head, f);
       list.append(head);
-      if (!f.collapsed) for (const p of node.members) list.append(item(p, true));
     }
   }
 

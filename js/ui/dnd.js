@@ -11,6 +11,7 @@ import { toast } from './toast.js';
 
 const ROWS = 'application/x-fusion-rows';
 const PLAYLIST = 'application/x-fusion-playlist';
+const FOLDER = 'application/x-fusion-folder';
 
 /**
  * Songs dragged out of `container` (rows inside it must be draggable).
@@ -40,13 +41,22 @@ export function draggablePlaylist(node, p) {
   });
 }
 
+/** A folder header that can be dragged onto another folder (to nest it). */
+export function draggableFolder(node, f) {
+  node.draggable = true;
+  node.addEventListener('dragstart', (e) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(FOLDER, f.id);
+  });
+}
+
 /** A playlist item that accepts dropped songs and reordered playlists. */
 export function playlistDropTarget(node, getPlaylist) {
   const accepts = (e) => {
     const p = getPlaylist();
     if (!p) return null;
     const types = e.dataTransfer.types;
-    if (types.includes(PLAYLIST)) return 'move';
+    if (types.includes(PLAYLIST) || types.includes(FOLDER)) return 'move';
     if (types.includes(ROWS) && !p.isAutoplaylist && !p.isLocked) return 'copy';
     return null;
   };
@@ -69,6 +79,8 @@ export function playlistDropTarget(node, getPlaylist) {
     const p = getPlaylist();
     if (!p) return;
     e.preventDefault();
+    const fid = e.dataTransfer.getData(FOLDER);
+    if (fid) return folders.moveFolder(fid, folders.folderOf(p.guid)?.id || null);
     const guid = e.dataTransfer.getData(PLAYLIST);
     if (guid) return movePlaylist(guid, p, after);
     const payload = e.dataTransfer.getData(ROWS);
@@ -92,10 +104,11 @@ async function movePlaylist(guid, target, after) {
   if (into?.id !== folders.folderOf(guid)?.id) await folders.move([guid], into ? into.id : null);
 }
 
-/** A folder header that takes dropped playlists into the folder. */
+/** A folder header that takes dropped playlists, and folders (as subfolders). */
 export function folderDropTarget(node, folder) {
   node.addEventListener('dragover', (e) => {
-    if (!e.dataTransfer.types.includes(PLAYLIST)) return;
+    const types = e.dataTransfer.types;
+    if (!types.includes(PLAYLIST) && !types.includes(FOLDER)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     node.classList.add('drop-into');
@@ -104,9 +117,11 @@ export function folderDropTarget(node, folder) {
   node.addEventListener('drop', (e) => {
     node.classList.remove('drop-into');
     const guid = e.dataTransfer.getData(PLAYLIST);
-    if (!guid) return;
+    const fid = e.dataTransfer.getData(FOLDER);
+    if (!guid && !fid) return;
     e.preventDefault();
-    folders.move([guid], folder.id);
+    if (guid) folders.move([guid], folder.id);
+    else folders.moveFolder(fid, folder.id);
   });
 }
 

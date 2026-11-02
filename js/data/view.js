@@ -88,6 +88,15 @@ class View extends Emitter {
     this.load();
   }
 
+  /** Jump to one artist's or genre's albums (from the expanded album's links). */
+  showValue(kind, key) {
+    store.set('view', kind);
+    this.mode = kind;
+    this.drill = { kind, key, label: key };
+    this.emit('mode', kind);
+    this.load();
+  }
+
   closeDrill() {
     this.drill = null;
     this.load();
@@ -273,7 +282,7 @@ class View extends Emitter {
   /**
    * Autoplaylists can't be reordered, but their sort pattern can be set when
    * they are created. foobar2000 doesn't expose an autoplaylist's query, so
-   * this only works for Fusion's own Collection and Favorites, whose queries
+   * this only works for Fusion's own Collection and Favourites, whose queries
    * we know.
    */
   async #resortAutoplaylist(pl, pattern) {
@@ -299,7 +308,7 @@ class View extends Emitter {
   /** Fetch display text + art path for each group's first row, in chunks. */
   async #loadHeads(gen) {
     const title = store.get('separateDiscs') ? TF.albumDiscTitle : TF.albumTitle;
-    const formats = { t: title, a: TF.albumArtist, y: TF.year, g: TF.genre };
+    const formats = { t: title, a: TF.albumArtist, y: TF.year, g: TF.genre, d: TF.date };
     for (let i = 0; i < this.groups.length; i += HEAD_CHUNK) {
       const chunk = this.groups.slice(i, i + HEAD_CHUNK);
       const res = await tryCall('playlist.getTracksAt', {
@@ -310,7 +319,7 @@ class View extends Emitter {
       });
       if (gen !== this.#generation || !res) return;
       res.tracks.forEach((t, n) => {
-        chunk[n].head = { handle: t.handle, title: t.formats.t, artist: t.formats.a, year: t.formats.y, genre: t.formats.g };
+        chunk[n].head = { handle: t.handle, title: t.formats.t, artist: t.formats.a, year: t.formats.y, genre: t.formats.g, date: t.formats.d };
       });
       this.emit('heads', { from: i, to: i + chunk.length });
     }
@@ -496,7 +505,7 @@ const UNKNOWN_GENRE = 'Unknown Genre';
 const SEP = '|||';
 
 /** Values of a multi-value key: split on the field separator and on ";". */
-function splitValues(key) {
+export function splitValues(key) {
   const out = [];
   const seen = new Set();
   for (const part of key.split(SEP)) {

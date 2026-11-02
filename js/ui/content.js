@@ -29,6 +29,14 @@ export function mountContent(root) {
   let current = null;
   let currentKind = '';
   let lastKey = '';
+  const scrollMemo = new Map(); // view key -> scrollTop
+
+  // A click on empty space (not on a song, tile or control) clears the selection.
+  scroller.addEventListener('click', (e) => {
+    if (!view.selection.size || e.ctrlKey || e.shiftKey) return;
+    if (e.target.closest('.song-row, .tp-row, .np-row, .tile, button, a, input, select, label, [role="button"], [role="tab"]')) return;
+    view.clearSelection();
+  });
 
   function kindFor(mode) {
     return mode === 'songs' ? 'songs' : mode === 'nowplaying' ? 'nowplaying' : 'grid';
@@ -49,8 +57,15 @@ export function mountContent(root) {
     const fresh = ensure();
     const key = [view.playlist?.guid, view.mode, view.drill?.key, view.filter, store.get('separateDiscs')].join('|');
     const keep = !fresh && key === lastKey;
+    // Back from an artist/genre goes to where you were in the list.
+    const cameBack = !keep && !view.drill && lastKey.startsWith(key.split('|').slice(0, 2).join('|') + '|') && lastKey.split('|')[2];
+    if (!keep && lastKey && !fresh) scrollMemo.set(lastKey, scroller.scrollTop);
     lastKey = key;
     if (currentKind !== 'nowplaying') current.setData(keep);
+    if (cameBack && scrollMemo.has(key)) {
+      scroller.scrollTop = scrollMemo.get(key);
+      current.render?.();
+    }
     renderMessage();
   }
 
@@ -91,7 +106,7 @@ export function mountContent(root) {
   player.on('track', () => current?.refreshPlaying?.());
   player.on('state', () => current?.refreshPlaying?.());
   store.subscribe((k) => {
-    if (['tileSize', 'artistTileSize', 'showAlbumYear', 'showTrackCounts', 'listArtLeft', 'listBackground'].includes(k) && current?.layout) {
+    if (['tileSize', 'artistTileSize', 'showAlbumYear', 'showTrackCounts', 'listArtLeft', 'listBackground', 'dimEditionTags', 'dimWords'].includes(k) && current?.layout) {
       if (current.expanded >= 0) current.panel.open(view.groups[current.expanded], current.expanded);
       current.layout();
       current.refreshHeads();

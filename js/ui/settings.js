@@ -46,11 +46,14 @@ export function mountSettings(root, app) {
         toggle('Show song counts under albums', 'showTrackCounts'),
         range('Album size', 'tileSize', 110, 260, 10),
         range('Artist size', 'artistTileSize', 100, 240, 10),
-        toggle('Sort Collection and Favorites when opened', 'sortOnOpen'),
+        toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
+        toggle('Grey out edition tags', 'dimEditionTags', 'Dims a bracketed ending like “(Single)” or “[Live]” in album and song titles when it contains one of these words'),
+        wordsField(),
       ]),
       section('Expanded album', [
         choice('Background', 'listBackground', [
           ['blur', 'Blurred cover'],
+          ['art', 'Album colours'],
           ['plain', 'Plain'],
         ]),
         toggle('Show cover art', 'listArtLeft'),
@@ -75,7 +78,7 @@ export function mountSettings(root, app) {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();
         }),
       ]),
-      el('p.set-about', { text: `Fusion ${VERSION} for foo_ui_webview2. Based on the original Fusion skin by NadirP.` }),
+      el("p.set-about", { text: `Fusion ${VERSION}` }),
     );
   }
 
@@ -92,6 +95,15 @@ export function mountSettings(root, app) {
   function toggleInverse(label, key) {
     const input = el('input', { type: 'checkbox', checked: !store.get(key), onchange: () => store.set(key, !input.checked) });
     return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
+  }
+
+  function wordsField() {
+    const input = el('textarea.set-words', { rows: 3, spellcheck: false, value: store.get('dimWords'), 'aria-label': 'Words that mark an edition tag' });
+    input.value = store.get('dimWords');
+    input.disabled = !store.get('dimEditionTags');
+    input.addEventListener('change', () => store.set('dimWords', input.value.replace(/\s*\n\s*/g, ', ')));
+    const reset = el('button.set-mini', { text: 'Defaults', onclick: () => store.set('dimWords', store.defaultOf('dimWords')) });
+    return el('div.set-words-box', null, input, el('div.set-words-foot', null, el('small', { text: 'Comma-separated, any case.' }), reset));
   }
 
   function quick(iconName, label, onclick) {

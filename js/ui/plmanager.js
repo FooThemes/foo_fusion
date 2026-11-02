@@ -1,6 +1,6 @@
 // Playlist manager (Ctrl+M): Fusion's stand-in for foobar2000's Default UI
 // Playlist Manager panel, which can't be hosted inside the WebView2 UI.
-// Every playlist, including Collection and Favorites; click to show, double-
+// Every playlist, including Collection and Favourites; click to show, double-
 // click to play, drag to reorder, drop songs on a playlist to add them,
 // F2 to rename, Delete to remove, right-click for the rest.
 
@@ -12,7 +12,7 @@ import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import * as store from '../core/store.js';
 import { playlistMenu, promptText, renamePlaylist, deletePlaylists, runMainMenuAny, folderMenu } from './menus.js';
-import { draggablePlaylist, playlistDropTarget, folderDropTarget } from './dnd.js';
+import { draggablePlaylist, playlistDropTarget, folderDropTarget, draggableFolder } from './dnd.js';
 import { newPlaylistDialog } from './autoplaylist.js';
 import { folders } from '../data/folders.js';
 
@@ -73,9 +73,11 @@ export function mountPlaylistManager(root, app) {
       });
       return row;
     };
-    for (const node of folders.tree()) {
+    for (const node of folders.rows()) {
       if (node.type === 'playlist') {
-        list.append(playlistRow(node.p, false));
+        const row = playlistRow(node.p, node.depth > 0);
+        row.style.setProperty('--depth', node.depth);
+        list.append(row);
         continue;
       }
       const f = node.folder;
@@ -87,11 +89,12 @@ export function mountPlaylistManager(root, app) {
         el('span.plm-name.ellipsis', { text: f.name }),
         el('span.plm-count', { text: String(node.members.length) }),
       );
+      head.style.setProperty('--depth', node.depth);
       head.addEventListener('click', () => folders.toggle(f.id));
       head.addEventListener('contextmenu', (e) => (e.preventDefault(), folderMenu(f)));
+      draggableFolder(head, f);
       folderDropTarget(head, f);
       list.append(head);
-      if (!f.collapsed) for (const p of node.members) list.append(playlistRow(p, true));
     }
     // Playlists overlap (Collection holds everything), so a song total would mislead.
     status.textContent = `${plural(playlists.list.length, 'playlist')}${selected.size > 1 ? ` · ${selected.size} selected` : ''}`;
@@ -146,12 +149,18 @@ export function mountPlaylistManager(root, app) {
   });
 
   async function sortByName() {
-    // A–Z, keeping Collection/Favorites on top and each folder's playlists together.
+    // A–Z, keeping Collection/Favourites on top and each folder's playlists together.
     const cmp = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
     const special = playlists.list.filter((p) => playlists.isSpecial(p));
-    const nodes = folders.tree().filter((n) => n.type === 'folder' || !playlists.isSpecial(n.p));
-    nodes.sort((a, b) => cmp(a.type === 'folder' ? a.folder.name : a.p.name, b.type === 'folder' ? b.folder.name : b.p.name));
-    const rest = nodes.flatMap((n) => (n.type === 'folder' ? [...n.members].sort((a, b) => cmp(a.name, b.name)) : [n.p]));
+    const name = (n) => (n.type === 'folder' ? n.folder.name : n.p.name);
+    const flat = (nodes) =>
+      [...nodes]
+        .filter((n) => n.type === 'folder' || !playlists.isSpecial(n.p))
+        .sort((a, b) => cmp(name(a), name(b)))
+        .flatMap((n) => (n.type === 'folder' ? flat(n.children) : [n.p]));
+    const rest = flat(folders.tree());
+    const hidden = playlists.list.filter((p) => playlists.isHidden(p));
+    rest.push(...hidden);
     await call('playlist.reorderPlaylists', { newOrderGuids: [...special, ...rest].map((p) => p.guid) });
   }
 

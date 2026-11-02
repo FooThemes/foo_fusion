@@ -5,6 +5,7 @@
 // are recycled while scrolling, so a library with thousands of albums costs
 // the same as one with fifty.
 
+import { setTitle } from './titles.js';
 import { el, rafThrottle, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
@@ -249,7 +250,7 @@ export class Grid {
     art.className = 'art';
     if (this.kind === 'albums') {
       const [artist, album] = splitAlbumKey(g.key);
-      t1.textContent = head?.title || album;
+      setTitle(t1, head?.title || album);
       const year = store.get('showAlbumYear') && head?.year ? ` · ${head.year}` : '';
       t2.textContent = (head?.artist || artist) + year + (store.get('showTrackCounts') ? ` · ${plural(g.count, 'song')}` : '');
       art.classList.add('ph-album');

@@ -172,7 +172,8 @@
   overflow: hidden;
 }
 
-.trackpanel[data-bg='plain'] .tp-bg-wrap {
+.trackpanel[data-bg='plain'] .tp-bg-wrap,
+.trackpanel[data-bg='art'] .tp-bg-wrap {
   display: none;
 }
 
@@ -257,6 +258,26 @@
   grid-column: 1;
   color: var(--list-text2);
   font-size: 13px;
+}
+
+.tp-link {
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+
+.tp-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* Album colours: the title takes the cover's accent colour. */
+.trackpanel[data-bg='art'] .tp-title {
+  color: var(--accent);
+}
+
+.trackpanel {
+  transition: background-color 0.25s;
 }
 
 .tp-buttons {

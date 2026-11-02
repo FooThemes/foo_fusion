@@ -1,5 +1,6 @@
 // Bottom bar: now-playing art and text, seek bar, transport, volume, menu.
 
+import { setTitle } from './titles.js';
 import { el, formatTime, clamp } from '../core/util.js';
 import { icon, setIcon } from '../core/icons.js';
 import * as store from '../core/store.js';
@@ -16,8 +17,11 @@ import { mountWaveform } from './waveform.js';
 export function mountPlayerBar(root, app) {
   const cover = el('img', { alt: '' });
   const coverBox = el('button.art.ph-album.pb-cover', { title: 'Show now playing', onclick: () => app.showPlaying() }, cover);
-  const title = el('div.pb-title.ellipsis');
-  const artist = el('div.pb-artist.ellipsis');
+  // Long names scroll back and forth instead of staying cut off.
+  const titleText = el('span.mq');
+  const artistText = el('span.mq');
+  const title = el('div.pb-title.mq-box', null, titleText);
+  const artist = el('div.pb-artist.mq-box', null, artistText);
   const heart = heartButton('', '');
   heart.classList.add('pb-heart');
   const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist), heart);
@@ -46,15 +50,65 @@ export function mountPlayerBar(root, app) {
 
   root.append(nowBox, seekBox, controls, volPop);
 
+  function marquee(box) {
+    box.classList.remove('marquee');
+    const over = box.scrollWidth - box.clientWidth;
+    if (over <= 2) return;
+    box.style.setProperty('--mq-dist', -over - 8 + 'px');
+    box.style.setProperty('--mq-dur', Math.max(8, (over / 30) * 2 + 5) + 's');
+    box.classList.add('marquee');
+  }
+  new ResizeObserver(() => [title, artist].forEach(marquee)).observe(nowBox);
+
+  // Hover card for the playing song, placed above the bar (there's no room
+  // below it) and kept inside the window.
+  let tipText = '';
+  let tipTimer = 0;
+  const tip = el('div.pb-tip', { hidden: true });
+  document.body.append(tip);
+  const textBox = nowBox.querySelector('.pb-text');
+  textBox.addEventListener('pointerenter', () => {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => {
+      if (!tipText) return;
+      tip.textContent = tipText;
+      tip.hidden = false;
+      const r = textBox.getBoundingClientRect();
+      const w = tip.offsetWidth;
+      tip.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
+      tip.style.top = r.top - tip.offsetHeight - 10 + 'px';
+    }, 500);
+  });
+  textBox.addEventListener('pointerleave', () => {
+    clearTimeout(tipTimer);
+    tip.hidden = true;
+  });
+
+  // foobar2000's own menu for the playing song (Properties and so on).
+  nowBox.addEventListener('contextmenu', (e) => {
+    if (!player.active) return;
+    e.preventDefault();
+    tip.hidden = true;
+    tryCall('menu.showNativePopup', { mode: 'nowPlaying' });
+  });
+
+  // Click the length to switch between total time and time remaining.
+  length.title = 'Click to show the time remaining';
+  length.addEventListener('click', () => {
+    store.set('showRemaining', !store.get('showRemaining'));
+    renderTime(true);
+  });
+
   // --- now playing text and art -------------------------------------------
   let artTrack = null;
   async function renderTrack() {
     const t = player.track;
     const on = player.active && t;
     root.classList.toggle('idle', !on);
-    title.textContent = on ? t.title || t.path.split(/[\\/]/).pop() : '';
-    artist.textContent = on ? t.artist : '';
-    nowBox.title = on ? `${t.title}\n${t.artist}\n${t.album}` : '';
+    setTitle(titleText, on ? t.title || t.path.split(/[\\/]/).pop() : '');
+    artistText.textContent = on ? t.artist : '';
+    tipText = on ? [t.title, t.artist, t.album].filter(Boolean).join('\n') : '';
+    requestAnimationFrame(() => [title, artist].forEach(marquee));
     heart.dataset.handle = on ? t.handle : '';
     heart.hidden = !on;
     wave.track(on ? t.handle : null);
@@ -111,7 +165,9 @@ export function mountPlayerBar(root, app) {
     const d = player.duration;
     const p = player.now();
     elapsed.textContent = player.active ? formatTime(p) : '';
-    length.textContent = player.active ? (d ? formatTime(d) : '') : '';
+    const remaining = store.get('showRemaining');
+    length.textContent = player.active ? (d ? (remaining ? '-' + formatTime(Math.max(0, d - p)) : formatTime(d)) : '') : '';
+    length.title = remaining ? 'Time remaining (click for the total)' : 'Total time (click for the time remaining)';
     setSeek(d ? p / d : 0);
   }
   function setSeek(frac) {

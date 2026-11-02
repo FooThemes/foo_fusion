@@ -27,7 +27,7 @@ export function mountSelectionBar(root) {
         const handles = await view.handlesFor(rows);
         try {
           await favourites.set(handles, 'like');
-          toast(`Added ${rows.length} to Favorites`);
+          toast(`Added ${rows.length} to Favourites`);
         } catch {
           toast("Couldn't update the files' tags");
         }

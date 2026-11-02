@@ -478,3 +478,9 @@
   color: var(--accent);
   font-weight: 600;
 }
+
+/* Album colours: the dislike heart matches the like heart (grey can vanish
+   into a coloured background). */
+.trackpanel[data-bg='art'] button.heart.hate {
+  color: var(--accent);
+}

@@ -44,7 +44,8 @@ async function extract(handle, img) {
   if (ours() && img.complete && img.naturalWidth) pixels = read(img);
   if (!pixels) {
     for (const type of ['front', 'disc']) {
-      const res = await tryCall('artwork.getByPath', { path: handle, type });
+      // The album art manager (finds folder covers as well as embedded ones).
+      const res = await tryCall('artwork.getForTrack', { path: handle, type });
       if (!res?.available || !res.dataUrl) continue;
       // Decode the data URL by hand: the page's security policy may not let
       // fetch() read data: URLs.
@@ -59,7 +60,7 @@ async function extract(handle, img) {
       if (pixels) break;
     }
   }
-  if (!pixels) throw new Error('no readable cover (canvas blocked and no embedded/folder art via getByPath)');
+  if (!pixels) throw new Error('no readable cover (canvas blocked and no art via getForTrack)');
   return palette(pixels);
 }
 

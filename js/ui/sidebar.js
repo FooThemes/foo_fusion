@@ -20,12 +20,18 @@ export function mountSidebar(root, app) {
   });
   const searchBox = el('div.search', null, search, el('button.search-btn', { title: 'Search', onclick: () => search.focus() }, icon('search')));
 
+  // Leaving Now playing for another playlist: switch tab without loading the
+  // old playlist first (that briefly showed its covers).
+  const leaveNowPlaying = (name) => {
+    if (view.mode !== 'nowplaying') return;
+    view.setMode(store.get('view'), { load: playlists.activePlaylist?.name === name });
+  };
   const navCollection = navItem('collection', 'Collection', () => {
-    if (view.mode === 'nowplaying') view.setMode(store.get('view'));
+    leaveNowPlaying(COLLECTION);
     playlists.ensureCollection();
   });
   const navFavorites = navItem('heart', 'Favourites', () => {
-    if (view.mode === 'nowplaying') view.setMode(store.get('view'));
+    leaveNowPlaying(FAVORITES);
     playlists.ensureFavorites();
   });
   const queueBadge = el('span.badge', { hidden: true });
@@ -86,7 +92,7 @@ export function mountSidebar(root, app) {
           role: 'option',
           title: `${p.name} - ${p.trackCount.toLocaleString()} songs`,
           onclick: () => {
-            if (view.mode === 'nowplaying') view.setMode(store.get('view'));
+            if (view.mode === 'nowplaying') view.setMode(store.get('view'), { load: p.index === playlists.active });
             playlists.activate(p.index);
           },
           oncontextmenu: (e) => {

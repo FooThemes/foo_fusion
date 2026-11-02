@@ -166,7 +166,7 @@ export class TrackPanel {
     const discs = this.multiDisc ? plural(this.discs.length, 'disc') : null;
     // Artist and genres link to their own pages; blank genres are left out.
     const link = (kind, value) =>
-      el('button.tp-link', { text: value, title: kind === 'artists' ? `Show ${value}'s albums` : `Show ${value} albums`, onclick: () => view.showValue(kind, value) });
+      el('button.tp-link', { text: value, title: kind === 'artists' ? `Show ${value}'s albums` : `Show ${value} albums`, onclick: () => view.showValue(kind, value, this.group) });
     const parts = [];
     const who = head?.artist || artist;
     if (who) parts.push(link('artists', who));

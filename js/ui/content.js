@@ -62,7 +62,14 @@ export function mountContent(root) {
     if (!keep && lastKey && !fresh) scrollMemo.set(lastKey, scroller.scrollTop);
     lastKey = key;
     if (currentKind !== 'nowplaying') current.setData(keep);
-    if (cameBack && scrollMemo.has(key)) {
+    // Back from an album's artist/genre link: the page and album you were on.
+    const ret = view.returning;
+    if (ret && view.groups.length) {
+      view.returning = null;
+      if (scrollMemo.has(key)) scroller.scrollTop = scrollMemo.get(key);
+      current.render?.();
+      if (ret.expandedKey) current.expandKey?.(ret.expandedKey);
+    } else if (cameBack && scrollMemo.has(key)) {
       scroller.scrollTop = scrollMemo.get(key);
       current.render?.();
     }

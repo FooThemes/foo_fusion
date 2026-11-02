@@ -320,6 +320,12 @@ export class Grid {
     }
   }
 
+  /** Open the album with this key (if it's in the list). */
+  expandKey(key) {
+    const i = view.groups.findIndex((g) => g.key === key);
+    if (i >= 0 && this.expanded !== i) this.toggle(i);
+  }
+
   toggle(i) {
     if (this.expanded === i) {
       this.collapse();

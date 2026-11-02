@@ -62,7 +62,7 @@ export function mountPlaylistManager(root, app) {
       row.addEventListener('mousedown', (e) => select(p, e));
       row.addEventListener('click', (e) => {
         if (e.ctrlKey || e.shiftKey) return;
-        if (view.mode === 'nowplaying') view.setMode(store.get('view'));
+        if (view.mode === 'nowplaying') view.setMode(store.get('view'), { load: p.index === playlists.active });
         playlists.activate(p.index);
       });
       row.addEventListener('dblclick', () => call('playlist.playTrack', { playlist: p.index, index: 0 }));

@@ -66,10 +66,13 @@ class View extends Emitter {
     on('playlist:selectionChanged', debounce((d) => {
       if (this.playlist && d.playlist === this.playlist.index) this.syncSelection();
     }, 30));
-    playlists.on('active', () => {
+    playlists.on('active', (pl) => {
       this.drill = null;
+      this.backTo = null;
       this.filter = '';
       this.emit('filter', '');
+      // Another playlist: don't leave the old one's tiles up while it loads.
+      if (pl?.guid !== this.playlist?.guid) this.#blank();
       this.load();
     });
     store.subscribe((key) => {
@@ -85,15 +88,19 @@ class View extends Emitter {
     return !!this.playlist && !this.playlist.isAutoplaylist && !this.playlist.isLocked;
   }
 
-  setMode(mode) {
+  /** { load: false } when a playlist switch (which loads anyway) follows. */
+  setMode(mode, { load = true } = {}) {
     if (mode !== 'nowplaying') store.set('view', mode);
     const regroup = mode !== this.mode && mode !== 'nowplaying';
     this.mode = mode;
     this.drill = null;
+    this.backTo = null;
     this.emit('mode', mode);
+    // The old tab's tiles would otherwise show until the new ones are ready.
+    if (regroup) this.#blank();
     // Re-sort only if this tab's sort isn't applied yet (load() checks the
     // remembered stamp); forcing it here rebuilt the library on every switch.
-    if (regroup) this.load();
+    if (regroup && load) this.load();
   }
 
   setFilter(text) {
@@ -105,26 +112,54 @@ class View extends Emitter {
 
   openDrill(group) {
     this.drill = { kind: this.mode, key: group.key, label: group.key };
+    this.backTo = null;
+    this.#blank();
     this.load();
   }
 
   /** Jump to one artist's or genre's albums (from the expanded album's links). */
-  showValue(kind, key) {
+  showValue(kind, key, fromGroup) {
+    this.backTo = { mode: this.mode, drill: this.drill, expandedKey: fromGroup?.key };
     store.set('view', kind);
     this.mode = kind;
     this.drill = { kind, key, label: key };
     // Don't leave the previous page's tiles up while this one loads.
-    this.groups = [];
-    this.total = 0;
     this.emit('mode', kind);
-    this.emit('change');
+    this.#blank();
     this.load();
   }
 
   closeDrill() {
+    // Came here from an album's artist/genre link: go back to that page.
+    if (this.backTo) {
+      const b = this.backTo;
+      this.backTo = null;
+      this.returning = b;
+      store.set('view', b.mode);
+      this.mode = b.mode;
+      this.drill = b.drill;
+      this.emit('mode', b.mode);
+      this.#blank();
+      this.load();
+      return;
+    }
     this.drill = null;
+    this.#blank();
     this.load();
   }
+
+  /** Empty the page (shown as loading) before loading another one. */
+  #blank() {
+    this.groups = [];
+    this.rows = [];
+    this.total = 0;
+    this.loading = true;
+    this.emit('loading', true);
+    this.emit('change');
+  }
+
+  backTo = null; // { mode, drill, expandedKey } to return to from a link
+  returning = null; // set while going back, for the view to restore its place
 
   async setSort(sortKey, descending = store.get('sortDescending')) {
     const mode = this.mode === 'nowplaying' ? 'albums' : this.mode;

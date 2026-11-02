@@ -13,6 +13,7 @@ import { player } from '../data/player.js';
 import { bindArt } from '../data/artwork.js';
 import { trackContextMenu } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
+import { draggableRows } from './dnd.js';
 
 const MARGIN = 40; // left/right margin, as in the original
 const PAD = 8; // gap around each cover
@@ -44,6 +45,10 @@ export class Grid {
     this.layer.addEventListener('dblclick', (e) => this.#dblclick(e));
     this.layer.addEventListener('contextmenu', (e) => this.#context(e));
     this.layer.addEventListener('keydown', (e) => this.#key(e));
+    draggableRows(this.layer, (e) => {
+      const i = this.#indexOf(e);
+      return i < 0 ? null : view.groupRows(view.groups[i]);
+    });
   }
 
   destroy() {
@@ -178,7 +183,7 @@ export class Grid {
     const play = el('button.tile-play', { title: 'Play', tabindex: -1 }, icon('play'));
     const node = el(
       'div.tile',
-      { tabindex: 0, role: 'button' },
+      { tabindex: 0, role: 'button', draggable: true },
       el('div.art', null, img, play),
       el('div.tile-t1.ellipsis'),
       el('div.tile-t2.ellipsis'),

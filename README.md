@@ -19,11 +19,19 @@ new.
 - **Now playing** with large artwork and the playback queue (or what's up next).
 - Player bar with seek, volume, playback order, and a menu that replaces the
   hidden foobar2000 menu bar (the full foobar2000 menu is still there).
+- **Multi-disc albums**: a disc bar with each disc's own cover and DISCSUBTITLE,
+  shown as separate sections or one disc at a time.
+- **Favourites**: hearts on songs set the `MOOD` tag to "Like it", the same as
+  the original skin; the Favorites autoplaylist lists them.
+- **Playlist manager** (Ctrl+M), standing in for foobar2000's Default UI panel:
+  reorder by dragging, multi-select, rename, duplicate, delete, load and save,
+  and create or edit autoplaylists.
+- Drag albums or songs onto a playlist to add them.
 - Track info panel, a pop-up bar for selected songs, light and dark themes, and
   21 accent colours.
 - foobar2000's own context menu on tracks and albums (right-click).
-- Keyboard shortcuts: Space, Enter, Delete, Ctrl+A/I/F/N/P/O, F5, F11,
-  Alt+A and Esc.
+- Keyboard shortcuts: Space, Enter, Delete, Ctrl+A/I/F/M/N/P/O, F5,
+  Ctrl+Shift+F5 (reload the skin), F11, Alt+A and Esc.
 
 ### Performance
 
@@ -67,7 +75,9 @@ skin.
 installer writes to. Your settings are stored in the profile as well.
 
 To update Fusion itself, replace the files in `webview-ui\fusion\`, then press
-**Apply** on the WebView2 UI preferences page, or restart foobar2000. To update
+**Ctrl+Shift+F5** in Fusion or restart foobar2000. Each file reference in
+`index.html` carries a content hash (written by `dev/tools/stamp.py`), so
+WebView2 never mixes cached old files with new ones. To update
 foo_ui_webview2, install the new `.fb2k-component` in the usual way.
 
 ## Troubleshooting

@@ -361,3 +361,155 @@
   gap: 8px;
   margin-top: 22px;
 }
+
+/* Playlist manager: slides in from the left over the main area */
+.plm {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  color: var(--text);
+  box-shadow: 6px 0 24px rgba(0, 0, 0, 0.25);
+  transform: translateX(-105%);
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  visibility: hidden;
+  contain: layout paint;
+  z-index: 20;
+}
+
+.plm.open {
+  transform: none;
+  visibility: visible;
+}
+
+.plm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30px 14px 6px 22px;
+}
+
+.plm-head h2 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 300;
+}
+
+.plm-tools {
+  display: flex;
+  gap: 4px;
+  padding: 6px 16px 12px;
+}
+
+.plm-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  background: var(--hover);
+  font-size: 13px;
+}
+
+.plm-tool .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.plm-tool:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.plm-list {
+  flex: 1;
+  overflow-y: auto;
+  outline: none;
+  padding-bottom: 8px;
+}
+
+.plm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  padding: 0 18px 0 22px;
+  font-size: 14px;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+}
+
+.plm-row .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text2);
+}
+
+.plm-row:hover {
+  background: var(--hover);
+}
+
+.plm-row.selected {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.plm-row.active .plm-name {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.plm-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.plm-playing .icon {
+  color: var(--accent);
+}
+
+.plm-count {
+  color: var(--text2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plm-status {
+  padding: 10px 22px 14px;
+  font-size: 12px;
+  color: var(--text2);
+  border-top: 1px solid var(--line);
+}
+
+/* Drag and drop feedback */
+.drop-into {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 25%, transparent) !important;
+}
+
+.drop-before {
+  border-top-color: var(--accent) !important;
+}
+
+.drop-after {
+  border-bottom-color: var(--accent) !important;
+}
+
+#drag-badge {
+  position: fixed;
+  top: -100px;
+  left: 0;
+  padding: 4px 10px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: 600 12px var(--font);
+}
+
+.plm-list:focus-visible {
+  outline: none;
+}

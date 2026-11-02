@@ -8,6 +8,7 @@ import { player } from '../data/player.js';
 import { trackContextMenu } from './menus.js';
 import { RowSelector } from './rowselect.js';
 import { heartButton, setHeart, refreshHearts } from './heart.js';
+import { draggableRows, selectionOr } from './dnd.js';
 import { favourites } from '../data/favourites.js';
 
 const ROW_H = 35;
@@ -53,6 +54,10 @@ export class SongList {
       trackContextMenu(view.selection.has(r) ? [...view.selection].sort((a, b) => a - b) : [r]);
     });
     this.loadVisible = debounce(() => this.#fetchVisible(), 40);
+    draggableRows(this.sizer, (e) => {
+      const node = e.target.closest('[data-row]');
+      return node ? selectionOr(Number(node.dataset.row)) : null;
+    });
     this.offFav = favourites.on('change', ({ handles, on }) => refreshHearts(this.sizer, handles, on));
   }
 
@@ -99,7 +104,7 @@ export class SongList {
   }
 
   #make() {
-    const node = el('div.song-row', { role: 'option' }, COLUMNS.map(([k]) => el(`div.c-${k}.ellipsis`)));
+    const node = el('div.song-row', { role: 'option', draggable: true }, COLUMNS.map(([k]) => el(`div.c-${k}.ellipsis`)));
     this.sizer.append(node);
     return node;
   }

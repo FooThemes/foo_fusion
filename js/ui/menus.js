@@ -34,7 +34,8 @@ export async function showAppMenu(app) {
   const fbItems = await foobarMenuItems();
   return showMenu([
     { label: 'Settings', run: () => app.toggleSettings(true) },
-    { label: 'Left panel', shortcut: 'Ctrl+M', checked: !store.get('sidebarHidden'), run: () => app.toggleSidebar() },
+    { label: 'Playlist manager', shortcut: 'Ctrl+M', run: () => app.togglePlaylistManager(true) },
+    { label: 'Left panel', checked: !store.get('sidebarHidden'), run: () => app.toggleSidebar() },
     { label: 'Track info panel', checked: store.get('infoPanel'), run: () => store.set('infoPanel', !store.get('infoPanel')) },
     { label: 'Dark theme', checked: store.get('dark'), run: () => store.set('dark', !store.get('dark')) },
     '-',
@@ -83,17 +84,36 @@ export function addToItems(rows) {
   ].filter(Boolean);
 }
 
-export function playlistMenu(p) {
+export function playlistMenu(p, targets = [p]) {
   const special = playlists.isSpecial(p);
+  const many = targets.length > 1;
   return showMenu([
     { label: 'Play', run: () => call('playlist.playTrack', { playlist: p.index, index: 0 }) },
+    { label: 'Show', run: () => playlists.activate(p.index) },
     '-',
-    { label: 'Rename…', enabled: !special, run: () => renamePlaylist(p) },
-    { label: 'Duplicate', run: () => call('playlist.duplicate', { playlist: p.index }) },
-    { label: 'Edit autoplaylist…', enabled: p.isAutoplaylist, run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) },
+    { label: 'Rename…', enabled: !special && !many, shortcut: 'F2', run: () => renamePlaylist(p) },
+    { label: many ? `Duplicate ${targets.length} playlists` : 'Duplicate', run: async () => {
+      for (const t of [...targets].reverse()) await tryCall('playlist.duplicate', { playlistGuid: t.guid });
+    } },
+    { label: 'Save as…', enabled: !many, run: async () => {
+      await playlists.activate(p.index);
+      await runMainMenuAny(['File/Save playlist...', 'File/Save playlist…', 'Save playlist...']);
+    } },
     '-',
-    { label: 'Delete', enabled: !p.isLocked, run: () => deletePlaylist(p) },
+    { label: 'Edit autoplaylist…', enabled: p.isAutoplaylist && !many, run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) },
+    { label: 'Convert to a normal playlist', enabled: p.isAutoplaylist && !special && !many, run: () => call('playlist.removeAutoplaylist', { playlist: p.index }) },
+    '-',
+    { label: many ? `Delete ${targets.length} playlists` : 'Delete', shortcut: 'Del', run: () => deletePlaylists(targets) },
   ]);
+}
+
+export async function deletePlaylists(list) {
+  if (!list.length) return;
+  const one = list.length === 1;
+  const ok = await confirmDialog(one ? `Delete "${list[0].name}"?` : `Delete ${list.length} playlists?`, `${one ? 'This playlist' : 'These playlists'} will be removed. The music files are not touched.`, 'Delete');
+  if (!ok) return;
+  // Remove by GUID one at a time; indexes shift as playlists go.
+  for (const p of list) await tryCall('playlist.remove', { playlistGuid: p.guid });
 }
 
 export async function renamePlaylist(p) {
@@ -101,9 +121,8 @@ export async function renamePlaylist(p) {
   if (name && name !== p.name) await playlists.rename(p.index, name);
 }
 
-export async function deletePlaylist(p) {
-  const ok = await confirmDialog(`Delete "${p.name}"?`, 'This playlist will be removed. The music files are not touched.', 'Delete');
-  if (ok) await playlists.remove(p.index);
+export function deletePlaylist(p) {
+  return deletePlaylists([p]);
 }
 
 /** The full foobar2000 main menu, as a native submenu tree. */
@@ -149,6 +168,20 @@ export function runMainMenu(path) {
   return tryCall('menu.runMainMenuCommand', { command: path });
 }
 
+/** Try several spellings of a main-menu command (menus differ slightly by version). */
+export async function runMainMenuAny(paths) {
+  for (const command of paths) {
+    try {
+      await call('menu.runMainMenuCommand', { command });
+      return true;
+    } catch {
+      // try the next spelling
+    }
+  }
+  toast("That foobar2000 command isn't available here");
+  return false;
+}
+
 // --- in-page dialogs -------------------------------------------------------
 
 function dialog(title, body, buttons) {
@@ -170,10 +203,11 @@ function dialog(title, body, buttons) {
   });
 }
 
-export function promptText(title, value = '') {
+export function promptText(title, value = '', hint = '') {
   const input = el('input.dialog-input', { type: 'text', value, spellcheck: false });
   input.addEventListener('focus', () => input.select(), { once: true });
-  return dialog(title, input, (close) => {
+  const body = hint ? el('div', null, el('p', { text: hint }), input) : input;
+  return dialog(title, body, (close) => {
     input.addEventListener('keydown', (e) => e.key === 'Enter' && close(input.value.trim() || null));
     return [el('button.btn-primary', { text: 'Save', onclick: () => close(input.value.trim() || null) }), el('button.btn-text', { text: 'Cancel', onclick: () => close(null) })];
   });

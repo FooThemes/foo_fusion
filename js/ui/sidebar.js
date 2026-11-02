@@ -7,8 +7,9 @@ import { playlists, COLLECTION, FAVORITES } from '../data/playlists.js';
 import { player } from '../data/player.js';
 import { view } from '../data/view.js';
 import { playlistMenu, promptText } from './menus.js';
+import { draggablePlaylist, playlistDropTarget } from './dnd.js';
 
-export function mountSidebar(root) {
+export function mountSidebar(root, app) {
   const search = el('input.search-input', {
     type: 'search',
     placeholder: 'Search',
@@ -32,6 +33,8 @@ export function mountSidebar(root) {
     if (name) playlists.create(name);
   });
   newPlaylist.classList.add('nav-new');
+  const manage = el('button.btn-icon.side-manage', { title: 'Playlist manager (Ctrl+M)', onclick: () => app.togglePlaylistManager() }, icon('playlist'));
+  const newRow = el('div.side-newrow', null, newPlaylist, manage);
 
   const list = el('div.pl-list', { role: 'listbox', 'aria-label': 'Playlists' });
 
@@ -43,7 +46,7 @@ export function mountSidebar(root) {
     el('div.side-sep'),
     el('nav.side-nav', null, navCollection, navFavorites, navNow),
     el('div.side-sep'),
-    newPlaylist,
+    newRow,
     list,
   );
 
@@ -70,6 +73,7 @@ export function mountSidebar(root) {
     const coll = playlists.byName(COLLECTION);
     const fav = playlists.byName(FAVORITES);
     setState(navCollection, !np && coll && coll.index === active, coll?.isPlaying);
+    navFavorites.hidden = false;
     setState(navFavorites, !np && fav && fav.index === active, fav?.isPlaying);
     setState(navNow, np, false);
     navCollection.title = coll ? `${COLLECTION} - ${coll.trackCount.toLocaleString()} songs` : 'Collection';
@@ -97,6 +101,8 @@ export function mountSidebar(root) {
       );
       setState(row, !np && p.index === active, p.isPlaying);
       row.setAttribute('aria-selected', String(!np && p.index === active));
+      draggablePlaylist(row, p);
+      playlistDropTarget(row, () => playlists.list.find((x) => x.guid === p.guid));
       list.append(row);
     }
   }

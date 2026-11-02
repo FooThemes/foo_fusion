@@ -197,7 +197,7 @@ export async function installMock() {
     },
     'playlist.reorderPlaylists': (p) => {
       const actGuid = pls[active].guid;
-      const re = p.newOrder.map((i) => pls[i]);
+      const re = p.newOrderGuids ? p.newOrderGuids.map((g) => pls.find((x) => x.guid === g)) : p.newOrder.map((i) => pls[i]);
       pls.splice(0, pls.length, ...re);
       active = pls.findIndex((x) => x.guid === actGuid);
       emit('playlist:reordered', {});

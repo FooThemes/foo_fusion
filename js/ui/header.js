@@ -18,7 +18,7 @@ const TABS = [
 ];
 
 export function mountHeader(root, app) {
-  const showSide = el('button.btn-icon.head-side', { title: 'Show the left panel (Ctrl+M)', onclick: () => app.toggleSidebar(true) }, icon('menu'));
+  const showSide = el('button.btn-icon.head-side', { title: 'Show the left panel', onclick: () => app.toggleSidebar(true) }, icon('menu'));
   const back = el('button.btn-icon.head-back', { title: 'Back', onclick: () => view.closeDrill() }, icon('back'));
   const title = el('h1.head-title.ellipsis');
   const actions = el('div.head-actions');

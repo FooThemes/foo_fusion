@@ -198,3 +198,35 @@ body.side-collapsed .badge {
 body.side-collapsed .nav-item {
   position: relative;
 }
+
+.side-newrow {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.side-newrow .nav-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.side-manage {
+  width: 36px;
+  height: 35px;
+  margin-right: 8px;
+  color: var(--side-text2);
+}
+
+.side-manage:hover {
+  background: var(--side-hover);
+  color: var(--side-text);
+}
+
+body.side-collapsed .side-manage {
+  display: none;
+}
+
+#sidebar .pl-item {
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+}

@@ -14,6 +14,7 @@ import { bindArt } from '../data/artwork.js';
 import { showMenu, addToItems, trackContextMenu } from './menus.js';
 import { RowSelector } from './rowselect.js';
 import { heartButton, refreshHearts } from './heart.js';
+import { draggableRows, selectionOr } from './dnd.js';
 import { favourites } from '../data/favourites.js';
 
 const ROW_H = 35;
@@ -70,6 +71,10 @@ export class TrackPanel {
     );
     this.selector = new RowSelector(this.list, () => this.visibleRows());
     favourites.on('change', ({ handles, on }) => refreshHearts(this.list, handles, on));
+    draggableRows(this.list, (e) => {
+      const r = rowOf(e);
+      return r == null ? null : selectionOr(r);
+    });
     this.list.addEventListener('dblclick', (e) => {
       const r = rowOf(e);
       if (r != null) view.play(r);
@@ -326,7 +331,7 @@ function trackRow(r, t, albumArtist) {
   const name = el('span.tp-name.ellipsis');
   const node = el(
     'div.tp-row',
-    { role: 'option', dataset: { row: r }, tabindex: -1 },
+    { role: 'option', dataset: { row: r }, tabindex: -1, draggable: true },
     el('span.tp-num', { text: trackNum(t) }),
     name,
     t ? heartButton(t.handle, favourites.isLoved(t)) : null,

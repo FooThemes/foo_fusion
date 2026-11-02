@@ -16,6 +16,7 @@ import { mountSettings } from './ui/settings.js';
 import { mountInfoPanel } from './ui/infopanel.js';
 import { mountSelectionBar } from './ui/selectionbar.js';
 import { mountKeyboard } from './ui/keyboard.js';
+import { mountPlaylistManager } from './ui/plmanager.js';
 import { installLog, logInfo } from './core/log.js';
 import { VERSION } from './version.js';
 
@@ -39,10 +40,15 @@ async function boot() {
   await view.init();
 
   // Panels call each other through this object; members are filled in below.
-  let content, settings, sidebar;
+  let content, settings, sidebar, plm;
   const app = {
     toggleSettings(on = !settings.isOpen) {
+      if (on) plm.open(false);
       settings.open(on);
+    },
+    togglePlaylistManager(on = !plm.isOpen) {
+      if (on) settings.open(false);
+      plm.open(on);
     },
     showPlaying() {
       if (!content.showPlaying()) view.setMode('nowplaying');
@@ -61,6 +67,7 @@ async function boot() {
     },
     escape() {
       if (settings.isOpen) return settings.open(false);
+      if (plm.isOpen) return plm.open(false);
       const grid = content.current;
       if (grid?.expanded >= 0) return grid.collapse();
       if (view.drill) return view.closeDrill();
@@ -75,9 +82,10 @@ async function boot() {
   mountHeader(head, app);
   content = mountContent(main);
   settings = mountSettings(main, app);
+  plm = mountPlaylistManager(main, app);
   mountSelectionBar(main);
   mountInfoPanel(document.getElementById('info-panel'));
-  sidebar = mountSidebar(document.getElementById('sidebar'));
+  sidebar = mountSidebar(document.getElementById('sidebar'), app);
   mountPlayerBar(document.getElementById('playerbar'), app);
   mountKeyboard(app);
 

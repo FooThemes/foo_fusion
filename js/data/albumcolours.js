@@ -75,7 +75,7 @@ function read(source) {
   }
 }
 
-function palette(data) {
+export function palette(data) {
   // Bucket colours (4 bits per channel) and weigh how common each is.
   const buckets = new Map();
   for (let i = 0; i < data.length; i += 4) {
@@ -91,10 +91,34 @@ function palette(data) {
   const colours = [...buckets.values()].map((b) => ({ n: b.n, rgb: [b.r / b.n, b.g / b.n, b.b / b.n] })).sort((a, b) => b.n - a.n);
   if (!colours.length) return null;
 
-  // Background: the most common colour, toned down so text stays readable.
-  let bg = colours[0].rgb;
-  const [h, s, l] = toHsl(bg);
-  bg = fromHsl(h, Math.min(s, 0.55), l > 0.5 ? Math.max(0.78, Math.min(l, 0.9)) : Math.min(Math.max(l, 0.1), 0.24));
+  // Background: the cover's main colour. When that is black, white or grey
+  // (a dark sleeve with colourful art on it), use its most present real
+  // colour instead, so the page isn't just grey.
+  const total = colours.reduce((n, c) => n + c.n, 0);
+  let base = colours[0].rgb;
+  const [, s0, l0] = toHsl(base);
+  const neutral = s0 < 0.18 || l0 < 0.1 || l0 > 0.9;
+  if (neutral) {
+    // Group colourful pixels by hue (12 bins) and weigh by how vivid they are.
+    const bins = Array.from({ length: 12 }, () => ({ w: 0, n: 0, r: 0, g: 0, b: 0 }));
+    for (const c of colours) {
+      const [ch, cs, cl] = toHsl(c.rgb);
+      if (cs < 0.3 || cl < 0.15 || cl > 0.85) continue;
+      const bin = bins[Math.floor(ch * 12) % 12];
+      bin.w += c.n * cs;
+      bin.n += c.n;
+      bin.r += c.rgb[0] * c.n;
+      bin.g += c.rgb[1] * c.n;
+      bin.b += c.rgb[2] * c.n;
+    }
+    const best = bins.reduce((a, b) => (b.w > a.w ? b : a));
+    if (best.n / total > 0.04) base = [best.r / best.n, best.g / best.n, best.b / best.n];
+  }
+  const [h, s, l] = toHsl(base);
+  const darkSleeve = neutral ? l0 < 0.5 : l < 0.5;
+  let bg = neutral && base !== colours[0].rgb
+    ? fromHsl(h, Math.min(Math.max(s, 0.35), 0.6), darkSleeve ? 0.17 : 0.86)
+    : fromHsl(h, Math.min(s, 0.55), l > 0.5 ? Math.max(0.78, Math.min(l, 0.9)) : Math.min(Math.max(l, 0.1), 0.24));
   const dark = luminance(bg) < 0.35;
   const text = dark ? [240, 240, 240] : [24, 24, 24];
 
@@ -105,7 +129,9 @@ function palette(data) {
     const [, cs, cl] = toHsl(c.rgb);
     const ratio = contrast(c.rgb, bg);
     if (ratio < 3) continue;
-    const score = cs * 2 + Math.log(c.n + 1) * 0.3 + Math.min(ratio, 7) * 0.1 - Math.abs(cl - 0.5) * 0.5;
+    const ch = toHsl(c.rgb)[0];
+    const hueGap = Math.min(Math.abs(ch - h), 1 - Math.abs(ch - h)); // 0..0.5
+    const score = cs * 2 + Math.log(c.n + 1) * 0.3 + Math.min(ratio, 7) * 0.1 - Math.abs(cl - 0.5) * 0.5 + (neutral ? hueGap * 0.8 : 0);
     if (score > best) {
       best = score;
       accent = c.rgb;

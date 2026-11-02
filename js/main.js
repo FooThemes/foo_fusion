@@ -27,6 +27,9 @@ async function boot() {
   }
 
   installLog(VERSION);
+  // foo_ui_webview2 opens its main window without a frame, expecting the theme
+  // to draw one. Fusion uses the normal Windows title bar, like the original.
+  tryCall('window.setFrameless', { frameless: false });
   const t0 = performance.now();
   await store.load();
   applyTheme();
@@ -80,7 +83,7 @@ async function boot() {
 
   await view.load();
   document.body.classList.add('ready');
-  logInfo(`ready in ${Math.round(performance.now() - t0)} ms: ${view.playlist?.name} (${view.playlist?.trackCount} tracks, ${view.groups.length} groups)`);
+  logInfo(`ready in ${Math.round(performance.now() - t0)} ms, ${innerWidth}x${innerHeight} @${devicePixelRatio}x: ${view.playlist?.name} (${view.playlist?.trackCount} tracks, ${view.groups.length} groups)`);
   tryCall('window.setTitle', { title: 'foobar2000' });
 }
 
@@ -91,7 +94,6 @@ function applyTheme() {
   const accent = store.get('accent') || '#107C10';
   root.style.setProperty('--accent', accent);
   root.style.setProperty('--accent-text', luminance(accent) > 0.6 ? '#111' : '#fff');
-  tryCall('window.setDarkMode', { enabled: true }); // the bars are always dark
 }
 
 function luminance(hex) {

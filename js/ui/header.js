@@ -64,7 +64,10 @@ export function mountHeader(root) {
     }
     const sortKey = view.currentSortKey();
     clear(sortBtn).append(el('span.sort-label', { text: 'Sort by ' }), el('span.sort-value', { text: (SORTS[sortKey]?.label || 'Album').toLowerCase() }), icon('chevronDown'));
-    sortBtn.disabled = VIEW_SORTS[view.mode]?.length < 2 || !view.playlist || view.playlist.isLocked;
+    const sortable = view.canSort();
+    sortBtn.disabled = VIEW_SORTS[view.drill ? 'albums' : view.mode]?.length < 2 || !sortable;
+    sortBtn.title = sortable ? '' : 'This autoplaylist keeps its own order. Change it in the autoplaylist settings.';
+    dirBtn.disabled = !view.playlist;
     const desc = store.get('sortDescending');
     clear(dirBtn).append(icon(desc ? 'sortDesc' : 'sortAsc'));
     dirBtn.title = desc ? 'Descending' : 'Ascending';

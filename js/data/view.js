@@ -11,7 +11,7 @@ import { debounce, serialize } from '../core/util.js';
 import * as store from '../core/store.js';
 import { SORTS } from '../core/store.js';
 import { TF, searchQuery } from './patterns.js';
-import { playlists } from './playlists.js';
+import { playlists, COLLECTION, FAVORITES } from './playlists.js';
 
 const HEAD_CHUNK = 1000;
 export const TRACK_FIELDS = ['handle', 'title', 'artist', 'album', 'albumArtist', 'date', 'genre', 'duration', 'trackNumber', 'discNumber'];
@@ -25,11 +25,11 @@ class View extends Emitter {
   rows = null; // songs view: row indices (null = every row)
   total = 0; // rows shown (after filtering)
   loading = false;
+  reversed = false; // descending order shown for a locked (auto)playlist
   selection = new Set();
   #trackCache = new Map(); // row -> track
   #generation = 0;
   #ownSortUntil = 0;
-  #sortedOnce = new Set();
 
   async init() {
     this.mode = store.get('view');
@@ -118,15 +118,27 @@ class View extends Emitter {
     }
 
     // The original skin sorted the library playlist into the view's order every
-    // time; we do it when asked, or the first time a library playlist is shown.
-    const wantSort = opts.sort || (store.get('sortOnOpen') && this.isLibrary && !this.#sortedOnce.has(pl.guid));
-    if (wantSort && pl.trackCount > 0 && !pl.isLocked) {
-      this.#sortedOnce.add(pl.guid);
-      const sort = SORTS[this.currentSortKey()] || SORTS.album;
-      this.#ownSortUntil = performance.now() + 2000;
-      await tryCall('playlist.sort', { playlist: pl.index, pattern: sort.pattern, descending: !!store.get('sortDescending') });
-      this.#ownSortUntil = performance.now() + 300;
+    // time it was shown. We sort when asked, and when a library playlist's
+    // order doesn't match the view's sort yet (remembered across sessions).
+    const sortKey = this.currentSortKey();
+    const desc = !!store.get('sortDescending');
+    const applied = store.get('appliedSort')[pl.guid];
+    const wantSort = opts.sort || (store.get('sortOnOpen') && this.isLibrary && applied !== sortKey + (pl.isLocked ? '' : desc ? ':desc' : ''));
+    this.reversed = false;
+    if (wantSort && pl.trackCount > 0 && this.canSort(pl)) {
+      const pattern = (SORTS[sortKey] || SORTS.album).pattern;
+      this.#ownSortUntil = performance.now() + 30000;
+      if (!pl.isLocked) {
+        await tryCall('playlist.sort', { playlist: pl.index, pattern, descending: desc });
+        store.update('appliedSort', { [pl.guid]: sortKey + (desc ? ':desc' : '') });
+      } else if (await this.#resortAutoplaylist(pl, pattern)) {
+        store.update('appliedSort', { [pl.guid]: sortKey });
+      }
+      this.#ownSortUntil = performance.now() + 600;
     }
+    // Autoplaylists are locked against reordering, so "descending" is applied
+    // to what we show rather than to the playlist itself.
+    this.reversed = pl.isLocked && desc;
 
     let matched = null;
     const q = this.filter ? searchQuery(this.filter) : '';
@@ -138,7 +150,7 @@ class View extends Emitter {
 
     if (this.mode === 'songs' || this.mode === 'nowplaying') {
       this.groups = [];
-      this.rows = matched;
+      this.rows = this.reversed ? (matched || Array.from({ length: pl.trackCount }, (_, i) => i)).reverse() : matched;
       this.total = matched ? matched.length : pl.trackCount;
       await this.syncSelection(false);
       return this.#done(gen);
@@ -160,6 +172,7 @@ class View extends Emitter {
 
     let groups = runs.map((r) => ({ key: r.key, start: r.start, count: r.count, sub: r.sub }));
     if (matched) groups = intersect(groups, matched);
+    if (this.reversed) groups.reverse();
     this.groups = groups;
     this.total = groups.reduce((n, g) => n + g.count, 0);
     this.rows = null;
@@ -167,6 +180,26 @@ class View extends Emitter {
     this.#done(gen);
     this.#loadHeads(gen);
   });
+
+  /** Sorting needs an unlocked playlist, or one of Fusion's own autoplaylists. */
+  canSort(pl = this.playlist) {
+    return !!pl && (!pl.isLocked || (pl.isAutoplaylist && playlists.isSpecial(pl)));
+  }
+
+  /**
+   * Autoplaylists can't be reordered, but their sort pattern can be set when
+   * they are created. foobar2000 doesn't expose an autoplaylist's query, so
+   * this only works for Fusion's own Collection and Favorites, whose queries
+   * we know.
+   */
+  async #resortAutoplaylist(pl, pattern) {
+    const query = pl.name === COLLECTION ? 'ALL' : pl.name === FAVORITES ? store.get('favouritesQuery') : null;
+    if (!query) return false;
+    const released = await tryCall('playlist.removeAutoplaylist', { playlist: pl.index });
+    if (!released || released.source === 'dui') return false;
+    const res = await tryCall('playlist.convertToAutoplaylist', { playlist: pl.index, query, sort: pattern, keepSorted: false });
+    return !!res;
+  }
 
   #done(gen) {
     if (gen !== this.#generation) return;

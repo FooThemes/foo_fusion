@@ -35,7 +35,8 @@ class Playlists extends Emitter {
 
   async init() {
     await this.refresh();
-    if (!this.byName(COLLECTION)) await this.ensureCollection(false);
+    // First run: create the library playlist and show it, as the original did.
+    if (!this.byName(COLLECTION)) await this.ensureCollection(true);
     const refresh = debounce(() => this.refresh(), 60);
     onAny(
       ['playlist:created', 'playlist:removed', 'playlist:renamed', 'playlist:reordered', 'playlist:lockChanged', 'playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReplaced', 'playback:trackChanged', 'playback:stopped'],

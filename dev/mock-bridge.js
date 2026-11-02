@@ -119,7 +119,7 @@ export async function installMock() {
     config = JSON.parse(localStorage.getItem('fusion-mock-config') || '{}');
   } catch {}
 
-  const mkPl = (name, items, auto = false, query = '') => ({ guid: `{${crypto.randomUUID()}}`, name, items, auto, query, selection: new Set(), focus: -1, locked: false });
+  const mkPl = (name, items, auto = false, query = '') => ({ guid: `{${crypto.randomUUID()}}`, name, items, auto, query, selection: new Set(), focus: -1, locked: auto });
   const pls = [mkPl('Collection', [...lib], true, 'ALL'), mkPl('Road trip', lib.filter((_, i) => i % 17 === 0)), mkPl('Late night', lib.filter((t) => t.genre === 'Jazz' || t.genre === 'Ambient')), mkPl('Empty playlist', [])];
   let active = 0;
   const pb = { state: 'stopped', pl: -1, idx: -1, pos: 0, vol: 72, muted: false, order: 0, sac: false };
@@ -216,8 +216,27 @@ export async function installMock() {
       return { index: pls.length - 1 };
     },
     'playlist.showAutoplaylistUI': () => ({}),
+    'playlist.removeAutoplaylist': (p) => {
+      const [pl, i] = getPl(p);
+      pl.auto = pl.locked = false;
+      return { playlist: i, source: 'sdk' };
+    },
+    'playlist.convertToAutoplaylist': (p) => {
+      const [pl, i] = getPl(p);
+      if (pl.auto) throw err('OPERATION_FAILED', 'already an autoplaylist');
+      pl.items = p.query.includes('Like it') ? lib.filter((t) => t.mood === 'Like it') : [...lib];
+      if (p.sort) {
+        const keyed = pl.items.map((t) => [tfEval(p.sort, t).toLowerCase(), t]);
+        keyed.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+        pl.items = keyed.map((k) => k[1]);
+      }
+      pl.auto = pl.locked = true;
+      emit('playlist:itemsReplaced', { playlist: i });
+      return { playlist: i };
+    },
     'playlist.sort': (p) => {
       const [pl, i] = getPl(p);
+      if (pl.locked) throw err('LOCKED', 'Playlist is locked');
       const keyed = pl.items.map((t) => [tfEval(p.pattern, t).toLowerCase(), t]);
       keyed.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
       pl.items = keyed.map((k) => k[1]);
@@ -395,7 +414,7 @@ export async function installMock() {
     'menu.getContextMenu': () => ({ mode: 'selection', items: [{ type: 'command', label: 'Open containing folder', commandId: 1 }], targetKey: 'x' }),
     'menu.runContextCommandById': () => ({}),
   };
-  const noop = ['window.setTitle', 'window.setDarkMode', 'window.toggleFullscreen', 'window.toggleAlwaysOnTop'];
+  const noop = ['window.setTitle', 'window.setDarkMode', 'window.setFrameless', 'window.reload', 'window.toggleFullscreen', 'window.toggleAlwaysOnTop'];
   noop.forEach((m) => (api[m] = () => ({})));
 
   window.fb2k = {

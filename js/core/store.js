@@ -70,7 +70,7 @@ const DEFAULTS = {
   smoothScroll: true,
   sortOnOpen: true, // sort Collection/Favorites by the view's sort when opened
   favouritesQuery: 'MOOD IS "Like it"',
-  hideSystemCaption: false,
+  appliedSort: {}, // playlist GUID -> sort applied by Fusion, so it isn't redone needlessly
 };
 
 const listeners = new Set();

@@ -213,7 +213,11 @@ export function mountPlayerBar(root, app) {
   }
   player.on('track', renderTrack);
   favourites.on('change', ({ handles, state }) => handles.includes(heart.dataset.handle) && setHeart(heart, state));
+  // Lets CSS animate the "now playing" bars only while audio is playing.
+  const markPlayback = () => (document.documentElement.dataset.playback = player.state || 'stopped');
+  markPlayback();
   player.on('state', () => {
+    markPlayback();
     renderState();
     startTicking();
     if (!player.active) renderTrack();

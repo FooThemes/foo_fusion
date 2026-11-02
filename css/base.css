@@ -357,3 +357,37 @@ button.heart.hate {
   opacity: 1;
   color: var(--text2);
 }
+
+/* "Now playing" equaliser icon: bars bounce while a song plays. */
+.icon .eq {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+:root[data-playback='playing'] .icon .eq {
+  animation: eq-bounce 0.9s ease-in-out infinite alternate;
+}
+:root[data-playback='playing'] .icon .eq2 {
+  animation-duration: 0.7s;
+  animation-delay: -0.3s;
+}
+:root[data-playback='playing'] .icon .eq3 {
+  animation-duration: 1.05s;
+  animation-delay: -0.6s;
+}
+:root[data-playback='playing'] .icon .eq4 {
+  animation-duration: 0.8s;
+  animation-delay: -0.15s;
+}
+@keyframes eq-bounce {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-playback='playing'] .icon .eq {
+    animation: none;
+  }
+}

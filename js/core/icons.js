@@ -42,7 +42,8 @@ const P = {
   tag: '<path d="M4 4h7.5L20 12.5 12.5 20 4 11.5z"/><circle cx="8" cy="8" r="1.2"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   fullscreen: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>',
-  nowPlaying: '<path d="M5 15v-3M9 18V8M13 15V5M17 17v-6"/>',
+  // Equaliser bars; they bounce (CSS) while something is playing.
+  nowPlaying: '<path class="eq eq1" d="M5 18v-5"/><path class="eq eq2" d="M9 18V8"/><path class="eq eq3" d="M13 18V5"/><path class="eq eq4" d="M17 18v-7"/>',
   collection: '<path d="M5 5v14M9 5v14"/><path d="M13 5.5l3.2-.8 3.6 14.3-3.2.8z"/>',
   playlist: '<path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 18V10l3-1"/><circle cx="16.5" cy="18" r="1.5"/>',
   autoplaylist: '<path d="M4 7h11M4 12h7M4 17h7"/><path d="M17 11l1 2.2 2.3.3-1.7 1.6.4 2.4-2-1.2-2 1.2.4-2.4-1.7-1.6 2.3-.3z"/>',

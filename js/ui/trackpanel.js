@@ -41,6 +41,9 @@ export class TrackPanel {
 
     this.bg = el('img.tp-bg', { alt: '', decoding: 'async' });
     this.cover = el('img', { alt: '', decoding: 'async' });
+    // The artwork handler allows cross-origin reads, so with CORS the cover's
+    // pixels can be sampled for Album colours without reading the file again.
+    this.cover.crossOrigin = 'anonymous';
     this.coverBox = el('div.art.ph-album.tp-cover', null, this.cover);
     this.coverLabel = el('div.tp-cover-label', { hidden: true });
     this.title = el('h2.tp-title.ellipsis');
@@ -178,7 +181,6 @@ export class TrackPanel {
     const mode = store.get('listBackground');
     if (head?.handle && mode === 'blur') bindArt(this.bg, head.handle, 160, ['parent', 'front']);
     this.#renderCover();
-    this.#applyColours(mode === 'art' ? head?.handle : null);
     const rows = () => this.visibleRows();
     clear(this.buttons).append(
       btn('play', 'Play', () => view.play(rows()[0])),
@@ -192,10 +194,10 @@ export class TrackPanel {
   async #applyColours(handle) {
     const st = this.node.style;
     const clearVars = () => ['--list-bg', '--list-text', '--list-text2', '--accent', '--accent-text'].forEach((v) => st.removeProperty(v));
+    this.colourFor = handle;
     if (!handle) return clearVars();
-    const group = this.group;
     const pal = await albumColours(handle, this.cover);
-    if (this.group !== group) return;
+    if (this.colourFor !== handle) return; // another disc/album was picked meanwhile
     if (!pal) return clearVars();
     st.setProperty('--list-bg', pal.bg);
     st.setProperty('--list-text', pal.text);
@@ -209,6 +211,8 @@ export class TrackPanel {
     const handle = disc?.first?.handle || this.group?.head?.handle;
     // "All discs" prefers the box-set cover in the folder above the discs.
     if (handle) bindArt(this.cover, handle, 260, disc ? ['front'] : ['parent', 'front']);
+    // Album colours follow the cover shown: a disc's own cover when one is picked.
+    this.#applyColours(store.get('listBackground') === 'art' ? handle : null);
     this.coverLabel.hidden = !disc;
     this.coverLabel.textContent = disc ? discLabel(disc) : '';
   }

@@ -52,7 +52,7 @@ export class NowPlaying {
     this.album.textContent = active ? [t.album, (t.date || '').slice(0, 4)].filter(Boolean).join(' · ') : '';
     this.tech.textContent = active ? [t.codec, t.bitrate ? `${t.bitrate} kbps` : '', t.sampleRate ? `${(t.sampleRate / 1000).toFixed(1)} kHz` : '', t.duration ? formatTime(t.duration) : ''].filter(Boolean).join(' · ') : '';
     this.renderList();
-    const url = active ? await nowPlayingUrl(480) : null;
+    const url = active ? await nowPlayingUrl(480, 'front', t?.handle) : null;
     if (url === this.artUrl) return;
     this.artUrl = url;
     if (!url) {

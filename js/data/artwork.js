@@ -66,6 +66,79 @@ export function artUrl(path, type = 'front', cssSize = 200) {
   return p;
 }
 
+// --- Transparent and animated covers ---------------------------------------
+// foobar2000's artwork handler scales pictures to JPEG, which turns a PNG's
+// transparent background black and freezes a GIF on its first frame. So for
+// albums whose folder cover is a .png or .gif, Fusion asks for the original
+// picture instead (the browser scales it). Which folders those are is found
+// by listing the folder once (cached).
+
+const COVER_FILES = ['cover', 'folder', 'front', 'albumart', 'album'];
+const dirKind = new Map(); // folder -> 'keep' (png/gif) | 'scale'
+const dirProbe = new Map(); // folder -> Promise
+let probing = 0;
+const probeQueue = [];
+
+function dirOf(handle) {
+  const p = handle.replace(/\|subsong:\d+$/, '');
+  const i = p.lastIndexOf('\\');
+  return i > 0 ? p.slice(0, i) : '';
+}
+
+/** Should this track's front cover be loaded unscaled? (undefined = not known yet) */
+export function keepOriginal(handle) {
+  return dirKind.get(dirOf(handle)) === 'keep' ? true : dirKind.has(dirOf(handle)) ? false : undefined;
+}
+
+function probeDir(dir) {
+  if (!dir) return Promise.resolve('scale');
+  if (!dirProbe.has(dir)) {
+    dirProbe.set(
+      dir,
+      new Promise((resolve) => {
+        probeQueue.push(async () => {
+          const res = await tryCall('artwork.getFolderImages', { directory: dir });
+          const images = res?.images || [];
+          const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
+          const pick = COVER_FILES.map((c) => images.find((im) => base(im.name) === c)).find(Boolean) || (images.length === 1 ? images[0] : null);
+          const kind = pick && /\.(png|gif)$/i.test(pick.name) ? 'keep' : 'scale';
+          dirKind.set(dir, kind);
+          resolve(kind);
+        });
+        pumpProbes();
+      }),
+    );
+  }
+  return dirProbe.get(dir);
+}
+
+function pumpProbes() {
+  while (probing < 4 && probeQueue.length) {
+    probing++;
+    probeQueue
+      .shift()()
+      .finally(() => {
+        probing--;
+        pumpProbes();
+      });
+  }
+}
+
+/** The unscaled picture's URL (keeps transparency and animation). */
+export function originalUrl(path, type = 'front') {
+  const key = `${type}|0|${path}`;
+  let p = cache.get(key);
+  if (!p) {
+    p = tryCall('artwork.getFb2kUrlByPath', { path, type, maxSize: 0 }).then((r) => {
+      const url = r?.available ? r.dataUrl : null;
+      resolved.set(key, url);
+      return url;
+    });
+    cache.set(key, p);
+  }
+  return p;
+}
+
 async function flush() {
   scheduled = false;
   const jobs = pending;
@@ -135,6 +208,8 @@ async function loadParentCover(dir, px) {
   const bin = atob(file.content);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  // PNG/GIF: keep the original (transparency, animation).
+  if (/\.(png|gif)$/i.test(pick.name)) return URL.createObjectURL(new Blob([bytes], { type: /\.gif$/i.test(pick.name) ? 'image/gif' : 'image/png' }));
   // Scale down once, so a 3000px scan doesn't sit in memory per tile.
   try {
     const bmp = await createImageBitmap(new Blob([bytes]));
@@ -149,8 +224,10 @@ async function loadParentCover(dir, px) {
 }
 
 /** Art for the playing track (cached per track by the caller). */
-export async function nowPlayingUrl(cssSize, type = 'front') {
-  const res = await tryCall('artwork.getFb2kUrl', { type, maxSize: sizeBucket(cssSize) });
+export async function nowPlayingUrl(cssSize, type = 'front', handle = null) {
+  // PNG/GIF folder covers unscaled, as for the grid.
+  const keep = handle && type === 'front' && (keepOriginal(handle) ?? (await probeDir(dirOf(handle))) === 'keep');
+  const res = await tryCall('artwork.getFb2kUrl', { type, maxSize: keep ? 0 : sizeBucket(cssSize) });
   return res?.available ? res.dataUrl : null;
 }
 
@@ -158,9 +235,16 @@ export function clearCache() {
   cache.clear();
   parentCache.clear();
   parentResolved.clear();
+  dirKind.clear();
+  dirProbe.clear();
   resolved.clear();
   loadedUrls.clear();
   keepAlive.clear();
+}
+
+function readyRaw(path, type) {
+  const url = resolved.get(`${type}|0|${path}`);
+  return url && loadedUrls.has(url) ? url : null;
 }
 
 /** Synchronous lookup: the URL if it is already known and decoded. */
@@ -182,7 +266,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
   // once, with no fade, so tiles don't flash.
   let ready = null;
   for (const t of types) {
-    const r = t === 'parent' ? parentReady(path, cssSize) : readyUrl(path, t, cssSize);
+    const r = t === 'parent' ? parentReady(path, cssSize) : t === 'front' && keepOriginal(path) ? readyRaw(path, t) : readyUrl(path, t, cssSize);
     if (r === undefined) break; // still unknown: load normally
     if (r) {
       ready = r;
@@ -203,7 +287,23 @@ export function bindArt(img, path, cssSize, types = ['front']) {
   img.removeAttribute('src');
   const attempt = async (i) => {
     if (i >= types.length || img.dataset.artToken !== token) return;
-    const url = types[i] === 'parent' ? await parentCoverUrl(path, cssSize) : await artUrl(path, types[i], cssSize);
+    const type = types[i];
+    const keep = type === 'front' && keepOriginal(path);
+    const url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
+    // Folder not checked yet: find out, and switch to the original if it's a PNG/GIF.
+    if (type === 'front' && keep === undefined && url) {
+      probeDir(dirOf(path)).then(async (kind) => {
+        if (kind !== 'keep' || img.dataset.artToken !== token) return;
+        const raw = await originalUrl(path, type);
+        if (!raw || img.dataset.artToken !== token) return;
+        const pre = new Image();
+        pre.src = raw;
+        pre.decode().then(
+          () => img.dataset.artToken === token && ((img.src = raw), markLoaded(raw)),
+          () => {},
+        );
+      });
+    }
     if (img.dataset.artToken !== token) return;
     if (!url) return attempt(i + 1);
     img.onload = () => {

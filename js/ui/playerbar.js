@@ -117,13 +117,13 @@ export function mountPlayerBar(root, app) {
     if (key === artTrack) return;
     artTrack = key;
     cover.classList.remove('loaded');
-    const url = on ? await nowPlayingUrl(64) : null;
+    const url = on ? await nowPlayingUrl(64, 'front', t?.handle) : null;
     if (artTrack !== key) return;
     if (url) {
       cover.onload = () => cover.classList.add('loaded');
       cover.src = url;
     } else cover.removeAttribute('src');
-    updateBigArt(url ? await nowPlayingUrl(store.get('sidebarWidth')) : null);
+    updateBigArt(url ? await nowPlayingUrl(store.get('sidebarWidth'), 'front', player.track?.handle) : null);
   }
 
   // Optional large artwork above the bar, in the left panel ("Large now playing artwork").

@@ -33,7 +33,7 @@ async function extract(handle, img) {
   // The cover on screen is quickest, if the browser lets us read it.
   // Only use the <img> once it shows this album (not the previous one).
   const ours = () => img && (img.dataset.artToken || '').startsWith(handle + '|');
-  if (ours() && !(img.complete && img.naturalWidth && img.classList.contains('loaded'))) {
+  if (ours() && !(img.complete && img.naturalWidth)) {
     await new Promise((resolve) => {
       const done = () => (img.removeEventListener('load', done), img.removeEventListener('error', done), resolve());
       img.addEventListener('load', done);

@@ -262,3 +262,11 @@
 .np-row.drop-after {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
+
+.np-row.previous {
+  opacity: 0.5;
+}
+
+.np-row.previous:hover {
+  opacity: 0.8;
+}

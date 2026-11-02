@@ -1,5 +1,5 @@
 // Greys out edition tags at the end of titles: "white forces (single)",
-// "Abbey Road (Remastered 2019)", "Song [Live]". Which tags count is a
+// "Abbey Road (Remastered 2019)", "Song [Live]", "Song <Remix>", "Song ~Live~". Which tags count is a
 // setting (Settings > Library); a bracketed tail is dimmed when it contains
 // one of the listed words.
 
@@ -32,10 +32,10 @@ export function splitTitle(text) {
   let cut = text.length;
   let i = text.length;
   for (;;) {
-    const tail = text.slice(0, i).match(/\s*(\([^()]*\)|\[[^[\]]*\]|\s-\s[^-()[\]]+)\s*$/);
+    const tail = text.slice(0, i).match(/\s*(\([^()]*\)|\[[^[\]]*\]|<[^<>]*>|\{[^{}]*\}|~[^~]+~|\s-\s[^-()[\]<>{}~]+)\s*$/);
     if (!tail) break;
     const inner = tail[1];
-    if (!re.test(' ' + inner.replace(/^\s-\s/, '') + ' ')) break;
+    if (!re.test(' ' + inner.replace(/^\s-\s/, '').replace(/^[([<{~]|[)\]>}~]$/g, ' ') + ' ')) break;
     i -= tail[0].length;
     cut = i;
   }

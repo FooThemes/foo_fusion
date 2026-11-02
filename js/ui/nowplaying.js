@@ -10,6 +10,7 @@ import { nowPlayingUrl } from '../data/artwork.js';
 import { playlists } from '../data/playlists.js';
 
 const UP_NEXT = 25;
+const PREVIOUS = 2; // songs played before the current one, shown dimmed
 
 export class NowPlaying {
   constructor(scroller) {
@@ -49,16 +50,33 @@ export class NowPlaying {
     this.artist.textContent = active ? t.artist : '';
     this.album.textContent = active ? [t.album, (t.date || '').slice(0, 4)].filter(Boolean).join(' · ') : '';
     this.tech.textContent = active ? [t.codec, t.bitrate ? `${t.bitrate} kbps` : '', t.sampleRate ? `${(t.sampleRate / 1000).toFixed(1)} kHz` : '', t.duration ? formatTime(t.duration) : ''].filter(Boolean).join(' · ') : '';
-    const url = active ? await nowPlayingUrl(480) : null;
-    for (const img of [this.cover, this.bg]) {
-      img.classList.remove('loaded');
-      if (url) {
-        img.onload = () => img.classList.add('loaded');
-        img.onerror = () => img.removeAttribute('src');
-        img.src = url;
-      } else img.removeAttribute('src');
-    }
     this.renderList();
+    const url = active ? await nowPlayingUrl(480) : null;
+    if (url === this.artUrl) return;
+    this.artUrl = url;
+    if (!url) {
+      for (const img of [this.cover, this.bg]) img.classList.remove('loaded'), img.removeAttribute('src');
+      return;
+    }
+    // Decode the next cover before swapping, so the old one stays up until
+    // then (no blank flash on Next/Previous).
+    const pre = new Image();
+    pre.src = url;
+    try {
+      await pre.decode();
+    } catch {
+      /* missing art: falls through to the placeholder */
+    }
+    if (this.artUrl !== url) return;
+    for (const img of [this.cover, this.bg]) {
+      if (pre.naturalWidth) {
+        img.src = url;
+        img.classList.add('loaded');
+      } else {
+        img.classList.remove('loaded');
+        img.removeAttribute('src');
+      }
+    }
   }
 
   renderState() {
@@ -86,7 +104,7 @@ export class NowPlaying {
     let rows = [];
     let note = '';
     if (pl && baseRow >= 0) {
-      if (shuffled) note = `${ORDER_LABELS[order]} is on: foobar2000 picks each next song as it goes, so the order can't be shown ahead.`;
+      if (shuffled) note = `${ORDER_LABELS[order]} is on. foobar2000 keeps its shuffled order to itself, so what plays next can't be listed here.`;
       else if (order === 'repeat-track' && !queue.length) note = 'Repeat (track) is on: this song plays again.';
       else {
         const n = pl.trackCount;
@@ -107,7 +125,22 @@ export class NowPlaying {
     const tracks = res?.tracks || [];
     const plName = playlists.isHidden(pl) ? 'Songs' : pl?.name;
 
+    // What played before, dimmed, above the current song (any order).
+    const prev = queue.length ? [] : player.history.slice(-PREVIOUS).filter((h) => h.handle !== player.track?.handle);
+
     clear(this.list);
+    prev.forEach((t, n) =>
+      this.list.append(
+        this.#row(t, {
+          kind: 'prev',
+          index: t.index,
+          number: n - prev.length,
+          previous: true,
+          queue,
+          onplay: () => (t.playlist >= 0 && t.index >= 0 ? call('playlist.playTrack', { playlist: t.playlist, index: t.index }) : call('playback.playPath', { path: t.handle })),
+        }),
+      ),
+    );
     this.listTitle.textContent = queue.length ? `Queue · ${queue.length}` : tracks.length || note ? `Up next${plName ? ` from ${plName}` : ''}` : '';
     const editable = pl && !pl.isLocked && !pl.isAutoplaylist;
     queue.forEach((t, n) => this.list.append(this.#row(t, { kind: 'queue', index: n, number: n + 1, queue, onplay: () => playQueued(t) })));
@@ -122,9 +155,9 @@ export class NowPlaying {
 
   #row(t, o) {
     const node = el(
-      'div.np-row' + (o.current ? '.current' : ''),
+      'div.np-row' + (o.current ? '.current' : '') + (o.previous ? '.previous' : ''),
       {
-        draggable: true,
+        draggable: !o.previous,
         ondblclick: o.onplay,
         title: `${t.title} - ${t.artist}`,
         // foobar2000's own track menu (Properties, tagging, and so on).
@@ -134,7 +167,7 @@ export class NowPlaying {
           else tryCall('menu.showNativePopup', { mode: 'handles', handles: [t.handle] });
         },
       },
-      el('span.np-n', null, o.current ? icon(player.state === 'paused' ? 'pause' : 'nowPlaying') : String(o.number)),
+      el('span.np-n', null, o.current ? icon(player.state === 'paused' ? 'pause' : 'nowPlaying') : o.previous ? '' : String(o.number)),
       el('span.np-t.ellipsis', null),
       el('span.np-a.ellipsis', { text: t.artist }),
       el('span.np-al.ellipsis', { text: t.album }),
@@ -151,7 +184,7 @@ export class NowPlaying {
       e.dataTransfer.setData(NP_MIME, JSON.stringify({ kind: o.kind, index: o.index, playlistGuid: o.playlist?.guid }));
     });
     node.addEventListener('dragover', (e) => {
-      if (!e.dataTransfer.types.includes(NP_MIME)) return;
+      if (!e.dataTransfer.types.includes(NP_MIME) || o.previous) return;
       if (o.kind === 'pl' && !o.editable) return;
       e.preventDefault();
       const after = e.offsetY > node.offsetHeight / 2;

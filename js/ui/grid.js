@@ -194,6 +194,11 @@ export class Grid {
     if (this.expanded >= 0) this.panel.refreshHead(view.groups[this.expanded]);
   }
 
+  /** Tags changed: re-read the open album's songs. */
+  refreshTracks() {
+    if (this.expanded >= 0) this.panel.reload();
+  }
+
   refreshPlaying() {
     for (const [i, node] of this.tiles) node.classList.toggle('playing', this.#isPlaying(view.groups[i]));
     this.panel.refreshPlaying();

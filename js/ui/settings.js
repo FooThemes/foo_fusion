@@ -47,14 +47,14 @@ export function mountSettings(root, app) {
         range('Album size', 'tileSize', 110, 260, 10),
         range('Artist size', 'artistTileSize', 100, 240, 10),
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
-        toggle('Grey out edition tags', 'dimEditionTags', 'Dims a bracketed ending like “(Single)” or “[Live]” in album and song titles when it contains one of these words'),
+        toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
         wordsField(),
       ]),
       section('Expanded album', [
         choice('Background', 'listBackground', [
-          ['blur', 'Blurred cover'],
-          ['art', 'Album colours'],
-          ['plain', 'Plain'],
+          ['blur', 'Blurred cover', 'The cover, blurred, behind the songs'],
+          ['art', 'Album colours', 'Background and title colours taken from the cover'],
+          ['plain', 'Plain', 'The normal list colours'],
         ]),
         toggle('Show cover art', 'listArtLeft'),
       ]),
@@ -97,13 +97,32 @@ export function mountSettings(root, app) {
     return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
   }
 
+  // Edition-tag words as removable chips, with a box to add more.
   function wordsField() {
-    const input = el('textarea.set-words', { rows: 3, spellcheck: false, value: store.get('dimWords'), 'aria-label': 'Words that mark an edition tag' });
-    input.value = store.get('dimWords');
-    input.disabled = !store.get('dimEditionTags');
-    input.addEventListener('change', () => store.set('dimWords', input.value.replace(/\s*\n\s*/g, ', ')));
-    const reset = el('button.set-mini', { text: 'Defaults', onclick: () => store.set('dimWords', store.defaultOf('dimWords')) });
-    return el('div.set-words-box', null, input, el('div.set-words-foot', null, el('small', { text: 'Comma-separated, any case.' }), reset));
+    const words = () =>
+      String(store.get('dimWords') || '')
+        .split(',')
+        .map((w) => w.trim())
+        .filter(Boolean);
+    const save = (list) => store.set('dimWords', [...new Set(list)].join(', '));
+    const off = !store.get('dimEditionTags');
+    const add = el('input.set-word-add', { type: 'text', placeholder: 'Add a word…', disabled: off, 'aria-label': 'Add a word' });
+    add.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ',') return;
+      e.preventDefault();
+      const w = add.value.trim().replace(/,/g, '');
+      if (w) save([...words(), w]);
+      add.value = '';
+    });
+    const chips = words().map((w) =>
+      el('span.set-chip', null, el('span', { text: w }), el('button', { title: `Remove "${w}"`, disabled: off, onclick: () => save(words().filter((x) => x !== w)) }, icon('close'))),
+    );
+    return el(
+      'div.set-words-box' + (off ? '.off' : ''),
+      null,
+      el('div.set-chips', null, chips, add),
+      el('div.set-words-foot', null, el('small', { text: 'Works with (…), […], <…>, {…}, ~…~ and " - …" endings.' }), el('button.set-mini', { text: 'Defaults', disabled: off, onclick: () => store.set('dimWords', store.defaultOf('dimWords')) })),
+    );
   }
 
   function quick(iconName, label, onclick) {
@@ -111,6 +130,22 @@ export function mountSettings(root, app) {
   }
 
   function choice(label, key, options) {
+    // Three or more options: a list of radio rows (a row of buttons would wrap).
+    if (options.length > 2) {
+      return el(
+        'div.set-radio',
+        { role: 'radiogroup', 'aria-label': label },
+        el('span.set-radio-label', { text: label }),
+        options.map(([value, text, hint]) =>
+          el(
+            'button.set-radio-row' + (store.get(key) === value ? '.on' : ''),
+            { role: 'radio', 'aria-checked': String(store.get(key) === value), onclick: () => store.set(key, value) },
+            el('span.set-radio-dot'),
+            el('span.set-radio-text', null, el('span', { text }), hint ? el('small', { text: hint }) : null),
+          ),
+        ),
+      );
+    }
     return el(
       'div.set-choice',
       null,
@@ -202,9 +237,11 @@ export function mountSettings(root, app) {
   store.subscribe(() => {
     if (!panel.classList.contains('open')) return;
     if (panel.querySelector('.set-custom')?.contains(document.activeElement)) return;
+    const refocus = document.activeElement?.classList.contains('set-word-add');
     const top = body.scrollTop;
     render();
     body.scrollTop = top;
+    if (refocus) panel.querySelector('.set-word-add')?.focus({ preventScroll: true });
   });
   return {
     open(on) {

@@ -3,6 +3,9 @@
 // from its most vivid colour that still stands out against that background.
 
 import { tryCall } from '../core/bridge.js';
+import { logInfo } from '../core/log.js';
+
+let warned = false;
 
 const cache = new Map(); // handle -> Promise<palette|null>
 const SIZE = 40; // sample grid; plenty for picking colours
@@ -10,7 +13,16 @@ const SIZE = 40; // sample grid; plenty for picking colours
 export function albumColours(handle, img) {
   if (!handle) return Promise.resolve(null);
   if (!cache.has(handle)) {
-    cache.set(handle, extract(handle, img).catch(() => null));
+    cache.set(
+      handle,
+      extract(handle, img).catch((err) => {
+        if (!warned) {
+          warned = true;
+          logInfo(`album colours failed: ${err?.message || err}`);
+        }
+        return null;
+      }),
+    );
     if (cache.size > 300) cache.delete(cache.keys().next().value);
   }
   return cache.get(handle);
@@ -34,14 +46,21 @@ async function extract(handle, img) {
     for (const type of ['front', 'disc']) {
       const res = await tryCall('artwork.getByPath', { path: handle, type });
       if (!res?.available || !res.dataUrl) continue;
-      const blob = await (await fetch(res.dataUrl)).blob();
+      // Decode the data URL by hand: the page's security policy may not let
+      // fetch() read data: URLs.
+      const comma = res.dataUrl.indexOf(',');
+      const bin = atob(res.dataUrl.slice(comma + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: res.mimeType || 'image/jpeg' });
       const bmp = await createImageBitmap(blob, { resizeWidth: SIZE, resizeHeight: SIZE, resizeQuality: 'medium' });
       pixels = read(bmp);
       bmp.close();
       if (pixels) break;
     }
   }
-  return pixels ? palette(pixels) : null;
+  if (!pixels) throw new Error('no readable cover (canvas blocked and no embedded/folder art via getByPath)');
+  return palette(pixels);
 }
 
 function read(source) {

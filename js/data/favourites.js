@@ -14,6 +14,13 @@ export const NEXT = { '': 'like', like: 'hate', hate: '' };
 
 class Favourites extends Emitter {
   #known = new Map(); // handle -> state (what we last read or wrote)
+  #written = new Map(); // handle -> time of our own MOOD write
+
+  /** Were all of these just changed by Fusion's own like/dislike? */
+  ownChange(handles) {
+    const now = performance.now();
+    return handles.length > 0 && handles.every((h) => now - (this.#written.get(h) ?? -1e9) < 4000);
+  }
 
   /** State of a track row fetched with formats: { m: MOOD_TF }. */
   state(track) {
@@ -40,6 +47,8 @@ class Favourites extends Emitter {
   async set(handles, state) {
     if (!handles.length) return;
     const before = handles.map((h) => this.#known.get(h));
+    const t = performance.now();
+    handles.forEach((h) => this.#written.set(h, t));
     handles.forEach((h) => this.#known.set(h, state));
     this.emit('change', { handles, state });
     try {

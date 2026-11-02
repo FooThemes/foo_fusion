@@ -213,6 +213,10 @@ export class TrackPanel {
     this.coverLabel.textContent = disc ? discLabel(disc) : '';
   }
 
+  reload() {
+    if (this.group) this.#load();
+  }
+
   #totalLength(rows) {
     let t = 0;
     for (const r of rows) t += view.cachedTrack(r)?.duration || 0;

@@ -169,6 +169,10 @@ export class SongList {
     this.refreshSelection();
   }
 
+  refreshTracks() {
+    this.refreshHeads();
+  }
+
   refreshHeads() {
     for (const [pos, node] of this.nodes) this.#fill(node, pos);
     this.loadVisible();

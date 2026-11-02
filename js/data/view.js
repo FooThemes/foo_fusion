@@ -13,7 +13,7 @@ import * as store from '../core/store.js';
 import { SORTS } from '../core/store.js';
 import { TF, searchQuery } from './patterns.js';
 import { playlists, COLLECTION, FAVORITES, PLAYBACK } from './playlists.js';
-import { MOOD_TF } from './favourites.js';
+import { MOOD_TF, favourites } from './favourites.js';
 import { player } from './player.js';
 
 const HEAD_CHUNK = 1000;
@@ -42,7 +42,27 @@ class View extends Emitter {
       if (!this.playlist || d.playlist == null || d.playlist === this.playlist.index) reload();
     };
     onAny(['playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered', 'playlist:itemsReplaced'], reloadIfActive);
-    on('metadb:changed', debounce(() => this.refreshHeads(), 600));
+    // Tags edited (here or in foobar2000's Properties): regroup (an album or
+    // artist name may have changed) and re-read the songs on screen.
+    const changed = new Set();
+    let everything = false;
+    const onTags = debounce(async () => {
+      const handles = [...changed];
+      const all = everything;
+      changed.clear();
+      everything = false;
+      // Our own heart clicks already updated the screen.
+      if (!all && favourites.ownChange(handles)) return;
+      this.#trackCache.clear();
+      this.#sortCache = null;
+      await this.load();
+      this.emit('metadata');
+    }, 350);
+    on('metadb:changed', (d) => {
+      if (d.truncated) everything = true;
+      for (const h of d.handles || []) changed.add(h);
+      onTags();
+    });
     on('playlist:selectionChanged', debounce((d) => {
       if (this.playlist && d.playlist === this.playlist.index) this.syncSelection();
     }, 30));
@@ -93,7 +113,11 @@ class View extends Emitter {
     store.set('view', kind);
     this.mode = kind;
     this.drill = { kind, key, label: key };
+    // Don't leave the previous page's tiles up while this one loads.
+    this.groups = [];
+    this.total = 0;
     this.emit('mode', kind);
+    this.emit('change');
     this.load();
   }
 

@@ -102,6 +102,7 @@ export function mountContent(root) {
   });
   view.on('loading', renderMessage);
   view.on('heads', () => current?.refreshHeads?.());
+  view.on('metadata', () => current?.refreshTracks?.());
   view.on('selection', () => current?.refreshSelection?.());
   player.on('track', () => current?.refreshPlaying?.());
   player.on('state', () => current?.refreshPlaying?.());

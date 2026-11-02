@@ -830,28 +830,61 @@
 
 .set-words-box {
   display: grid;
-  gap: 6px;
-  margin: 2px 0 8px;
+  gap: 8px;
+  margin: 2px 0 10px;
 }
 
-.set-words {
-  width: 100%;
-  resize: vertical;
-  padding: 8px 10px;
+.set-words-box.off {
+  opacity: 0.5;
+}
+
+.set-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
   border: 1px solid var(--line);
+}
+
+.set-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  background: var(--hover);
+  font-size: 12.5px;
+  border-radius: 13px;
+}
+
+.set-chip button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: var(--text2);
+}
+
+.set-chip button:hover {
+  background: var(--selected);
+  color: var(--text);
+}
+
+.set-chip .icon {
+  width: 11px;
+  height: 11px;
+}
+
+.set-word-add {
+  flex: 1 0 90px;
+  min-width: 90px;
+  height: 26px;
+  border: 0;
   background: transparent;
   color: var(--text);
   font: 12.5px var(--font);
-  line-height: 1.4;
-}
-
-.set-words:focus {
   outline: none;
-  border-color: var(--accent);
-}
-
-.set-words:disabled {
-  opacity: 0.5;
 }
 
 .set-words-foot {
@@ -870,4 +903,58 @@
 
 .set-mini:hover {
   background: var(--selected);
+}
+
+.set-radio {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 4px;
+}
+
+.set-radio-label {
+  margin-bottom: 4px;
+}
+
+.set-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  margin: 0 -10px;
+  text-align: left;
+}
+
+.set-radio-row:hover {
+  background: var(--hover);
+}
+
+.set-radio-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--text2);
+  position: relative;
+}
+
+.set-radio-row.on .set-radio-dot {
+  border-color: var(--accent);
+}
+
+.set-radio-row.on .set-radio-dot::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.set-radio-text {
+  display: grid;
+  gap: 1px;
+}
+
+.set-radio-text small {
+  font-size: 11.5px;
+  color: var(--text2);
 }

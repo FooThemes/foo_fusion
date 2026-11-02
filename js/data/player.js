@@ -25,6 +25,7 @@ class Player extends Emitter {
   volume = 100;
   muted = false;
   order = 'default';
+  history = []; // songs played before the current one, oldest first
   queueCount = 0;
   stopAfterCurrent = false;
   playingPlaylist = -1;
@@ -62,6 +63,11 @@ class Player extends Emitter {
     }
 
     on('playback:trackChanged', (t) => {
+      // Remember what played before (for "Previously" in Now playing).
+      if (this.track && this.track.handle !== t.handle) {
+        this.history.push({ ...this.track, playlist: this.playingPlaylist, index: this.playingIndex });
+        if (this.history.length > 20) this.history.shift();
+      }
       this.track = t;
       this.duration = t.duration || 0;
       this.#setPosition(t.position || 0);
@@ -94,6 +100,11 @@ class Player extends Emitter {
     on('playback:stopAfterCurrentChanged', (d) => {
       this.stopAfterCurrent = !!(d.enabled ?? d.stopAfterCurrent ?? d.state);
       this.emit('state', this.state);
+    });
+    // The playing song's tags were edited: show the new title/artist.
+    on('metadb:changed', (d) => {
+      if (!this.track) return;
+      if (d.truncated || (d.handles || []).includes(this.track.handle)) tryCall('playback.getCurrentTrack').then((r) => r?.track && ((this.track = r.track), this.emit('track', r.track)));
     });
     on('playback:edited', () => tryCall('playback.getCurrentTrack').then((r) => r?.track && ((this.track = r.track), this.emit('track', r.track))));
   }

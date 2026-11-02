@@ -76,6 +76,12 @@ export function artUrl(path, type = 'front', cssSize = 200) {
 // by listing the folder once (cached).
 
 const dirKind = new Map(); // folder -> 'keep' (png/gif) | 'scale'
+const rawUrls = new Set(); // URLs of unscaled PNG/GIF pictures (may be transparent)
+
+/** Is this an unscaled PNG/GIF picture (shown without a backing square)? */
+export function isRawUrl(url) {
+  return rawUrls.has(url);
+}
 const dirProbe = new Map(); // folder -> Promise
 let probing = 0;
 let probeLogs = 40; // folders with PNG/GIF pictures to note in fusion.log
@@ -135,6 +141,7 @@ export function originalUrl(path, type = 'front') {
   if (!p) {
     p = tryCall('artwork.getFb2kUrlByPath', { path, type, maxSize: 0 }).then((r) => {
       const url = r?.available ? r.dataUrl : null;
+      if (url) rawUrls.add(url);
       resolved.set(key, url);
       return url;
     });
@@ -216,7 +223,11 @@ async function loadParentCover(dir, px) {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   // PNG/GIF: keep the original (transparency, animation).
-  if (/\.(png|gif)$/i.test(pick.name)) return URL.createObjectURL(new Blob([bytes], { type: /\.gif$/i.test(pick.name) ? 'image/gif' : 'image/png' }));
+  if (/\.(png|gif)$/i.test(pick.name)) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: /\.gif$/i.test(pick.name) ? 'image/gif' : 'image/png' }));
+    rawUrls.add(url);
+    return url;
+  }
   // Scale down once, so a 3000px scan doesn't sit in memory per tile.
   try {
     const bmp = await createImageBitmap(new Blob([bytes]));
@@ -235,7 +246,9 @@ export async function nowPlayingUrl(cssSize, type = 'front', handle = null) {
   // PNG/GIF folder covers unscaled, as for the grid.
   const keep = handle && type === 'front' && (keepOriginal(handle) ?? (await probeDir(dirOf(handle), handle)) === 'keep');
   const res = await tryCall('artwork.getFb2kUrl', { type, maxSize: keep ? 0 : sizeBucket(cssSize) });
-  return res?.available ? res.dataUrl : null;
+  const url = res?.available ? res.dataUrl : null;
+  if (url && keep) rawUrls.add(url);
+  return url;
 }
 
 export function clearCache() {
@@ -284,12 +297,13 @@ export function bindArt(img, path, cssSize, types = ['front']) {
   if (ready) {
     img.onload = img.onerror = null;
     img.decoding = 'sync';
+    img.classList.toggle('alpha', rawUrls.has(ready));
     img.src = ready;
     markLoaded(ready);
     img.classList.add('loaded', 'instant');
     return;
   }
-  img.classList.remove('loaded', 'instant');
+  img.classList.remove('loaded', 'instant', 'alpha');
   img.decoding = 'async';
   img.removeAttribute('src');
   const attempt = async (i) => {
@@ -306,13 +320,14 @@ export function bindArt(img, path, cssSize, types = ['front']) {
         const pre = new Image();
         pre.src = raw;
         pre.decode().then(
-          () => img.dataset.artToken === token && ((img.src = raw), markLoaded(raw)),
+          () => img.dataset.artToken === token && ((img.src = raw), img.classList.add('alpha'), markLoaded(raw)),
           () => {},
         );
       });
     }
     if (img.dataset.artToken !== token) return;
     if (!url) return attempt(i + 1);
+    img.classList.toggle('alpha', rawUrls.has(url));
     img.onload = () => {
       markLoaded(url);
       if (img.dataset.artToken === token) img.classList.add('loaded');

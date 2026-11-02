@@ -5,7 +5,7 @@ import { el, formatTime, clamp } from '../core/util.js';
 import { icon, setIcon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { player, ORDER_LABELS } from '../data/player.js';
-import { nowPlayingUrl } from '../data/artwork.js';
+import { nowPlayingUrl, isRawUrl } from '../data/artwork.js';
 import { view } from '../data/view.js';
 import { playlists } from '../data/playlists.js';
 import { showMenu, showAppMenu } from './menus.js';
@@ -122,6 +122,7 @@ export function mountPlayerBar(root, app) {
     if (url) {
       cover.onload = () => cover.classList.add('loaded');
       cover.src = url;
+      cover.classList.toggle('alpha', isRawUrl(url));
     } else cover.removeAttribute('src');
     updateBigArt(url ? await nowPlayingUrl(store.get('sidebarWidth'), 'front', player.track?.handle) : null);
   }
@@ -136,6 +137,7 @@ export function mountPlayerBar(root, app) {
     if (url) {
       bigArt.onload = () => bigArt.classList.add('loaded');
       bigArt.src = url;
+      bigArt.classList.toggle('alpha', isRawUrl(url));
     } else bigArt.removeAttribute('src');
   }
 

@@ -7,7 +7,7 @@ import { el, clear, formatTime } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall, call } from '../core/bridge.js';
 import { player, ORDER_LABELS } from '../data/player.js';
-import { nowPlayingUrl } from '../data/artwork.js';
+import { nowPlayingUrl, isRawUrl } from '../data/artwork.js';
 import { playlists } from '../data/playlists.js';
 
 const UP_NEXT = 25;
@@ -72,6 +72,7 @@ export class NowPlaying {
     for (const img of [this.cover, this.bg]) {
       if (pre.naturalWidth) {
         img.src = url;
+        img.classList.toggle('alpha', isRawUrl(url));
         img.classList.add('loaded');
       } else {
         img.classList.remove('loaded');

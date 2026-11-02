@@ -285,6 +285,27 @@ body.no-sidebar #sidebar {
   transition: none;
 }
 
+/* PNG/GIF covers keep their transparency: no grey square or square shadow
+   behind them; the expanded album and Now playing shadow follows the shape. */
+.art:has(> img.alpha.loaded) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.art:has(> img.alpha.loaded)::before {
+  display: none;
+}
+
+.tp-cover img.alpha,
+.np-cover img.alpha {
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+}
+
+.tp-cover:has(> img.alpha.loaded),
+.np-cover:has(> img.alpha.loaded) {
+  overflow: visible;
+}
+
 .art.round {
   border-radius: 50%;
 }

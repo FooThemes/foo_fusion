@@ -7,6 +7,7 @@
 
 import { tryCall } from '../core/bridge.js';
 import { logInfo } from '../core/log.js';
+import { artPatterns, pickByPatterns } from './artpatterns.js';
 
 const cache = new Map(); // key -> Promise<string|null>
 const resolved = new Map(); // key -> string|null, once known (for instant reuse)
@@ -74,7 +75,6 @@ export function artUrl(path, type = 'front', cssSize = 200) {
 // picture instead (the browser scales it). Which folders those are is found
 // by listing the folder once (cached).
 
-const COVER_FILES = ['cover', 'folder', 'front', 'albumart', 'album'];
 const dirKind = new Map(); // folder -> 'keep' (png/gif) | 'scale'
 const dirProbe = new Map(); // folder -> Promise
 let probing = 0;
@@ -92,7 +92,7 @@ export function keepOriginal(handle) {
   return dirKind.get(dirOf(handle)) === 'keep' ? true : dirKind.has(dirOf(handle)) ? false : undefined;
 }
 
-function probeDir(dir) {
+function probeDir(dir, sample) {
   if (!dir) return Promise.resolve('scale');
   if (!dirProbe.has(dir)) {
     dirProbe.set(
@@ -102,15 +102,8 @@ function probeDir(dir) {
           const res = await tryCall('artwork.getFolderImages', { directory: dir });
           const images = res?.images || [];
           const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
-          // Which picture foobar2000 uses isn't reported, so guess like its
-          // default search: cover/folder/front/album by name, then any name
-          // containing those words, then the only picture or the only kind.
-          const words = /cover|front|folder|album|jacket/i;
-          const pick =
-            COVER_FILES.map((c) => images.find((im) => base(im.name) === c)).find(Boolean) ||
-            images.find((im) => words.test(base(im.name))) ||
-            (images.length === 1 ? images[0] : null) ||
-            (images.length && images.every((im) => /\.(png|gif)$/i.test(im.name)) ? images[0] : null);
+          // The file foobar2000 itself would use, by its search patterns.
+          const pick = await pickByPatterns((await artPatterns()).front, images, sample);
           const kind = pick && /\.(png|gif)$/i.test(pick.name) ? 'keep' : 'scale';
           if (probeLogs-- > 0 && images.some((im) => /\.(png|gif)$/i.test(im.name))) logInfo(`cover check ${dir.split('\\').pop()}: [${images.map((im) => im.name).join(', ')}] -> ${pick?.name || 'none'} (${kind})`);
           dirKind.set(dir, kind);
@@ -212,7 +205,10 @@ async function loadParentCover(dir, px) {
   const images = res?.images || [];
   if (!images.length) return null;
   const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
-  const pick = COVER_NAMES.map((c) => images.find((im) => base(im.name) === c)).find(Boolean) || (images.length === 1 ? images[0] : null);
+  const pick =
+    (await pickByPatterns((await artPatterns()).front.filter((p) => !/[%$]/.test(p)), images, null)) ||
+    COVER_NAMES.map((c) => images.find((im) => base(im.name) === c)).find(Boolean) ||
+    (images.length === 1 ? images[0] : null);
   if (!pick) return null;
   const file = await tryCall('file.read', { path: pick.path, encoding: 'binary' });
   if (!file?.content) return null;
@@ -237,7 +233,7 @@ async function loadParentCover(dir, px) {
 /** Art for the playing track (cached per track by the caller). */
 export async function nowPlayingUrl(cssSize, type = 'front', handle = null) {
   // PNG/GIF folder covers unscaled, as for the grid.
-  const keep = handle && type === 'front' && (keepOriginal(handle) ?? (await probeDir(dirOf(handle))) === 'keep');
+  const keep = handle && type === 'front' && (keepOriginal(handle) ?? (await probeDir(dirOf(handle), handle)) === 'keep');
   const res = await tryCall('artwork.getFb2kUrl', { type, maxSize: keep ? 0 : sizeBucket(cssSize) });
   return res?.available ? res.dataUrl : null;
 }
@@ -303,7 +299,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     const url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
     // Folder not checked yet: find out, and switch to the original if it's a PNG/GIF.
     if (type === 'front' && keep === undefined && url) {
-      probeDir(dirOf(path)).then(async (kind) => {
+      probeDir(dirOf(path), path).then(async (kind) => {
         if (kind !== 'keep' || img.dataset.artToken !== token) return;
         const raw = await originalUrl(path, type);
         if (!raw || img.dataset.artToken !== token) return;

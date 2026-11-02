@@ -508,15 +508,14 @@
 }
 
 .tp-row:hover .tp-name.clipped {
-  animation: tp-name-scroll var(--mq-dur, 4s) ease-in-out 0.4s infinite alternate;
+  animation: tp-name-scroll var(--mq-dur, 2s) ease-in-out 0.25s infinite alternate;
 }
 
 @keyframes tp-name-scroll {
-  0%,
-  15% {
+  0% {
     text-indent: 0;
   }
-  85%,
+  80%,
   100% {
     text-indent: var(--mq-dist);
   }

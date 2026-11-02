@@ -358,7 +358,7 @@ export class TrackPanel {
         n.classList.toggle('clipped', over > 2 && !this.twoLine);
         if (over > 2 && !this.twoLine) {
           n.style.setProperty('--mq-dist', -over - 6 + 'px');
-          n.style.setProperty('--mq-dur', Math.max(3, over / 40 + 2) + 's');
+          n.style.setProperty('--mq-dur', Math.max(1.2, over / 90 + 0.6) + 's');
         }
       }
     });

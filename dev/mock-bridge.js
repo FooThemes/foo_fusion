@@ -441,7 +441,29 @@ export async function installMock() {
     'menu.getContextMenu': () => ({ mode: 'selection', items: [{ type: 'command', label: 'Open containing folder', commandId: 1 }], targetKey: 'x' }),
     'menu.runContextCommandById': () => ({}),
   };
-  const noop = ['window.setTitle', 'window.setDarkMode', 'window.setFrameless', 'window.reload', 'window.toggleFullscreen', 'window.toggleAlwaysOnTop'];
+  let fullscreen = false;
+  let waveTask = 0;
+  api['window.isFullscreen'] = () => ({ fullscreen, isFullscreen: fullscreen, windowId: 'main' });
+  api['window.toggleFullscreen'] = () => {
+    fullscreen = !fullscreen;
+    emit('window:stateChanged', { windowId: 'main', fullscreen, isFullscreen: fullscreen, maximized: false, minimized: false, active: true });
+    return { fullscreen };
+  };
+  api['audio.cancelFullWaveform'] = () => ({ cancelled: true });
+  api['audio.generateFullWaveform'] = (p) => {
+    const taskId = `wf_${++waveTask}`;
+    const n = p.resolution || 256;
+    let seed = [...p.path].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const waveform = Array.from({ length: n }, (_, i) => {
+      const x = i / n;
+      const env = Math.min(1, x * 12) * Math.min(1, (1 - x) * 8) * (0.55 + 0.45 * Math.sin(x * 9 + seed % 5));
+      return Math.max(0, Math.min(1, env * (0.6 + 0.4 * rnd())));
+    });
+    setTimeout(() => emit('audio:fullWaveformReady', { taskId, path: p.path, waveform, maxAmplitude: 0.9, duration: 200, resolution: n, cached: false }), 400);
+    return { status: 'pending', taskId, resolution: n, path: p.path };
+  };
+  const noop = ['window.setTitle', 'window.setDarkMode', 'window.setFrameless', 'window.reload', 'window.toggleAlwaysOnTop'];
   noop.forEach((m) => (api[m] = () => ({})));
 
   window.fb2k = {

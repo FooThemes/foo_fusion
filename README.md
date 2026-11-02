@@ -27,6 +27,13 @@ new.
 - **Playlist manager** (Ctrl+M), standing in for foobar2000's Default UI panel:
   reorder by dragging, multi-select, rename, duplicate, delete, load and save,
   and create or edit autoplaylists.
+- **Playlist folders** in the left panel and the playlist manager, and a New
+  playlist dialog with Playlist / Autoplaylist tabs.
+- **Multi-value tags**: Artists uses ARTISTS (so featured artists get a tile)
+  and Genres splits GENRE on `;`. Box-set covers are found in the folder above
+  `CD1`, `Disc 2`… folders.
+- Optional **waveform seek bar** (Settings → Layout).
+- Accent colour from the presets or any custom colour.
 - Drag albums or songs onto a playlist to add them.
 - Track info panel, a pop-up bar for selected songs, light and dark themes, and
   21 accent colours.

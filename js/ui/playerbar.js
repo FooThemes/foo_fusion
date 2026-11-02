@@ -11,6 +11,7 @@ import { showMenu, showAppMenu } from './menus.js';
 import { tryCall } from '../core/bridge.js';
 import { heartButton, setHeart } from './heart.js';
 import { favourites } from '../data/favourites.js';
+import { mountWaveform } from './waveform.js';
 
 export function mountPlayerBar(root, app) {
   const cover = el('img', { alt: '' });
@@ -27,6 +28,7 @@ export function mountPlayerBar(root, app) {
   const knob = el('div.seek-knob');
   const seek = el('div.seek', { role: 'slider', 'aria-label': 'Seek', tabindex: 0 }, el('div.seek-track', null, fill, knob));
   const seekBox = el('div.pb-seek', null, elapsed, seek, length);
+  const wave = mountWaveform(seek);
 
   const orderBtn = el('button.btn-icon.pb-order', { title: 'Playback order', onclick: orderMenu }, icon('shuffle'));
   const prev = el('button.btn-icon', { title: 'Previous', onclick: () => player.previous() }, icon('prev'));
@@ -55,6 +57,7 @@ export function mountPlayerBar(root, app) {
     nowBox.title = on ? `${t.title}\n${t.artist}\n${t.album}` : '';
     heart.dataset.handle = on ? t.handle : '';
     heart.hidden = !on;
+    wave.track(on ? t.handle : null);
     if (on) favourites.load([t.handle]).then(([state]) => heart.dataset.handle === t.handle && setHeart(heart, state));
     const key = on ? t.handle : null;
     if (key === artTrack) return;
@@ -115,6 +118,7 @@ export function mountPlayerBar(root, app) {
     frac = clamp(frac, 0, 1);
     fill.style.transform = `scaleX(${frac})`;
     knob.style.left = frac * 100 + '%';
+    wave.progress(frac);
     seek.setAttribute('aria-valuenow', Math.round(frac * 100));
   }
   let raf = 0;
@@ -222,6 +226,11 @@ export function mountPlayerBar(root, app) {
   player.on('order', renderOrder);
   playlists.on('active', renderState);
   view.on('change', renderState);
+  store.subscribe((k) => {
+    if (k === 'waveformSeekbar') wave.show(store.get('waveformSeekbar'), player.active ? player.track?.handle : null);
+    else if (k === 'accent' || k === 'dark') requestAnimationFrame(wave.redraw);
+  });
+  wave.show(store.get('waveformSeekbar'), player.active ? player.track?.handle : null);
   store.subscribe((k) => (k === 'largeNowPlayingArt' || k === 'sidebarCollapsed') && ((artTrack = null), renderTrack()));
   document.addEventListener('visibilitychange', startTicking);
 

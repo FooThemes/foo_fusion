@@ -4,7 +4,7 @@ import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { ACCENTS } from '../core/store.js';
-import { tryCall } from '../core/bridge.js';
+import { tryCall, on } from '../core/bridge.js';
 import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.js';
 import { clearCache } from '../data/artwork.js';
 import { VERSION } from '../version.js';
@@ -17,14 +17,20 @@ export function mountSettings(root, app) {
     if (e.key === 'Escape') app.toggleSettings(false);
   });
 
+  // Highlighted while the window is fullscreen.
+  const fullscreenBtn = quick('fullscreen', 'Fullscreen', () => tryCall('window.toggleFullscreen'));
+  const setFullscreen = (on) => fullscreenBtn.classList.toggle('on', !!on);
+  tryCall('window.isFullscreen').then((r) => setFullscreen(r?.fullscreen));
+  on('window:stateChanged', (e) => (!e.windowId || e.windowId === 'main') && setFullscreen(e.fullscreen ?? e.isFullscreen));
+
   function render() {
     clear(body).append(
       el(
         'div.set-quick',
         null,
-        quick('menu', 'foobar2000 menu', async () => showMenu(await foobarMenuItems())),
+        quick('menu', 'Main menu', async () => showMenu(await foobarMenuItems())),
         quick('settings', 'Preferences', () => tryCall('misc.showPreferences')),
-        quick('fullscreen', 'Fullscreen', () => tryCall('window.toggleFullscreen')),
+        fullscreenBtn,
       ),
       section('Theme', [
         choice('Mode', 'dark', [
@@ -32,6 +38,7 @@ export function mountSettings(root, app) {
           [true, 'Dark'],
         ]),
         swatches(),
+        customColour(),
       ]),
       section('Library', [
         toggle('Separate albums by disc', 'separateDiscs'),
@@ -53,17 +60,18 @@ export function mountSettings(root, app) {
         toggle('Show playlist song counts', 'showPlaylistCounts'),
         toggle('Large now playing artwork', 'largeNowPlayingArt'),
         toggle('Track info panel', 'infoPanel'),
-        toggle('Selection bar', 'selectionBar'),
+        toggle('Action bar for selected songs', 'selectionBar', 'Play, queue, like and add-to buttons along the bottom when songs are selected'),
+        toggle('Waveform seek bar', 'waveformSeekbar', 'Draws the playing song’s waveform in place of the plain bar'),
         toggle('Smooth scrolling', 'smoothScroll'),
       ]),
       section('foobar2000', [
-        link('Preferences…', () => tryCall('misc.showPreferences')),
-        link('Configure media library…', () => tryCall('config.showLibraryPreferences')),
-        link('Refresh artwork', () => {
+        link('settings', 'Preferences…', () => tryCall('misc.showPreferences')),
+        link('library', 'Configure media library…', () => tryCall('config.showLibraryPreferences')),
+        link('refresh', 'Refresh artwork', () => {
           clearCache();
           app.reload();
         }),
-        link('Reset Fusion settings', async () => {
+        link('reset', 'Reset Fusion settings', async () => {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();
         }),
       ]),
@@ -75,9 +83,10 @@ export function mountSettings(root, app) {
     return el('section.set-section', null, el('h3', { text: title }), items);
   }
 
-  function toggle(label, key) {
+  function toggle(label, key, hint) {
     const input = el('input', { type: 'checkbox', checked: !!store.get(key), onchange: () => store.set(key, input.checked) });
-    return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
+    const text = hint ? el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })) : el('span', { text: label });
+    return el('label.set-toggle', null, text, input, el('span.switch'));
   }
 
   function toggleInverse(label, key) {
@@ -86,7 +95,7 @@ export function mountSettings(root, app) {
   }
 
   function quick(iconName, label, onclick) {
-    return el('button.set-quick-btn', { onclick, title: label }, icon(iconName), el('span', { text: label }));
+    return el('button.set-quick-btn', { onclick, title: label }, icon(iconName), el('span.set-quick-label', { text: label }));
   }
 
   function choice(label, key, options) {
@@ -115,23 +124,76 @@ export function mountSettings(root, app) {
     return el(
       'div.swatches',
       { role: 'radiogroup', 'aria-label': 'Accent colour' },
-      ACCENTS.map((c) =>
-        el('button.swatch' + (c.toLowerCase() === cur ? '.on' : ''), {
-          style: { background: c },
-          title: c,
-          role: 'radio',
-          'aria-checked': String(c.toLowerCase() === cur),
-          onclick: () => (store.set('accent', c), render()),
-        }),
-      ),
+      ACCENTS.map((c) => {
+        const on = c.toLowerCase() === cur;
+        return el(
+          'button.swatch' + (on ? '.on' : ''),
+          { style: { '--sw': c }, title: c, role: 'radio', 'aria-checked': String(on), onclick: () => store.set('accent', c) },
+          on ? icon('check') : null,
+        );
+      }),
     );
   }
 
-  function link(label, onclick) {
-    return el('button.set-link', { text: label, onclick });
+  // Your own colour: a hue strip for quick picks, plus the system colour
+  // picker and a hex box for exact values.
+  function customColour() {
+    const cur = store.get('accent');
+    const hsl = hexToHsl(cur);
+    const hue = el('input.hue', { type: 'range', min: 0, max: 359, step: 1, value: Math.round(hsl.h), 'aria-label': 'Hue' });
+    const shade = el('input.shade', { type: 'range', min: 25, max: 65, step: 1, value: Math.round(clampN(hsl.l, 25, 65)), 'aria-label': 'Lightness' });
+    const picker = el('input.set-picker', { type: 'color', value: cur, title: 'Pick any colour' });
+    const hex = el('input.set-hex', { type: 'text', value: cur.toUpperCase(), maxLength: 7, spellcheck: false, 'aria-label': 'Hex colour' });
+    const preview = el('span.set-colour-preview', { style: { background: cur } });
+    let timer = 0;
+    const apply = (c, from) => {
+      c = c.toUpperCase();
+      preview.style.background = c;
+      if (from !== 'hex') hex.value = c;
+      if (from !== 'picker') picker.value = c.toLowerCase();
+      if (from !== 'slider') {
+        const h = hexToHsl(c);
+        hue.value = Math.round(h.h);
+        shade.value = Math.round(clampN(h.l, 25, 65));
+      }
+      document.documentElement.style.setProperty('--accent', c);
+      clearTimeout(timer);
+      timer = setTimeout(() => store.get('accent').toUpperCase() !== c && store.set('accent', c), 250);
+    };
+    const fromSliders = () => apply(hslToHex(Number(hue.value), 72, Number(shade.value)), 'slider');
+    hue.addEventListener('input', fromSliders);
+    shade.addEventListener('input', fromSliders);
+    shade.style.setProperty('--h', hue.value);
+    hue.addEventListener('input', () => shade.style.setProperty('--h', hue.value));
+    picker.addEventListener('input', () => apply(picker.value, 'picker'));
+    hex.addEventListener('input', () => {
+      let v = hex.value.trim();
+      if (!v.startsWith('#')) v = '#' + v;
+      if (/^#[0-9a-f]{6}$/i.test(v)) apply(v, 'hex');
+    });
+    return el(
+      'div.set-custom',
+      null,
+      el('div.set-custom-head', null, el('span', { text: 'Custom colour' }), preview),
+      hue,
+      shade,
+      el('div.set-custom-row', null, el('label.set-picker-wrap', { title: 'Pick any colour' }, icon('palette'), picker), hex),
+    );
   }
 
-  store.subscribe(() => panel.classList.contains('open') && render());
+  function link(iconName, label, onclick) {
+    return el('button.set-link', { onclick }, icon(iconName), el('span', { text: label }));
+  }
+
+  // Re-render on changes, keeping the scroll position (and not while the
+  // custom colour controls are being dragged or typed in).
+  store.subscribe(() => {
+    if (!panel.classList.contains('open')) return;
+    if (panel.querySelector('.set-custom')?.contains(document.activeElement)) return;
+    const top = body.scrollTop;
+    render();
+    body.scrollTop = top;
+  });
   return {
     open(on) {
       if (on) render();
@@ -144,4 +206,32 @@ export function mountSettings(root, app) {
       return panel.classList.contains('open');
     },
   };
+}
+
+function clampN(v, a, b) {
+  return Math.min(b, Math.max(a, v));
+}
+
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l: l * 100 };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: h * 60, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+  return '#' + [f(0), f(8), f(4)].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 }

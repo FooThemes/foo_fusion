@@ -102,6 +102,48 @@ body.no-sidebar #playerbar {
   background: var(--accent);
 }
 
+/* Waveform seek bar (Settings > Layout) */
+.wave-box {
+  display: none;
+  position: relative;
+  width: 100%;
+  height: 34px;
+}
+.seek.waveform {
+  height: 40px;
+}
+.seek.waveform .seek-track {
+  display: none;
+}
+.seek.waveform .wave-box {
+  display: block;
+  --wave-back: #444;
+  --wave-fill: var(--seek-fill);
+}
+.seek.waveform:hover .wave-box {
+  --wave-fill: var(--accent);
+}
+.wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.wave-front {
+  clip-path: inset(0 100% 0 0);
+}
+/* Until the waveform is decoded, show a thin line so seeking still works. */
+.wave-box:not(.ready)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--seek-back);
+}
+
 .seek-knob {
   position: absolute;
   top: 50%;

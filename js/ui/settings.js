@@ -23,7 +23,7 @@ export function mountSettings(root, app) {
         'div.set-quick',
         null,
         quick('menu', 'foobar2000 menu', async () => showMenu(await foobarMenuItems())),
-        quick('settings', 'Preferences', () => runMainMenu('File/Preferences')),
+        quick('settings', 'Preferences', () => tryCall('misc.showPreferences')),
         quick('fullscreen', 'Fullscreen', () => tryCall('window.toggleFullscreen')),
       ),
       section('Theme', [
@@ -57,7 +57,7 @@ export function mountSettings(root, app) {
         toggle('Smooth scrolling', 'smoothScroll'),
       ]),
       section('foobar2000', [
-        link('Preferences…', () => runMainMenu('File/Preferences')),
+        link('Preferences…', () => tryCall('misc.showPreferences')),
         link('Configure media library…', () => tryCall('config.showLibraryPreferences')),
         link('Refresh artwork', () => {
           clearCache();

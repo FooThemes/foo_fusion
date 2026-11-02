@@ -513,3 +513,119 @@
 .plm-list:focus-visible {
   outline: none;
 }
+
+/* Autoplaylist properties */
+.ap-dialog {
+  display: flex;
+  gap: 0;
+  width: min(620px, calc(100vw - 40px));
+  padding: 0;
+  transition: width 0.2s ease;
+}
+
+.ap-dialog.with-help {
+  width: min(1180px, calc(100vw - 40px));
+  height: min(760px, calc(100vh - 60px));
+}
+
+.ap-main {
+  flex: 0 0 min(620px, calc(100vw - 40px));
+  padding: 26px 28px 22px;
+  min-width: 0;
+}
+
+.ap-dialog.with-help .ap-main {
+  flex-basis: 520px;
+}
+
+.ap-field {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ap-label {
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.dialog-input.mono {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 13px;
+}
+
+.dialog-input.invalid {
+  border-color: #c42b1c;
+}
+
+.dialog-input:disabled {
+  opacity: 0.6;
+}
+
+.ap-q {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  font-weight: 700;
+  color: var(--text2);
+}
+
+.ap-q:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.ap-check {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 6px 0 0 118px;
+  font-size: 13px;
+}
+
+.ap-check input {
+  accent-color: var(--accent);
+}
+
+.ap-hint {
+  flex-basis: 100%;
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.ap-note {
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+
+.ap-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.ap-help {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+}
+
+.ap-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 16px;
+  font-weight: 600;
+}
+
+.ap-help-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}

@@ -46,7 +46,7 @@ export function mountKeyboard(app) {
         const name = await promptText('Name this playlist', 'New playlist');
         if (name) playlists.create(name);
       },
-      'Ctrl+P': () => runMainMenu('File/Preferences'),
+      'Ctrl+P': () => tryCall('misc.showPreferences'),
       'Ctrl+O': () => view.selection.size && runSelectionCommand('Open containing folder'),
       F5: () => view.load(),
       'Ctrl+Shift+F5': () => tryCall('window.reload'),

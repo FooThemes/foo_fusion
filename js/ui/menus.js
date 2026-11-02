@@ -6,6 +6,7 @@ import { el } from '../core/util.js';
 import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { toast } from './toast.js';
+import { editAutoplaylist } from './autoplaylist.js';
 import * as store from '../core/store.js';
 import { player } from '../data/player.js';
 
@@ -46,7 +47,7 @@ export async function showAppMenu(app) {
     { label: 'Always on top', shortcut: 'Alt+A', run: () => tryCall('window.toggleAlwaysOnTop') },
     '-',
     { label: 'foobar2000', submenu: fbItems.length ? fbItems : [{ label: 'Unavailable', enabled: false }] },
-    { label: 'Preferences', shortcut: 'Ctrl+P', run: () => runMainMenu('File/Preferences') },
+    { label: 'Preferences', shortcut: 'Ctrl+P', run: () => tryCall('misc.showPreferences') },
   ]);
 }
 
@@ -100,7 +101,8 @@ export function playlistMenu(p, targets = [p]) {
       await runMainMenuAny(['File/Save playlist...', 'File/Save playlist…', 'Save playlist...']);
     } },
     '-',
-    { label: 'Edit autoplaylist…', enabled: p.isAutoplaylist && !many, run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) },
+    { label: 'Autoplaylist properties…', enabled: p.isAutoplaylist && !many, run: () => editAutoplaylist(p) },
+    { label: "foobar2000's autoplaylist editor…", enabled: p.isAutoplaylist && !many, run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) },
     { label: 'Convert to a normal playlist', enabled: p.isAutoplaylist && !special && !many, run: () => call('playlist.removeAutoplaylist', { playlist: p.index }) },
     '-',
     { label: many ? `Delete ${targets.length} playlists` : 'Delete', shortcut: 'Del', run: () => deletePlaylists(targets) },

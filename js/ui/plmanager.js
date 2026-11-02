@@ -13,6 +13,7 @@ import { player } from '../data/player.js';
 import * as store from '../core/store.js';
 import { playlistMenu, promptText, renamePlaylist, deletePlaylists, runMainMenuAny } from './menus.js';
 import { draggablePlaylist, playlistDropTarget } from './dnd.js';
+import { newAutoplaylist } from './autoplaylist.js';
 
 export function mountPlaylistManager(root, app) {
   const list = el('div.plm-list', { role: 'listbox', 'aria-label': 'Playlists', 'aria-multiselectable': 'true', tabindex: 0 });
@@ -122,15 +123,6 @@ export function mountPlaylistManager(root, app) {
     } else return;
     e.stopPropagation();
   });
-
-  async function newAutoplaylist() {
-    const query = await promptText('Autoplaylist query', 'GENRE HAS rock', 'A foobar2000 query, e.g. ARTIST IS Adele, or %rating% GREATER 3. Edit it later from the right-click menu.');
-    if (!query) return;
-    const name = await promptText('Name this autoplaylist', query);
-    if (!name) return;
-    const res = await tryCall('playlist.createAutoplaylist', { name, query, sort: '', keepSorted: false });
-    if (res) playlists.activate(res.index);
-  }
 
   async function sortByName() {
     const special = playlists.list.filter((p) => playlists.isSpecial(p));

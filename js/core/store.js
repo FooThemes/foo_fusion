@@ -71,6 +71,7 @@ const DEFAULTS = {
   smoothScroll: true,
   sortOnOpen: true, // sort Collection/Favorites by the view's sort when opened
   favouritesQuery: 'MOOD IS "Like it"',
+  autoplaylists: {}, // GUID -> { query, sort, keepSorted } for autoplaylists made or edited in Fusion
   appliedSort: {}, // playlist GUID -> sort applied by Fusion, so it isn't redone needlessly
 };
 

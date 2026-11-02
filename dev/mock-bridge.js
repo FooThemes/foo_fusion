@@ -426,6 +426,9 @@ export async function installMock() {
       const byPath = new Map(lib.map((t) => [t.handle, t]));
       return { results: p.paths.map((path) => ({ path, success: true, result: byPath.get(path) ? tfEval(p.pattern, byPath.get(path)) : '' })) };
     },
+    'misc.getFoobarPath': () => ({ path: 'C:\\Program Files\\foobar2000', value: 'C:\\Program Files\\foobar2000' }),
+    'misc.showPreferences': () => (console.info('[mock] preferences'), {}),
+    'file.read': (p) => ({ content: `<html><body style="font:14px Segoe UI,sans-serif;padding:16px"><h1>${p.path.split('\\').pop()}</h1><p>(mock help page)</p><h2>Examples</h2><pre>ARTIST IS Adele\nGENRE HAS rock AND %rating% GREATER 3</pre></body></html>`, size: 100 }),
     'menu.showNativePopup': () => (console.info('[mock] native context menu'), {}),
     'menu.getMainMenu': () => ({
       items: ['File', 'Edit', 'View', 'Playback', 'Library', 'Help'].map((l) => ({ type: 'submenu', label: l, path: l, children: [{ type: 'command', label: `${l} command`, path: `${l}/${l} command`, enabled: true }] })),

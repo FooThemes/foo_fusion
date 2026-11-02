@@ -1,0 +1,1658 @@
+{
+"artwork.getAvailableArtwork": [
+"path"
+],
+"artwork.getAvailableTypes": [
+"path"
+],
+"artwork.getBatch": [
+"paths",
+"type"
+],
+"artwork.getByPath": [
+"path",
+"type"
+],
+"artwork.getByPlaylistItem": [
+"index",
+"playlist",
+"playlistGuid",
+"type"
+],
+"artwork.getCurrent": [
+"type"
+],
+"artwork.getFb2kUrl": [
+"maxSize",
+"type"
+],
+"artwork.getFb2kUrlByPath": [
+"maxSize",
+"path",
+"type"
+],
+"artwork.getFb2kUrlByPathBatch": [
+"items",
+"maxSize",
+"paths",
+"type"
+],
+"artwork.getFolderImages": [
+"directory"
+],
+"artwork.getForTrack": [
+"path",
+"type"
+],
+"artwork.getLyrics": [
+"path"
+],
+"artwork.getMetadata": [
+"path"
+],
+"audio.analyzeBPM": [
+"path"
+],
+"audio.cancelDecodePcm": [
+"taskId"
+],
+"audio.cancelFullWaveform": [
+"taskId"
+],
+"audio.decodePcm": [
+"cueIndex",
+"end",
+"mono",
+"path",
+"sampleRate",
+"start"
+],
+"audio.generateFullWaveform": [
+"cueIndex",
+"method",
+"path",
+"preferCache",
+"resolution",
+"scale",
+"signed"
+],
+"audio.getOutputInfo": [],
+"audio.getPcmDebugState": [],
+"audio.getSpectrum": [
+"bands",
+"channels",
+"maxFrequency",
+"minFrequency",
+"output",
+"scale",
+"subscriptionId"
+],
+"audio.getSpectrumDebugState": [],
+"audio.getStreamInfo": [],
+"audio.getWaveform": [
+"channels",
+"duration",
+"points",
+"signed"
+],
+"audio.isVisualizationAvailable": [],
+"audio.setChannelMode": [
+"mode"
+],
+"audio.subscribeSpectrum": [
+"backgroundThrottle",
+"bands",
+"channels",
+"event",
+"fftSize",
+"fps",
+"maxFrequency",
+"minFrequency",
+"output",
+"scale",
+"subscriptionId"
+],
+"audio.subscribeStream": [
+"bufferSeconds",
+"interval",
+"subscriptionId"
+],
+"audio.unsubscribeSpectrum": [
+"subscriptionId"
+],
+"audio.unsubscribeStream": [
+"subscriptionId"
+],
+"clipboard.read": [],
+"clipboard.write": [
+"text"
+],
+"clipboard.writeFiles": [
+"paths"
+],
+"clipboard.writeHTML": [
+"html",
+"plainText"
+],
+"config.export": [],
+"config.get": [
+"default",
+"key"
+],
+"config.getActiveDspPreset": [],
+"config.getAdvancedConfig": [
+"parentGuid"
+],
+"config.getAdvancedConfigValue": [
+"guid"
+],
+"config.getAll": [],
+"config.getComponents": [],
+"config.getCursorFollowPlayback": [],
+"config.getDspPresets": [],
+"config.getLibraryFilePatterns": [],
+"config.getLibraryStatus": [],
+"config.getOutputConfig": [],
+"config.getOutputDevices": [],
+"config.getPlaybackFollowCursor": [],
+"config.getPreferencesPages": [],
+"config.getPreferencesStandardGuids": [],
+"config.getReplaygainMode": [],
+"config.getVersionInfo": [],
+"config.remove": [
+"key"
+],
+"config.resetAdvancedConfig": [
+"guid"
+],
+"config.set": [
+"key",
+"value"
+],
+"config.setActiveDspPreset": [
+"index"
+],
+"config.setAdvancedConfigValue": [
+"guid",
+"value"
+],
+"config.setCursorFollowPlayback": [
+"enabled"
+],
+"config.setOutputBuffer": [
+"bufferLength",
+"milliseconds"
+],
+"config.setOutputDevice": [
+"deviceId",
+"outputId"
+],
+"config.setPlaybackFollowCursor": [
+"enabled"
+],
+"config.setReplaygainMode": [
+"mode",
+"sourceMode"
+],
+"config.showLibraryPreferences": [],
+"console.error": [
+"args",
+"message"
+],
+"console.log": [
+"args",
+"message"
+],
+"console.warn": [
+"args",
+"message"
+],
+"cursor.isHidden": [],
+"cursor.setHidden": [
+"hidden"
+],
+"dialog.confirm": [
+"buttons",
+"defaultButton",
+"message",
+"title",
+"type"
+],
+"dialog.openFile": [
+"defaultPath",
+"filters",
+"multiple",
+"title"
+],
+"dialog.openFolder": [
+"defaultPath",
+"title"
+],
+"dialog.saveFile": [
+"defaultName",
+"filters",
+"title"
+],
+"discovery.executeContextMenuByPath": [
+"path",
+"trackPath"
+],
+"discovery.executeContextMenuCommand": [
+"force",
+"guid"
+],
+"discovery.executeMainMenuCommand": [
+"guid",
+"subGuid"
+],
+"discovery.getAllServices": [],
+"discovery.getComponents": [],
+"discovery.getContextMenuCommands": [
+"includeHidden"
+],
+"discovery.getContextMenuTree": [],
+"discovery.getDspEntries": [],
+"discovery.getInputFormats": [],
+"discovery.getMainMenuCommands": [
+"expandDynamic",
+"includeHidden"
+],
+"discovery.getMainMenuGroups": [],
+"discovery.getOutputDevices": [],
+"discovery.getPreferencePages": [],
+"discovery.getUIElements": [],
+"discovery.searchCommands": [
+"expandDynamic",
+"includeHidden",
+"query",
+"scope"
+],
+"dnd.getCapabilities": [],
+"dnd.getPathsAsync": [
+"sessionId"
+],
+"dnd.prepareDrag": [
+"paths"
+],
+"dnd.startDrag": [],
+"dsp.addDsp": [
+"guid",
+"position"
+],
+"dsp.applyPreset": [
+"index",
+"name"
+],
+"dsp.getAvailable": [],
+"dsp.getChain": [],
+"dsp.getPresets": [],
+"dsp.moveDsp": [
+"from",
+"to"
+],
+"dsp.removeDsp": [
+"index"
+],
+"dsp.setChain": [
+"dsps"
+],
+"event.emit": [
+"event",
+"excludeSelf",
+"payload"
+],
+"event.emitTo": [
+"event",
+"payload",
+"targetWindowId"
+],
+"file.cancelOp": [
+"operationId"
+],
+"file.copy": [
+"destination",
+"overwrite",
+"source"
+],
+"file.copyAsync": [
+"items",
+"overwrite"
+],
+"file.delete": [
+"moveToTrash",
+"path"
+],
+"file.deleteAsync": [
+"moveToTrash",
+"paths"
+],
+"file.exists": [
+"path"
+],
+"file.getInfo": [
+"path"
+],
+"file.list": [
+"path",
+"pattern",
+"recursive"
+],
+"file.mkdir": [
+"path"
+],
+"file.move": [
+"destination",
+"source"
+],
+"file.moveAsync": [
+"items",
+"overwrite"
+],
+"file.read": [
+"encoding",
+"path"
+],
+"file.rename": [
+"newName",
+"path"
+],
+"file.write": [
+"append",
+"atomic",
+"content",
+"encoding",
+"path"
+],
+"http.abort": [
+"requestId"
+],
+"http.delete": [
+"async",
+"body",
+"headers",
+"insecureTls",
+"redirect",
+"responseType",
+"timeout",
+"url"
+],
+"http.download": [
+"async",
+"headers",
+"insecureTls",
+"redirect",
+"saveTo",
+"timeout",
+"url"
+],
+"http.get": [
+"async",
+"headers",
+"insecureTls",
+"redirect",
+"responseType",
+"timeout",
+"url"
+],
+"http.head": [
+"async",
+"headers",
+"insecureTls",
+"redirect",
+"timeout",
+"url"
+],
+"http.patch": [
+"async",
+"body",
+"headers",
+"insecureTls",
+"redirect",
+"responseType",
+"timeout",
+"url"
+],
+"http.post": [
+"async",
+"body",
+"headers",
+"insecureTls",
+"redirect",
+"responseType",
+"timeout",
+"url"
+],
+"http.put": [
+"async",
+"body",
+"headers",
+"insecureTls",
+"redirect",
+"responseType",
+"timeout",
+"url"
+],
+"jitQueue.clear": [],
+"jitQueue.enqueueNext": [
+"title",
+"trackId",
+"url"
+],
+"jitQueue.getState": [],
+"jitQueue.notifyEmpty": [],
+"jitQueue.playNow": [
+"title",
+"trackId",
+"url"
+],
+"jitQueue.preloadBatch": [
+"replace",
+"startIndex",
+"urls"
+],
+"jitQueue.skip": [],
+"jitQueue.stop": [
+"clearBuffer"
+],
+"jitSession.adoptNative": [
+"contextId",
+"controlToken",
+"currentEntryId",
+"expectedRevision",
+"requestId",
+"sessionId",
+"snapshotToken"
+],
+"jitSession.claimControl": [
+"expectedOwnerEpoch",
+"mode",
+"requestId",
+"sessionId"
+],
+"jitSession.create": [
+"requestId"
+],
+"jitSession.discover": [],
+"jitSession.getCapabilities": [],
+"jitSession.getNativeContext": [
+"collection",
+"contextId",
+"expectedContextRevision",
+"limit",
+"offset",
+"sessionId"
+],
+"jitSession.getOperation": [
+"operationId",
+"sessionId"
+],
+"jitSession.getState": [
+"sessionId"
+],
+"jitSession.play": [
+"controlToken",
+"entryId",
+"expectedRevision",
+"expiresAt",
+"location",
+"requestId",
+"sessionId",
+"title"
+],
+"jitSession.playNative": [
+"contextId",
+"controlToken",
+"entryId",
+"expectedRevision",
+"nativeRef",
+"requestId",
+"sessionId",
+"title"
+],
+"jitSession.prepareAdoption": [
+"controlToken",
+"expectedRevision",
+"requestId",
+"sessionId"
+],
+"jitSession.release": [
+"controlToken",
+"expectedRevision",
+"nativeDisposition",
+"requestId",
+"sessionId"
+],
+"jitSession.setNativeNext": [
+"afterAttemptId",
+"contextId",
+"controlToken",
+"entryId",
+"expectedRevision",
+"nativeRef",
+"requestId",
+"sessionId",
+"title"
+],
+"jitSession.setNativeQueue": [
+"contextId",
+"controlToken",
+"expectedContextRevision",
+"expectedRevision",
+"remainingOccurrenceIds",
+"requestId",
+"sessionId"
+],
+"jitSession.setNext": [
+"afterAttemptId",
+"controlToken",
+"endOfQueue",
+"entryId",
+"expectedRevision",
+"expiresAt",
+"location",
+"requestId",
+"sessionId",
+"title"
+],
+"jitSession.skip": [
+"attemptId",
+"controlToken",
+"expectedRevision",
+"requestId",
+"sessionId"
+],
+"jitSession.stop": [
+"controlToken",
+"expectedRevision",
+"requestId",
+"sessionId"
+],
+"keyboard.getRegisteredHotkeys": [],
+"keyboard.registerHotkey": [
+"action",
+"global",
+"key"
+],
+"keyboard.registerShortcut": [
+"action",
+"key"
+],
+"keyboard.unregisterHotkey": [
+"id",
+"key"
+],
+"library.addToPlaylist": [
+"paths",
+"playlist",
+"playlistGuid"
+],
+"library.browseDirectory": [
+"includeFiles",
+"path"
+],
+"library.browseTree": [
+"includeFiles",
+"pathId",
+"recursiveFiles",
+"rootId"
+],
+"library.getAlbumTracks": [
+"album",
+"albumArtist",
+"albumId"
+],
+"library.getAlbums": [
+"coverMaxSize",
+"includeCover",
+"includeTracks",
+"limit",
+"offset",
+"query",
+"sort",
+"useCache"
+],
+"library.getAll": [
+"asyncResult",
+"limit",
+"offset",
+"useCache"
+],
+"library.getArtistAlbums": [
+"artist",
+"limit",
+"match",
+"sort"
+],
+"library.getArtistTracks": [
+"artist",
+"limit"
+],
+"library.getArtists": [
+"includeAlbums",
+"limit",
+"sort"
+],
+"library.getByPath": [
+"path"
+],
+"library.getCacheStats": [],
+"library.getChanges": [
+"epoch",
+"since"
+],
+"library.getCount": [],
+"library.getFieldValues": [
+"field",
+"limit",
+"separator"
+],
+"library.getGenres": [],
+"library.getRandomTracks": [
+"count"
+],
+"library.getRecentlyAdded": [
+"limit",
+"sortBy"
+],
+"library.getRoots": [],
+"library.getStats": [],
+"library.getStatus": [],
+"library.getTracks": [
+"fields",
+"handles"
+],
+"library.invalidateCache": [],
+"library.isEnabled": [],
+"library.query": [
+"fields",
+"limit",
+"query",
+"sort"
+],
+"library.refresh": [],
+"library.rescan": [],
+"library.search": [
+"fields",
+"limit",
+"offset",
+"query"
+],
+"log.clear": [],
+"log.read": [
+"lines"
+],
+"log.write": [
+"append",
+"args",
+"file",
+"level",
+"message",
+"timestamp"
+],
+"lyrics.exists": [
+"filename",
+"path"
+],
+"lyrics.get": [
+"filename",
+"format",
+"path",
+"source",
+"type"
+],
+"lyrics.save": [
+"filename",
+"format",
+"lyrics",
+"path",
+"tagName",
+"target"
+],
+"media.getContainerInfo": [
+"path"
+],
+"media.getStreamUrl": [
+"path"
+],
+"menu.close": [
+"reason"
+],
+"menu.getContextMenu": [
+"handles",
+"i18n",
+"locale",
+"mode",
+"withAvailability"
+],
+"menu.getMainMenu": [
+"i18n",
+"locale",
+"root",
+"withAvailability"
+],
+"menu.runContextCommand": [
+"command",
+"subGuid"
+],
+"menu.runContextCommandById": [
+"expectPath",
+"expectTarget",
+"handles",
+"id",
+"mode"
+],
+"menu.runMainMenuCommand": [
+"command",
+"subGuid"
+],
+"menu.show": [
+"backdrop",
+"backdropDarkMode",
+"closeAnimationMs",
+"css",
+"cssReplace",
+"items",
+"windowModel",
+"x",
+"y"
+],
+"menu.showNativePopup": [
+"handles",
+"mode",
+"x",
+"y"
+],
+"metadata.cancelProbe": [
+"operationId"
+],
+"metadata.embedArtwork": [
+"filename",
+"imageData",
+"path",
+"target",
+"type"
+],
+"metadata.probeBatchAsync": [
+"includeTags",
+"paths"
+],
+"metadata.read": [
+"cueIndex",
+"path"
+],
+"metadata.readBatch": [
+"paths"
+],
+"metadata.readByPath": [
+"cueIndex",
+"path"
+],
+"metadata.readRaw": [
+"cueIndex",
+"path"
+],
+"metadata.removeEmbeddedArt": [
+"path",
+"removeAll",
+"type"
+],
+"metadata.removeField": [
+"cueIndex",
+"path",
+"tags"
+],
+"metadata.removeTag": [
+"cueIndex",
+"path",
+"tags"
+],
+"metadata.write": [
+"cueIndex",
+"path",
+"tags"
+],
+"metadata.writeBatch": [
+"items"
+],
+"misc.exit": [],
+"misc.getComponentPath": [],
+"misc.getFoobarPath": [],
+"misc.getProfilePath": [],
+"misc.restart": [],
+"misc.showConsole": [],
+"misc.showLibrarySearch": [
+"query"
+],
+"misc.showPopupMessage": [
+"message",
+"title"
+],
+"misc.showPreferences": [],
+"output.getDevices": [],
+"output.getEntries": [],
+"output.getSettings": [],
+"panel.getConfig": [],
+"panel.setConfig": [
+"enableDragDrop",
+"grabFocus",
+"panelName",
+"transparentBackground"
+],
+"playback.getCurrentTrack": [],
+"playback.getCurrentTrackIndex": [
+"includeTrackInfo"
+],
+"playback.getPlaybackOrder": [],
+"playback.getPlayingPlaylist": [],
+"playback.getPosition": [],
+"playback.getState": [],
+"playback.getStopAfterCurrent": [],
+"playback.getVolume": [],
+"playback.mute": [
+"muted"
+],
+"playback.next": [],
+"playback.pause": [],
+"playback.play": [],
+"playback.playOrPause": [],
+"playback.playPath": [
+"path"
+],
+"playback.playPaths": [
+"paths",
+"replace",
+"startIndex"
+],
+"playback.playPause": [],
+"playback.previous": [],
+"playback.random": [],
+"playback.setPlaybackOrder": [
+"name",
+"order"
+],
+"playback.setPosition": [
+"position"
+],
+"playback.setStopAfterCurrent": [
+"enabled"
+],
+"playback.setVolume": [
+"volume"
+],
+"playback.stop": [],
+"playback.toggleMute": [],
+"playback.toggleStopAfterCurrent": [],
+"playback.volumeDown": [],
+"playback.volumeUp": [],
+"playcount.get": [
+"paths"
+],
+"playcount.getBatch": [
+"paths"
+],
+"playcount.getStats": [],
+"playcount.set": [
+"path"
+],
+"playlist.addHandles": [
+"handles",
+"playlist",
+"playlistGuid"
+],
+"playlist.addPaths": [
+"paths",
+"playlist",
+"playlistGuid"
+],
+"playlist.addPathsAsync": [
+"paths",
+"playlist",
+"playlistGuid"
+],
+"playlist.addPathsSequential": [
+"paths",
+"playlist",
+"playlistGuid"
+],
+"playlist.clear": [
+"playlist",
+"playlistGuid"
+],
+"playlist.convertToAutoplaylist": [
+"keepSorted",
+"playlist",
+"playlistGuid",
+"query",
+"sort"
+],
+"playlist.create": [
+"name",
+"position"
+],
+"playlist.createAutoplaylist": [
+"keepSorted",
+"name",
+"query",
+"sort"
+],
+"playlist.createManagedAutoplaylist": [
+"keepSorted",
+"name",
+"query",
+"sort"
+],
+"playlist.deselectAll": [
+"playlist",
+"playlistGuid"
+],
+"playlist.duplicate": [
+"name",
+"playlist",
+"playlistGuid"
+],
+"playlist.focusTrack": [
+"expectedVersion",
+"index",
+"playlist",
+"playlistGuid"
+],
+"playlist.getActive": [],
+"playlist.getAll": [],
+"playlist.getAutoplaylistConfig": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getAutoplaylistInfo": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getAutoplaylistQuery": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getAvailableColumns": [],
+"playlist.getCount": [],
+"playlist.getFocusTrack": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getFocusedTrack": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getGroupRuns": [
+"patterns",
+"playlist",
+"playlistGuid"
+],
+"playlist.getLockInfo": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getMatchingRows": [
+"playlist",
+"playlistGuid",
+"query"
+],
+"playlist.getPlaying": [],
+"playlist.getSelectedTracks": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getSelection": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getTrackCount": [
+"playlist",
+"playlistGuid"
+],
+"playlist.getTracks": [
+"count",
+"fields",
+"formats",
+"playlist",
+"playlistGuid",
+"start"
+],
+"playlist.getTracksAt": [
+"fields",
+"formats",
+"playlist",
+"playlistGuid",
+"rows"
+],
+"playlist.insertTracks": [
+"expectedVersion",
+"handles",
+"playlist",
+"playlistGuid",
+"position"
+],
+"playlist.isAutoplaylist": [
+"playlist",
+"playlistGuid"
+],
+"playlist.isLocked": [
+"playlist",
+"playlistGuid"
+],
+"playlist.moveTracks": [
+"delta",
+"expectedVersion",
+"items",
+"playlist",
+"playlistGuid"
+],
+"playlist.playTrack": [
+"deferred",
+"expectedVersion",
+"index",
+"muted",
+"playlist",
+"playlistGuid"
+],
+"playlist.redo": [
+"playlist",
+"playlistGuid"
+],
+"playlist.remove": [
+"playlist",
+"playlistGuid"
+],
+"playlist.removeAutoplaylist": [
+"playlist",
+"playlistGuid"
+],
+"playlist.removeSelectedTracks": [
+"playlist",
+"playlistGuid"
+],
+"playlist.removeTracks": [
+"expectedVersion",
+"items",
+"playlist",
+"playlistGuid"
+],
+"playlist.rename": [
+"name",
+"playlist",
+"playlistGuid"
+],
+"playlist.reorder": [
+"expectedVersion",
+"newOrder",
+"playlist",
+"playlistGuid"
+],
+"playlist.reorderPlaylists": [
+"newOrder",
+"newOrderGuids"
+],
+"playlist.replaceAllAndPlay": [
+"autoPlay",
+"paths",
+"playIndex",
+"playlist",
+"playlistGuid",
+"stopFirst"
+],
+"playlist.reverse": [
+"playlist",
+"playlistGuid"
+],
+"playlist.selectAll": [
+"playlist",
+"playlistGuid"
+],
+"playlist.setActive": [
+"playlist",
+"playlistGuid"
+],
+"playlist.setAutoplaylistConfig": [
+"expectedRevision",
+"keepSorted",
+"playlist",
+"playlistGuid",
+"query",
+"sort"
+],
+"playlist.setFocusedTrack": [
+"expectedVersion",
+"index",
+"playlist",
+"playlistGuid"
+],
+"playlist.setSelection": [
+"clearOthers",
+"expectedVersion",
+"indices",
+"playlist",
+"playlistGuid"
+],
+"playlist.showAutoplaylistUI": [
+"playlist",
+"playlistGuid"
+],
+"playlist.shuffle": [
+"playlist",
+"playlistGuid"
+],
+"playlist.sort": [
+"descending",
+"pattern",
+"playlist",
+"playlistGuid",
+"selectedOnly"
+],
+"playlist.undo": [
+"playlist",
+"playlistGuid"
+],
+"port.connect": [
+"name"
+],
+"port.disconnect": [
+"portId"
+],
+"port.getPorts": [
+"name"
+],
+"port.postMessage": [
+"message",
+"portId"
+],
+"port.postMessageTo": [
+"message",
+"portId",
+"targetPortId"
+],
+"queue.add": [
+"expectedPlaylistVersion",
+"playlist",
+"playlistGuid",
+"track",
+"tracks"
+],
+"queue.addPaths": [
+"paths",
+"playlist",
+"playlistGuid",
+"useQueuePlaylist"
+],
+"queue.clear": [],
+"queue.flush": [],
+"queue.get": [],
+"queue.getCount": [],
+"queue.insertNext": [
+"expectedVersion",
+"items",
+"paths",
+"position"
+],
+"queue.moveToTop": [
+"expectedVersion",
+"index"
+],
+"queue.playNow": [
+"expectedVersion",
+"index"
+],
+"queue.remove": [
+"expectedVersion",
+"index",
+"indices"
+],
+"queue.setContents": [
+"expectedVersion",
+"items"
+],
+"rating.get": [
+"cueIndex",
+"path"
+],
+"rating.set": [
+"cueIndex",
+"path",
+"rating"
+],
+"replaygain.clear": [
+"paths"
+],
+"replaygain.get": [
+"paths"
+],
+"replaygain.getMode": [],
+"replaygain.getPreamp": [],
+"replaygain.getSettings": [],
+"replaygain.scan": [
+"mode",
+"paths"
+],
+"replaygain.setMode": [
+"processingMode",
+"sourceMode"
+],
+"replaygain.setPreamp": [
+"withRg",
+"withoutRg"
+],
+"selection.get": [
+"limit",
+"offset"
+],
+"selection.getType": [],
+"selection.getViewerMode": [],
+"selection.getViewingTrack": [
+"includeTrackInfo"
+],
+"selection.set": [
+"handles"
+],
+"selection.setPlaylistTracking": [
+"mode"
+],
+"shell.exec": [
+"args",
+"command",
+"cwd",
+"hidden"
+],
+"shell.openExternal": [
+"url"
+],
+"shell.openWith": [
+"path"
+],
+"shell.showInExplorer": [
+"path"
+],
+"shell.spawn": [
+"args",
+"cwd",
+"executable",
+"hidden",
+"waitForExitMs"
+],
+"state.delete": [
+"key"
+],
+"state.get": [
+"key"
+],
+"state.keys": [
+"pattern"
+],
+"state.set": [
+"key",
+"silent",
+"ttlMs",
+"value"
+],
+"system.getApiStats": [],
+"system.getApisByNamespace": [
+"namespace"
+],
+"system.getDPI": [],
+"system.getLocale": [],
+"system.getRegisteredPlugins": [],
+"system.getTheme": [],
+"system.isPluginRegistered": [
+"namespace"
+],
+"system.listAvailableApis": [
+"includeExternal",
+"includeInternal"
+],
+"system.searchApis": [
+"query"
+],
+"taskbar.flash": [
+"count",
+"interval"
+],
+"taskbar.setOverlayIcon": [
+"description",
+"icon"
+],
+"taskbar.setProgress": [
+"state",
+"value"
+],
+"taskbar.setThumbnailButtons": [
+"buttons"
+],
+"taskbar.updateButton": [
+"enabled",
+"icon",
+"id",
+"tooltip",
+"visible"
+],
+"titleformat.eval": [
+"path",
+"pattern"
+],
+"titleformat.evalBatch": [
+"paths",
+"pattern"
+],
+"titleformat.evalFields": [
+"fields",
+"path"
+],
+"titleformat.evalFieldsBatch": [
+"fields",
+"paths"
+],
+"titleformat.getBuiltinFields": [],
+"tray.appendMenuItems": [
+"items",
+"position"
+],
+"tray.clearMenuItems": [
+"position"
+],
+"tray.create": [
+"icon",
+"tooltip"
+],
+"tray.destroy": [],
+"tray.getMenuItems": [],
+"tray.isVisible": [],
+"tray.removeMenuItems": [
+"ids"
+],
+"tray.setClickAction": [
+"action"
+],
+"tray.setCloseToTray": [
+"enabled"
+],
+"tray.setContextMenu": [
+"config",
+"items"
+],
+"tray.setIcon": [
+"icon"
+],
+"tray.setMenuItemState": [
+"checked",
+"enabled",
+"id"
+],
+"tray.setMenuZones": [
+"bottom",
+"config",
+"playback",
+"top"
+],
+"tray.setMinimizeToTray": [
+"enabled"
+],
+"tray.setTooltip": [
+"tooltip"
+],
+"tray.showBalloon": [
+"icon",
+"message",
+"title"
+],
+"ui.hideNotification": [],
+"ui.showContextMenu": [
+"x",
+"y"
+],
+"ui.showCustomMenu": [
+"h",
+"items",
+"suppressDefault",
+"w",
+"x",
+"y"
+],
+"ui.showNotification": [
+"body",
+"silent",
+"timeout",
+"title"
+],
+"ui.showToast": [
+"duration",
+"message",
+"position",
+"type"
+],
+"webview.getSource": [],
+"window.blur": [],
+"window.broadcast": [
+"message"
+],
+"window.cancelClose": [],
+"window.center": [],
+"window.clearClickThroughExcludeRegions": [
+"windowId"
+],
+"window.clearDragRegions": [],
+"window.clearNoDragRegions": [],
+"window.close": [],
+"window.closeAllPopups": [],
+"window.closePopup": [
+"windowId"
+],
+"window.confirmClose": [],
+"window.createPopup": [
+"alwaysOnTop",
+"backdropPolicy",
+"beforeClose",
+"behavior",
+"clickThrough",
+"frame",
+"height",
+"maxHeight",
+"maxWidth",
+"minHeight",
+"minWidth",
+"profile",
+"resizable",
+"showInTaskbar",
+"title",
+"transparent",
+"url",
+"width",
+"x",
+"y"
+],
+"window.enterFullscreen": [
+"windowId"
+],
+"window.exitFullscreen": [
+"windowId"
+],
+"window.flash": [
+"count",
+"enabled"
+],
+"window.flashTaskbar": [
+"count"
+],
+"window.focus": [
+"windowId"
+],
+"window.getAllWindows": [],
+"window.getBackdropPolicy": [
+"windowId"
+],
+"window.getBounds": [],
+"window.getCaptionButtonsWidth": [],
+"window.getCornerPreference": [],
+"window.getCurrentWindowId": [],
+"window.getDevServerConfig": [],
+"window.getDpiScale": [],
+"window.getMaxSize": [
+"windowId"
+],
+"window.getMinSize": [
+"windowId"
+],
+"window.getMode": [],
+"window.getPopupBehavior": [
+"windowId"
+],
+"window.getState": [],
+"window.getTitle": [],
+"window.getTitlebarHeight": [],
+"window.getTitlebarInfo": [],
+"window.getZoom": [],
+"window.hasSavedBounds": [],
+"window.isAlwaysOnTop": [],
+"window.isClickThrough": [
+"windowId"
+],
+"window.isFullscreen": [
+"windowId"
+],
+"window.isMaximized": [],
+"window.isMinimized": [],
+"window.isResizable": [
+"windowId"
+],
+"window.maximize": [],
+"window.minimize": [],
+"window.refreshWebView": [],
+"window.reload": [],
+"window.resetZoom": [],
+"window.restore": [],
+"window.sendMessage": [
+"message",
+"targetWindowId"
+],
+"window.setAcrylic": [
+"darkMode",
+"enabled",
+"windowId"
+],
+"window.setAlwaysOnTop": [
+"enabled"
+],
+"window.setBackdropPolicy": [
+"backdropPolicy",
+"windowId"
+],
+"window.setBackgroundTransparency": [
+"transparent",
+"windowId"
+],
+"window.setBlur": [
+"enabled",
+"windowId"
+],
+"window.setBounds": [
+"height",
+"width",
+"x",
+"y"
+],
+"window.setClickThrough": [
+"enabled",
+"windowId"
+],
+"window.setClickThroughExcludeRegions": [
+"regions",
+"windowId"
+],
+"window.setCornerPreference": [
+"mode"
+],
+"window.setDarkMode": [
+"enabled",
+"windowId"
+],
+"window.setDevServerConfig": [
+"devServerUrl",
+"useDevServer"
+],
+"window.setDragRegions": [
+"regions"
+],
+"window.setFrameless": [
+"frameless",
+"windowId"
+],
+"window.setFullscreen": [
+"enabled",
+"windowId"
+],
+"window.setMaxSize": [
+"height",
+"width",
+"windowId"
+],
+"window.setMaximizeButtonRegion": [
+"region"
+],
+"window.setMica": [
+"darkMode",
+"enabled",
+"variant",
+"windowId"
+],
+"window.setMicaEffect": [
+"darkMode",
+"enabled",
+"variant",
+"windowId"
+],
+"window.setMinSize": [
+"height",
+"width",
+"windowId"
+],
+"window.setNoDragRegions": [
+"regions"
+],
+"window.setPopupBehavior": [
+"behavior",
+"profile",
+"windowId"
+],
+"window.setPosition": [
+"x",
+"y"
+],
+"window.setResizable": [
+"resizable",
+"windowId"
+],
+"window.setSize": [
+"height",
+"width"
+],
+"window.setTitle": [
+"title"
+],
+"window.setTitlebarHeight": [
+"height"
+],
+"window.setZoom": [
+"zoom"
+],
+"window.setZoomForDpi": [
+"dpi"
+],
+"window.showSystemMenu": [
+"h",
+"w",
+"x",
+"y"
+],
+"window.startDrag": [],
+"window.startResize": [
+"edge"
+],
+"window.toggleAlwaysOnTop": [],
+"window.toggleFullscreen": [
+"windowId"
+],
+"window.toggleMaximize": []
+}

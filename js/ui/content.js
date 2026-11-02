@@ -1,0 +1,105 @@
+// Switches the main area between the tile grid, the song list and Now playing,
+// and shows the empty-state messages from the original skin.
+
+import { el, clear } from '../core/util.js';
+import { tryCall } from '../core/bridge.js';
+import * as store from '../core/store.js';
+import { view } from '../data/view.js';
+import { player } from '../data/player.js';
+import { playlists, COLLECTION } from '../data/playlists.js';
+import { Grid } from './grid.js';
+import { SongList } from './songs.js';
+import { NowPlaying } from './nowplaying.js';
+
+export function mountContent(root) {
+  const scroller = el('div.content', { tabindex: -1 });
+  const message = el('div.message', { hidden: true });
+  const loading = el('div.loading', { hidden: true, text: 'Loading…' });
+  root.append(scroller, message, loading);
+
+  let current = null;
+  let currentKind = '';
+  let lastKey = '';
+
+  function kindFor(mode) {
+    return mode === 'songs' ? 'songs' : mode === 'nowplaying' ? 'nowplaying' : 'grid';
+  }
+
+  function ensure() {
+    const kind = kindFor(view.mode);
+    if (kind === currentKind && current) return false;
+    current?.destroy();
+    scroller.scrollTop = 0;
+    current = kind === 'songs' ? new SongList(scroller) : kind === 'nowplaying' ? new NowPlaying(scroller) : new Grid(scroller);
+    currentKind = kind;
+    scroller.dataset.kind = kind;
+    return true;
+  }
+
+  function onChange() {
+    const fresh = ensure();
+    const key = [view.playlist?.guid, view.mode, view.drill?.key, view.filter, store.get('separateDiscs')].join('|');
+    const keep = !fresh && key === lastKey;
+    lastKey = key;
+    if (currentKind !== 'nowplaying') current.setData(keep);
+    renderMessage();
+  }
+
+  function renderMessage() {
+    loading.hidden = !(view.loading && currentKind === 'grid' && !view.groups.length);
+    if (currentKind === 'nowplaying' || view.loading) {
+      message.hidden = true;
+      return;
+    }
+    const pl = view.playlist;
+    clear(message);
+    let show = true;
+    if (!pl) {
+      message.append(el('h2', { text: 'No playlist selected.' }));
+    } else if (pl.trackCount === 0) {
+      if (pl.name === COLLECTION) {
+        message.append(
+          el('h2', { text: 'Your media library is empty (no music found).' }),
+          el('button.btn-primary', { text: 'Configure the media library', onclick: () => tryCall('config.showLibraryPreferences') }),
+        );
+      } else {
+        message.append(el('h2', { text: "It's lonely in here. Add songs from your collection, or drag some files here." }));
+      }
+    } else if (view.filter && view.total === 0) {
+      message.append(el('h2', { text: "Sorry, we've got no results to show." }));
+    } else show = false;
+    message.hidden = !show;
+  }
+
+  view.on('change', onChange);
+  view.on('mode', () => {
+    ensure();
+    if (view.mode === 'nowplaying') renderMessage();
+  });
+  view.on('loading', renderMessage);
+  view.on('heads', () => current?.refreshHeads?.());
+  view.on('selection', () => current?.refreshSelection?.());
+  player.on('track', () => current?.refreshPlaying?.());
+  player.on('state', () => current?.refreshPlaying?.());
+  store.subscribe((k) => {
+    if (['tileSize', 'artistTileSize', 'showAlbumYear', 'showTrackCounts', 'listArtLeft', 'listBackground'].includes(k) && current?.layout) {
+      if (current.expanded >= 0) current.panel.open(view.groups[current.expanded], current.expanded);
+      current.layout();
+      current.refreshHeads();
+    }
+  });
+  playlists.on('change', renderMessage);
+
+  return {
+    scroller,
+    get current() {
+      return current;
+    },
+    /** Scroll to the playing track (if it is in the shown playlist). */
+    showPlaying() {
+      if (player.playingPlaylist !== view.playlist?.index || player.playingIndex < 0) return false;
+      current?.showRow?.(player.playingIndex);
+      return true;
+    },
+  };
+}

@@ -1,0 +1,315 @@
+/* Fusion - base: colour tokens, typography, shared controls.
+   Colours follow the original Fusion skin (light and dark variants).
+   --accent is set from the settings at runtime. */
+
+:root {
+  --accent: #107c10;
+  --accent-text: #fff;
+
+  --bg: #e1e1e1;
+  --text: #212121;
+  --text2: #626262;
+  --hover: rgba(0, 0, 0, 0.06);
+  --row-alt: rgba(0, 0, 0, 0.025);
+  --selected: rgba(0, 0, 0, 0.1);
+  --line: rgba(0, 0, 0, 0.12);
+
+  --side-bg: #222;
+  --side-text: #fff;
+  --side-text2: #9a9a9a;
+  --side-hover: rgba(255, 255, 255, 0.1);
+  --side-line: #3a3a3a;
+  --search-bg: #3a3a3a;
+
+  --bar-bg: #101010;
+  --bar-title: #ededed;
+  --bar-text2: #8b8b8b;
+  --seek-back: #393939;
+  --seek-fill: #e9e9e9;
+
+  --tab-off-bg: #5f5f5f;
+  --tab-off-text: #fff;
+
+  --list-bg: #f0f0f0;
+  --list-text: #212121;
+  --list-text2: #626262;
+
+  --panel-bg: #f2f2f2;
+  --menu-bg: #2b2b2b;
+  --placeholder: #9b9b9b;
+  --placeholder-line: #b8b8b8;
+
+  --font: 'Segoe UI', 'Segoe UI Variable Text', system-ui, sans-serif;
+  --sidebar-w: 250px;
+  --bar-h: 75px;
+  --margin: 40px;
+  --row-h: 35px;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #222;
+  --text: #e9e9e9;
+  --text2: #7c7c7c;
+  --hover: rgba(255, 255, 255, 0.06);
+  --row-alt: rgba(255, 255, 255, 0.02);
+  --selected: rgba(255, 255, 255, 0.1);
+  --line: rgba(255, 255, 255, 0.1);
+  --side-bg: #181818;
+  --side-line: #2f2f2f;
+  --seek-back: #232323;
+  --tab-off-bg: #101010;
+  --list-bg: #141414;
+  --list-text: #e9e9e9;
+  --list-text2: #7c7c7c;
+  --panel-bg: #1b1b1b;
+  --placeholder: #3c3c3c;
+  --placeholder-line: #555;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.35 var(--font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Square icon button used across the UI */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 2px;
+  color: inherit;
+}
+
+.btn-icon:hover {
+  background: var(--hover);
+}
+
+.btn-icon:disabled {
+  opacity: 0.35;
+}
+
+/* Text button with an icon (Play all, Add to, ...) */
+.btn-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px 0 8px;
+  border-radius: 2px;
+  color: var(--text);
+}
+
+.btn-text:hover {
+  background: var(--hover);
+}
+
+.btn-text .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  padding: 0 16px;
+  height: 32px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+/* Scrollbars: slim and theme-coloured */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.45);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(127, 127, 127, 0.7);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Layout */
+#app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 0 minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) var(--bar-h);
+  height: 100vh;
+}
+
+#sidebar {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+#sidebar-resizer {
+  grid-row: 1;
+  grid-column: 2;
+  position: relative;
+  z-index: 5;
+}
+
+#sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+  cursor: ew-resize;
+}
+
+#main {
+  grid-row: 1;
+  grid-column: 3;
+  position: relative;
+  min-width: 0;
+}
+
+#info-panel {
+  grid-row: 1;
+  grid-column: 4;
+  width: 350px;
+}
+
+#playerbar {
+  grid-row: 2;
+  grid-column: 1 / -1;
+}
+
+body.no-sidebar #app {
+  grid-template-columns: 0 0 minmax(0, 1fr) auto;
+}
+
+body.no-sidebar #sidebar {
+  display: none;
+}
+
+/* Placeholder art (no cover found) */
+.art {
+  position: relative;
+  overflow: hidden;
+  background: var(--placeholder);
+}
+
+.art::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: center / 42% no-repeat var(--placeholder-icon, none);
+  opacity: 0.55;
+}
+
+.art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.art img.loaded {
+  opacity: 1;
+}
+
+.art.round {
+  border-radius: 50%;
+}
+
+/* Toasts */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--bar-h) + 20px);
+  transform: translateX(-50%);
+  background: rgba(20, 20, 20, 0.92);
+  color: #fff;
+  padding: 10px 18px;
+  font-size: 13px;
+  z-index: 100;
+  animation: toast-in 0.18s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

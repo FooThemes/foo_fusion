@@ -1,0 +1,179 @@
+/* Fusion - main area: header, tabs, messages */
+
+#main {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.head {
+  flex: none;
+  padding: 36px var(--margin) 6px;
+}
+
+.head-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 48px;
+}
+
+.head-back {
+  margin-left: -10px;
+  margin-right: -8px;
+}
+
+.head-title {
+  font-size: 25px;
+  font-weight: 700;
+  margin: 0;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.head-actions {
+  display: flex;
+  gap: 2px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 14px;
+  height: 32px;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.tab {
+  height: 30px;
+  padding: 0 18px;
+  background: var(--tab-off-bg);
+  color: var(--tab-off-text);
+  font-size: 14px;
+}
+
+.tab:hover {
+  filter: brightness(1.15);
+}
+
+.tab.active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 6px;
+  color: var(--text2);
+}
+
+.sort-btn .sort-value {
+  color: var(--accent);
+}
+
+.sort-btn:hover {
+  background: var(--hover);
+}
+
+.sort-btn:disabled {
+  opacity: 0.5;
+}
+
+.sort-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.dir-btn {
+  width: 32px;
+  height: 30px;
+  color: var(--text2);
+  margin-left: -14px;
+}
+
+.head-count {
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+}
+
+.message {
+  position: absolute;
+  top: 160px;
+  left: var(--margin);
+  right: var(--margin);
+  pointer-events: none;
+}
+
+.message h2 {
+  font-size: 35px;
+  font-weight: 300;
+  line-height: 1.25;
+  margin: 0 0 24px;
+  max-width: 900px;
+}
+
+.message button {
+  pointer-events: auto;
+}
+
+.loading {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 18px;
+  color: var(--text2);
+}
+
+.boot-error {
+  position: fixed;
+  inset: 20px;
+  background: #300;
+  color: #fdd;
+  padding: 20px;
+  white-space: pre-wrap;
+  z-index: 1000;
+  user-select: text;
+}
+
+@media (max-width: 900px) {
+  .head-actions .btn-text span:not(.icon) {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .head-tools {
+    gap: 10px;
+  }
+
+  .tab {
+    padding: 0 10px;
+  }
+
+  .head-count {
+    display: none;
+  }
+}

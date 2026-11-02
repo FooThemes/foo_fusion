@@ -1,0 +1,240 @@
+// Bottom bar: now-playing art and text, seek bar, transport, volume, menu.
+
+import { el, formatTime, clamp } from '../core/util.js';
+import { icon, setIcon } from '../core/icons.js';
+import * as store from '../core/store.js';
+import { player, ORDER_LABELS } from '../data/player.js';
+import { nowPlayingUrl } from '../data/artwork.js';
+import { view } from '../data/view.js';
+import { playlists } from '../data/playlists.js';
+import { showMenu, foobarMenuItems, runMainMenu } from './menus.js';
+import { tryCall } from '../core/bridge.js';
+
+export function mountPlayerBar(root, app) {
+  const cover = el('img', { alt: '' });
+  const coverBox = el('button.art.ph-album.pb-cover', { title: 'Show now playing', onclick: () => app.showPlaying() }, cover);
+  const title = el('div.pb-title.ellipsis');
+  const artist = el('div.pb-artist.ellipsis');
+  const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist));
+
+  const elapsed = el('span.pb-time');
+  const length = el('span.pb-time');
+  const fill = el('div.seek-fill');
+  const knob = el('div.seek-knob');
+  const seek = el('div.seek', { role: 'slider', 'aria-label': 'Seek', tabindex: 0 }, el('div.seek-track', null, fill, knob));
+  const seekBox = el('div.pb-seek', null, elapsed, seek, length);
+
+  const orderBtn = el('button.btn-icon.pb-order', { title: 'Playback order', onclick: orderMenu }, icon('shuffle'));
+  const prev = el('button.btn-icon', { title: 'Previous', onclick: () => player.previous() }, icon('prev'));
+  const play = el('button.pb-play', { title: 'Play', onclick: () => player.playOrPause() }, icon('play'));
+  const next = el('button.btn-icon', { title: 'Next', onclick: () => player.next() }, icon('next'));
+  const volBtn = el('button.btn-icon', { title: 'Volume', onclick: toggleVolume }, icon('volume'));
+  const more = el('button.btn-icon', { title: 'Menu', onclick: mainMenu }, icon('more'));
+  const controls = el('div.pb-controls', null, orderBtn, prev, play, next, volBtn, more);
+
+  const volFill = el('div.vol-fill');
+  const volTrack = el('div.vol-track', null, volFill);
+  const volValue = el('div.vol-value');
+  const volPop = el('div.vol-pop', { hidden: true }, volValue, el('div.vol-slider', { role: 'slider', 'aria-label': 'Volume', tabindex: 0 }, volTrack), el('button.btn-icon.vol-mute', { title: 'Mute', onclick: () => player.toggleMute() }, icon('mute')));
+
+  root.append(nowBox, seekBox, controls, volPop);
+
+  // --- now playing text and art -------------------------------------------
+  let artTrack = null;
+  async function renderTrack() {
+    const t = player.track;
+    const on = player.active && t;
+    root.classList.toggle('idle', !on);
+    title.textContent = on ? t.title || t.path.split(/[\\/]/).pop() : '';
+    artist.textContent = on ? t.artist : '';
+    nowBox.title = on ? `${t.title}\n${t.artist}\n${t.album}` : '';
+    const key = on ? t.handle : null;
+    if (key === artTrack) return;
+    artTrack = key;
+    cover.classList.remove('loaded');
+    const url = on ? await nowPlayingUrl(64) : null;
+    if (artTrack !== key) return;
+    if (url) {
+      cover.onload = () => cover.classList.add('loaded');
+      cover.src = url;
+    } else cover.removeAttribute('src');
+    updateBigArt(url ? await nowPlayingUrl(store.get('sidebarWidth')) : null);
+  }
+
+  // Optional large artwork above the bar, in the left panel ("Large now playing artwork").
+  const bigArt = el('img', { alt: '' });
+  const bigBox = el('div.art.ph-album.big-art', { hidden: true, onclick: () => app.showPlaying() }, bigArt);
+  document.getElementById('sidebar').append(bigBox);
+  function updateBigArt(url) {
+    bigBox.hidden = !store.get('largeNowPlayingArt') || !player.active || store.get('sidebarCollapsed');
+    bigArt.classList.remove('loaded');
+    if (url) {
+      bigArt.onload = () => bigArt.classList.add('loaded');
+      bigArt.src = url;
+    } else bigArt.removeAttribute('src');
+  }
+
+  function renderState() {
+    const playing = player.state === 'playing';
+    setIcon(play.querySelector('.icon'), playing ? 'pause' : 'play');
+    play.title = playing ? 'Pause' : 'Play';
+    play.setAttribute('aria-label', play.title);
+    const nothing = !player.active && !(playlists.activePlaylist?.trackCount > 0);
+    play.disabled = nothing;
+    prev.disabled = next.disabled = !player.active;
+    root.classList.toggle('idle', !player.active);
+    seekBox.classList.toggle('disabled', !player.active || !player.canSeek);
+    renderTime(true);
+  }
+
+  // --- time: interpolate between the host's 1 Hz updates ------------------
+  let dragging = false;
+  let lastQuarter = -1;
+  // Called every animation frame while playing; only touches the DOM when the
+  // shown value can change (4 times a second).
+  function renderTime(force = false) {
+    if (dragging) return;
+    const q = Math.floor(player.now() * 4);
+    if (q === lastQuarter && !force) return;
+    lastQuarter = q;
+    const d = player.duration;
+    const p = player.now();
+    elapsed.textContent = player.active ? formatTime(p) : '';
+    length.textContent = player.active ? (d ? formatTime(d) : '') : '';
+    setSeek(d ? p / d : 0);
+  }
+  function setSeek(frac) {
+    frac = clamp(frac, 0, 1);
+    fill.style.transform = `scaleX(${frac})`;
+    knob.style.left = frac * 100 + '%';
+    seek.setAttribute('aria-valuenow', Math.round(frac * 100));
+  }
+  let raf = 0;
+  function tick() {
+    renderTime();
+    raf = player.state === 'playing' && !document.hidden ? requestAnimationFrame(tick) : 0;
+  }
+  function startTicking() {
+    if (!raf && player.state === 'playing') raf = requestAnimationFrame(tick);
+  }
+  seek.addEventListener('pointerdown', (e) => {
+    if (!player.active || !player.canSeek || !player.duration) return;
+    dragging = true;
+    seek.setPointerCapture(e.pointerId);
+    const rect = seek.getBoundingClientRect();
+    const frac = (ev) => clamp((ev.clientX - rect.left) / rect.width, 0, 1);
+    const move = (ev) => {
+      setSeek(frac(ev));
+      elapsed.textContent = formatTime(frac(ev) * player.duration);
+    };
+    const up = (ev) => {
+      seek.removeEventListener('pointermove', move);
+      seek.removeEventListener('pointerup', up);
+      dragging = false;
+      player.seek(frac(ev) * player.duration);
+    };
+    move(e);
+    seek.addEventListener('pointermove', move);
+    seek.addEventListener('pointerup', up);
+  });
+  seek.addEventListener('keydown', (e) => {
+    if (!player.active) return;
+    if (e.key === 'ArrowRight') player.seek(Math.min(player.duration, player.now() + 5));
+    if (e.key === 'ArrowLeft') player.seek(Math.max(0, player.now() - 5));
+  });
+
+  // --- volume --------------------------------------------------------------
+  function renderVolume() {
+    const v = player.muted ? 0 : player.volume;
+    volFill.style.transform = `scaleY(${v / 100})`;
+    volValue.textContent = Math.round(v);
+    setIcon(volBtn.querySelector('.icon'), player.muted || v === 0 ? 'mute' : 'volume');
+  }
+  function toggleVolume() {
+    volPop.hidden = !volPop.hidden;
+    if (!volPop.hidden) {
+      const r = volBtn.getBoundingClientRect();
+      volPop.style.left = r.left + r.width / 2 - 30 + 'px';
+      setTimeout(() => document.addEventListener('mousedown', closeVolume), 0);
+    }
+  }
+  function closeVolume(e) {
+    if (volPop.contains(e.target) || volBtn.contains(e.target)) return;
+    volPop.hidden = true;
+    document.removeEventListener('mousedown', closeVolume);
+  }
+  const volSlider = volPop.querySelector('.vol-slider');
+  volSlider.addEventListener('pointerdown', (e) => {
+    volSlider.setPointerCapture(e.pointerId);
+    const rect = volTrack.getBoundingClientRect();
+    const val = (ev) => clamp((rect.bottom - ev.clientY) / rect.height, 0, 1) * 100;
+    const move = (ev) => {
+      volFill.style.transform = `scaleY(${val(ev) / 100})`;
+      volValue.textContent = Math.round(val(ev));
+      player.setVolume(val(ev));
+    };
+    const up = () => {
+      volSlider.removeEventListener('pointermove', move);
+      volSlider.removeEventListener('pointerup', up);
+    };
+    move(e);
+    volSlider.addEventListener('pointermove', move);
+    volSlider.addEventListener('pointerup', up);
+  });
+  volSlider.addEventListener('wheel', (e) => player.setVolume(clamp(player.volume - Math.sign(e.deltaY) * 5, 0, 100)), { passive: true });
+  volBtn.addEventListener('wheel', (e) => player.setVolume(clamp(player.volume - Math.sign(e.deltaY) * 5, 0, 100)), { passive: true });
+
+  // --- playback order ------------------------------------------------------
+  function renderOrder() {
+    const o = player.order;
+    setIcon(orderBtn.querySelector('.icon'), o === 'repeat-track' ? 'repeatOne' : o.startsWith('repeat') ? 'repeat' : 'shuffle');
+    orderBtn.classList.toggle('on', o !== 'default');
+    orderBtn.title = `Playback order: ${ORDER_LABELS[o]}`;
+  }
+  function orderMenu() {
+    showMenu(Object.entries(ORDER_LABELS).map(([k, label]) => ({ label, checked: player.order === k, run: () => player.setOrder(k) })));
+  }
+
+  // --- main menu (replaces the hidden foobar2000 menu bar) -----------------
+  async function mainMenu() {
+    const fbItems = await foobarMenuItems();
+    showMenu([
+      { label: 'Settings', run: () => app.toggleSettings(true) },
+      { label: 'Track info panel', checked: store.get('infoPanel'), run: () => store.set('infoPanel', !store.get('infoPanel')) },
+      { label: 'Left panel', checked: !store.get('sidebarCollapsed'), run: () => store.set('sidebarCollapsed', !store.get('sidebarCollapsed')) },
+      { label: 'Dark theme', checked: store.get('dark'), run: () => store.set('dark', !store.get('dark')) },
+      '-',
+      { label: 'Stop after current', checked: player.stopAfterCurrent, run: () => tryCall('playback.toggleStopAfterCurrent') },
+      { label: 'Stop', enabled: player.active, run: () => player.stop() },
+      '-',
+      { label: 'Fullscreen', shortcut: 'F11', run: () => tryCall('window.toggleFullscreen') },
+      { label: 'Always on top', shortcut: 'Alt+A', run: () => tryCall('window.toggleAlwaysOnTop') },
+      '-',
+      { label: 'foobar2000', submenu: fbItems.length ? fbItems : [{ label: 'Unavailable', enabled: false }] },
+      { label: 'Preferences', shortcut: 'Ctrl+P', run: () => runMainMenu('File/Preferences') },
+    ]);
+  }
+
+  player.on('track', renderTrack);
+  player.on('state', () => {
+    renderState();
+    startTicking();
+    if (!player.active) renderTrack();
+  });
+  player.on('time', () => {
+    renderTime(true);
+    startTicking();
+  });
+  player.on('volume', renderVolume);
+  player.on('order', renderOrder);
+  playlists.on('active', renderState);
+  view.on('change', renderState);
+  store.subscribe((k) => (k === 'largeNowPlayingArt' || k === 'sidebarCollapsed') && ((artTrack = null), renderTrack()));
+  document.addEventListener('visibilitychange', startTicking);
+
+  renderTrack();
+  renderState();
+  renderVolume();
+  renderOrder();
+  startTicking();
+}

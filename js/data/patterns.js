@@ -1,0 +1,36 @@
+// Every title formatting pattern Fusion sends to foobar2000 lives here, so they
+// are easy to find and adjust (and so the dev mock can emulate them).
+
+export const TF = {
+  // Group keys. The playlist is shown in its own order; adjacent rows with the
+  // same key form one tile.
+  albumKey: "$if2(%album artist%,'Unknown Artist')|$if2(%album%,'Single(s)')",
+  albumDiscKey: "$if2(%album artist%,'Unknown Artist')|$if2(%album%,'Single(s)')$ifgreater(%totaldiscs%,1,|%discnumber%,)",
+  artistKey: "$if2(%album artist%,'Unknown Artist')",
+  genreKey: "$if2(%genre%,'Unknown Genre')",
+
+  // Text shown on tiles (read from the first row of each group).
+  albumTitle: "$if(%album%,%album%,$if(%album artist%,'Single(s)','Unknown Album'))",
+  albumDiscTitle: "$if(%album%,%album%$ifgreater(%totaldiscs%,1,[' (Disc '%discnumber%')'],),$if(%album artist%,'Single(s)','Unknown Album'))",
+  albumArtist: "$if2(%album artist%,'Unknown Artist')",
+  year: '$year(%date%)',
+  genre: "$if2(%genre%,'Unknown Genre')",
+
+  // Track rows.
+  trackNumber: "$if2(%tracknumber%,'')",
+  trackArtist: '[%track artist%]',
+};
+
+/** Build a foobar2000 query that matches every word in `text` somewhere. */
+export function searchQuery(text) {
+  const words = text
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.replace(/["()]/g, ''))
+    .filter(Boolean);
+  if (!words.length) return '';
+  return words
+    .map((w) => `(%title% HAS "${w}" OR %artist% HAS "${w}" OR %album% HAS "${w}" OR %album artist% HAS "${w}" OR %genre% HAS "${w}")`)
+    .join(' AND ');
+}

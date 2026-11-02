@@ -12,7 +12,8 @@ export const TF = {
   // Multi-value keys for the Artists and Genres views (values joined by |||,
   // and also split on ';' by Fusion). ARTISTS lists every performer, so
   // featured artists get their own tile; it falls back to ARTIST.
-  artistsMulti: "$if2($meta_sep(artists,'|||'),$if2($meta_sep(artist,'|||'),'Unknown Artist'))",
+  // ARTISTS (featured artists included), else ALBUM ARTIST, else ARTIST.
+  artistsMulti: "$if2($meta_sep(artists,'|||'),$if2($meta_sep(album artist,'|||'),$if2($meta_sep(artist,'|||'),'Unknown Artist')))",
   genresMulti: "$if2($meta_sep(genre,'|||'),'Unknown Genre')",
 
   // Text shown on tiles (read from the first row of each group).

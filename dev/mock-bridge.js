@@ -81,7 +81,7 @@ function tfEval(pattern, t) {
     [MOOD_TF]: () => t.mood || '',
     [TF.artistKey]: () => aa,
     [TF.genreKey]: () => t.genre || 'Unknown Genre',
-    [TF.artistsMulti]: () => (t.artistsTag ? t.artistsTag.join('|||') : t.artist || 'Unknown Artist'),
+    [TF.artistsMulti]: () => (t.artistsTag ? t.artistsTag.join('|||') : t.albumArtist || t.artist || 'Unknown Artist'),
     [TF.genresMulti]: () => t.genre || 'Unknown Genre',
     [TF.albumTitle]: () => al,
     [TF.albumDiscTitle]: () => (t.totalDiscs > 1 ? `${al} (Disc ${t.discNumber})` : al),

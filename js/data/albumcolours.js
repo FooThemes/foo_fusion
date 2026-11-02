@@ -148,7 +148,7 @@ export function palette(data) {
   for (const c of colours.slice(0, 40)) {
     const [, cs, cl] = toHsl(c.rgb);
     const ratio = contrast(c.rgb, bg);
-    if (ratio < 3) continue;
+    if (ratio < 4) continue; // the album title is drawn in this colour
     const ch = toHsl(c.rgb)[0];
     const hueGap = Math.min(Math.abs(ch - h), 1 - Math.abs(ch - h)); // 0..0.5
     const score = cs * 2 + Math.log(c.n + 1) * 0.3 + Math.min(ratio, 7) * 0.1 - Math.abs(cl - 0.5) * 0.5 + (neutral ? hueGap * 0.8 : 0);
@@ -158,13 +158,23 @@ export function palette(data) {
     }
   }
   if (!accent) {
-    // Push the main colour's hue to a lightness that contrasts.
-    accent = fromHsl(h, Math.max(s, 0.45), dark ? 0.72 : 0.32);
+    // Push the main colour's hue to a lightness that contrasts; failing
+    // that, the title simply uses the text colour.
+    accent = fromHsl(h, Math.max(s, 0.45), dark ? 0.85 : 0.25);
+    if (contrast(accent, bg) < 4) accent = text;
+  }
+  // Secondary text (artist, date, song lengths): as soft as it can be while
+  // still reading clearly on this background.
+  let t = 0.62;
+  let text2 = mix(text, bg, t);
+  while (contrast(text2, bg) < 3.6 && t < 1) {
+    t = Math.min(1, t + 0.06);
+    text2 = mix(text, bg, t);
   }
   return {
     bg: hex(bg),
     text: hex(text),
-    text2: hex(mix(text, bg, 0.62)),
+    text2: hex(text2),
     accent: hex(accent),
     accentText: luminance(accent) > 0.6 ? '#111111' : '#ffffff',
     dark,

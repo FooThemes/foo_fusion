@@ -22,6 +22,10 @@ import { favourites } from '../data/favourites.js';
 
 const ROW_H = 35;
 const COL_MIN = 300;
+const COL_GAP = 30; // .tp-grid column-gap
+const ROW_CHROME = 150; // number, heart, length, padding and gaps around a title
+const ROW_H2 = 52; // two-line rows for albums of long titles
+const MAX_ROWS = 22; // fewer columns, but not longer than this per column
 const PAD = 40; // same as the left margin, so the panel is evenly padded
 const HEAD_H = 76;
 const DISCBAR_H = 52;
@@ -110,10 +114,22 @@ export class TrackPanel {
 
     const sections = this.disc === 'all' && this.multiDisc ? this.discs.map((d) => d.rows.length) : [this.visibleRows().length];
     const biggest = Math.max(...sections);
-    this.cols = Math.max(1, Math.min(maxCols, Math.ceil(biggest / 4)));
+    // As many columns as the song count suggests, then fewer while too many
+    // titles would be cut off (long titles get wider columns, more rows).
+    let cols = Math.max(1, Math.min(maxCols, Math.ceil(biggest / 4)));
+    const widths = this.#labelWidths();
+    const colWidth = (c) => (listW - COL_GAP * (c - 1)) / c - ROW_CHROME;
+    const fitShare = (c, lines = 1) => (widths.length ? widths.filter((w) => w <= colWidth(c) * lines).length / widths.length : 1);
+    const floor = Math.max(1, Math.min(cols, Math.ceil(biggest / MAX_ROWS)));
+    while (cols > floor && fitShare(cols) < 0.9) cols--;
+    // Mostly long titles even so (classical works, say): give rows two lines.
+    this.twoLine = widths.length > 0 && fitShare(cols) < 0.5;
+    this.rowH = this.twoLine ? ROW_H2 : ROW_H;
+    this.cols = cols;
     this.perCol = sections.map((n) => Math.ceil(n / this.cols));
+    this.node.classList.toggle('two-line', this.twoLine);
 
-    let body = this.perCol.reduce((h, rows) => h + rows * ROW_H, 0);
+    let body = this.perCol.reduce((h, rows) => h + rows * this.rowH, 0);
     if (sections.length > 1) body += sections.length * SECTION_H;
     // The disc bar wraps onto more lines for big box sets; use its real height.
     const extra = this.multiDisc ? this.discBar.offsetHeight || DISCBAR_H : 0;
@@ -222,6 +238,25 @@ export class TrackPanel {
     if (this.group) this.#load();
   }
 
+  /** Width each loaded song's title (plus its artist note) needs, in px. */
+  #labelWidths() {
+    if (!this.tracks) return [];
+    const key = this.group?.key + '|' + this.disc + '|' + this.tracks.length;
+    if (this.widthsKey === key) return this.widths;
+    const ctx = (measureCtx ||= new OffscreenCanvas(1, 1).getContext('2d'));
+    ctx.font = `14px ${getComputedStyle(document.body).fontFamily}`;
+    const albumArtist = this.group?.head?.artist || '';
+    const want = new Set(this.visibleRows());
+    this.widths = this.tracks
+      .filter((t) => t && want.has(t.index))
+      .map((t) => {
+        const note = artistNote(t.artist, albumArtist);
+        return ctx.measureText((t.title || '') + (note ? ` · ${note}` : '')).width;
+      });
+    this.widthsKey = key;
+    return this.widths;
+  }
+
   #totalLength(rows) {
     let t = 0;
     for (const r of rows) t += view.cachedTrack(r)?.duration || 0;
@@ -292,7 +327,7 @@ export class TrackPanel {
     (tracks || []).forEach((t) => t && byRow.set(t.index, t));
     const albumArtist = this.group?.head?.artist || '';
     const makeRows = (rows, perCol) => {
-      const grid = el('div.tp-grid', { style: { gridTemplateRows: `repeat(${perCol}, ${ROW_H}px)` } });
+      const grid = el('div.tp-grid', { style: { gridTemplateRows: `repeat(${perCol}, ${this.rowH || ROW_H}px)` } });
       for (const r of rows) grid.append(trackRow(r, byRow.get(r), albumArtist));
       return grid;
     };
@@ -316,6 +351,17 @@ export class TrackPanel {
     } else {
       this.list.append(makeRows(this.visibleRows(), this.perCol[0]));
     }
+    // Titles still cut off scroll into view on hover (see .tp-name.clipped).
+    requestAnimationFrame(() => {
+      for (const n of this.list.querySelectorAll('.tp-name')) {
+        const over = this.twoLine ? n.scrollHeight - n.clientHeight : n.scrollWidth - n.clientWidth;
+        n.classList.toggle('clipped', over > 2 && !this.twoLine);
+        if (over > 2 && !this.twoLine) {
+          n.style.setProperty('--mq-dist', -over - 6 + 'px');
+          n.style.setProperty('--mq-dur', Math.max(3, over / 40 + 2) + 's');
+        }
+      }
+    });
     this.refreshSelection();
     this.refreshPlaying();
   }
@@ -378,11 +424,33 @@ function trackRow(r, t, albumArtist) {
   );
   if (t) {
     setTitle(name, t.title || t.handle.split('\\').pop());
-    if (t.artist && albumArtist && t.artist.toLowerCase() !== albumArtist.toLowerCase()) name.append(el('span.tp-artist', { text: ` · ${t.artist}` }));
+    const note = artistNote(t.artist, albumArtist);
+    if (note) name.append(el('span.tp-artist', { text: ` · ${note}` }));
     name.title = name.textContent;
   }
   return node;
 }
+
+/**
+ * The artist shown after a song title, when it differs from the album artist:
+ * "Jeff Williams feat. Casey Lee Williams" on a Jeff Williams album becomes
+ * "feat. Casey Lee Williams"; the same artist shows nothing.
+ */
+function artistNote(artist, albumArtist) {
+  if (!artist) return '';
+  if (!albumArtist) return artist;
+  const a = artist.trim();
+  const aa = albumArtist.trim();
+  if (a.toLowerCase() === aa.toLowerCase()) return '';
+  if (a.toLowerCase().startsWith(aa.toLowerCase())) {
+    const rest = a.slice(aa.length).replace(/^[\s,&;/+x×]+/i, '').trim();
+    if (!rest) return '';
+    return /^(feat\.?|ft\.?|featuring|with|vs\.?|and)\b/i.test(rest) ? rest : `with ${rest}`;
+  }
+  return a;
+}
+
+let measureCtx = null;
 
 function rowOf(e) {
   const node = e.target.closest('.tp-row');

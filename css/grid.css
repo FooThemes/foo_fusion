@@ -484,3 +484,46 @@
 .trackpanel[data-bg='art'] button.heart.hate {
   color: var(--accent);
 }
+
+/* Long titles: two lines per row when most of an album's titles are long. */
+.trackpanel.two-line .tp-row {
+  height: 52px;
+}
+
+.trackpanel.two-line .tp-name {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+}
+
+/* A title that still doesn't fit scrolls into view while hovered. */
+.tp-name.clipped {
+  text-overflow: ellipsis;
+}
+
+.tp-row:hover .tp-name.clipped {
+  text-overflow: clip;
+}
+
+.tp-row:hover .tp-name.clipped {
+  animation: tp-name-scroll var(--mq-dur, 4s) ease-in-out 0.4s infinite alternate;
+}
+
+@keyframes tp-name-scroll {
+  0%,
+  15% {
+    text-indent: 0;
+  }
+  85%,
+  100% {
+    text-indent: var(--mq-dist);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-row:hover .tp-name.clipped {
+    animation: none;
+  }
+}

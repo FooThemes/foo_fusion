@@ -26,6 +26,15 @@ export const SHORTCUTS = [
 
 export function mountKeyboard(app) {
   document.addEventListener('keydown', async (e) => {
+    // Reload works from anywhere (even the search box), and falls back to a
+    // plain page reload if foobar2000 doesn't answer.
+    if (e.ctrlKey && e.shiftKey && e.key === 'F5') {
+      e.preventDefault();
+      let done = false;
+      tryCall('window.reload').then((r) => (done = !!r));
+      setTimeout(() => done || location.reload(), 1500);
+      return;
+    }
     if (e.defaultPrevented) return;
     const typing = e.target.closest('input, textarea, [contenteditable]');
     if (typing) return;
@@ -46,7 +55,6 @@ export function mountKeyboard(app) {
       'Ctrl+P': () => tryCall('misc.showPreferences'),
       'Ctrl+O': () => view.selection.size && runSelectionCommand('Open containing folder'),
       F5: () => view.load(),
-      'Ctrl+Shift+F5': () => tryCall('window.reload'),
       F11: () => tryCall('window.toggleFullscreen'),
       'Alt+A': () => tryCall('window.toggleAlwaysOnTop'),
       Escape: () => app.escape(),

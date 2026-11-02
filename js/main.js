@@ -19,6 +19,7 @@ import { mountKeyboard } from './ui/keyboard.js';
 import { mountPlaylistManager } from './ui/plmanager.js';
 import { installLog, logInfo } from './core/log.js';
 import { VERSION } from './version.js';
+import { installDiagnostics } from './core/diag.js';
 
 async function boot() {
   if (!window.fb2k) {
@@ -93,6 +94,7 @@ async function boot() {
   sidebar = mountSidebar(document.getElementById('sidebar'), app);
   mountPlayerBar(document.getElementById('playerbar'), app);
   mountKeyboard(app);
+  installDiagnostics(view);
 
   // Follow the playing track into view when it changes, if it's in this playlist.
   player.on('track', () => {

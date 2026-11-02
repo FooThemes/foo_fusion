@@ -10,11 +10,16 @@ let warned = false;
 const cache = new Map(); // handle -> Promise<palette|null>
 const SIZE = 40; // sample grid; plenty for picking colours
 
-export function albumColours(handle, img) {
+/**
+ * `variant` tells covers of the same track apart: the box-set cover above the
+ * disc folders ("all discs") and the disc's own cover are different pictures.
+ */
+export function albumColours(handle, img, variant = '') {
   if (!handle) return Promise.resolve(null);
-  if (!cache.has(handle)) {
+  const key = variant + '|' + handle;
+  if (!cache.has(key)) {
     cache.set(
-      handle,
+      key,
       extract(handle, img).catch((err) => {
         if (!warned) {
           warned = true;
@@ -25,7 +30,7 @@ export function albumColours(handle, img) {
     );
     if (cache.size > 300) cache.delete(cache.keys().next().value);
   }
-  return cache.get(handle);
+  return cache.get(key);
 }
 
 async function extract(handle, img) {
@@ -118,7 +123,7 @@ export function palette(data) {
   const darkSleeve = neutral ? l0 < 0.5 : l < 0.5;
   let bg = neutral && base !== colours[0].rgb
     ? fromHsl(h, Math.min(Math.max(s, 0.35), 0.6), darkSleeve ? 0.17 : 0.86)
-    : fromHsl(h, Math.min(s, 0.55), l > 0.5 ? Math.max(0.78, Math.min(l, 0.9)) : Math.min(Math.max(l, 0.1), 0.24));
+    : fromHsl(h, Math.min(s, 0.55), l > 0.5 ? Math.max(0.78, Math.min(l, neutral ? 0.95 : 0.9)) : Math.min(Math.max(l, 0.1), 0.24));
   const dark = luminance(bg) < 0.35;
   const text = dark ? [240, 240, 240] : [24, 24, 24];
 

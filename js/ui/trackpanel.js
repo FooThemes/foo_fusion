@@ -191,13 +191,13 @@ export class TrackPanel {
   }
 
   // "Album colours": background and text colours taken from the cover.
-  async #applyColours(handle) {
+  async #applyColours(handle, variant = '') {
     const st = this.node.style;
     const clearVars = () => ['--list-bg', '--list-text', '--list-text2', '--accent', '--accent-text'].forEach((v) => st.removeProperty(v));
-    this.colourFor = handle;
+    this.colourFor = variant + handle;
     if (!handle) return clearVars();
-    const pal = await albumColours(handle, this.cover);
-    if (this.colourFor !== handle) return; // another disc/album was picked meanwhile
+    const pal = await albumColours(handle, this.cover, variant);
+    if (this.colourFor !== variant + handle) return; // another disc/album was picked meanwhile
     if (!pal) return clearVars();
     st.setProperty('--list-bg', pal.bg);
     st.setProperty('--list-text', pal.text);
@@ -212,7 +212,7 @@ export class TrackPanel {
     // "All discs" prefers the box-set cover in the folder above the discs.
     if (handle) bindArt(this.cover, handle, 260, disc ? ['front'] : albumArtTypes(store.get('separateDiscs')));
     // Album colours follow the cover shown: a disc's own cover when one is picked.
-    this.#applyColours(store.get('listBackground') === 'art' ? handle : null);
+    this.#applyColours(store.get('listBackground') === 'art' ? handle : null, disc ? `disc${disc.number}` : 'all');
     this.coverLabel.hidden = !disc;
     this.coverLabel.textContent = disc ? discLabel(disc) : '';
   }

@@ -11,7 +11,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt } from '../data/artwork.js';
+import { bindArt, albumArtTypes } from '../data/artwork.js';
 import { trackContextMenu } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 import { draggableRows } from './dnd.js';
@@ -273,7 +273,7 @@ export class Grid {
       node.title = `${g.key}\n${plural(g.albumCount || g.sub?.length || 1, 'album')}`;
     }
     art.dataset.label = this.kind === 'genres' ? g.key : '';
-    if (head?.handle) bindArt(img, head.handle, this.artSize, this.kind === 'artists' ? ['artist', 'front'] : this.kind === 'albums' ? ['parent', 'front'] : ['front']);
+    if (head?.handle) bindArt(img, head.handle, this.artSize, this.kind === 'artists' ? ['artist', 'front'] : this.kind === 'albums' ? albumArtTypes(store.get('separateDiscs')) : ['front']);
     else if (!sameAlbum) {
       delete img.dataset.artToken;
       img.removeAttribute('src');

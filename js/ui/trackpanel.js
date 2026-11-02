@@ -13,7 +13,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt } from '../data/artwork.js';
+import { bindArt, albumArtTypes } from '../data/artwork.js';
 import { showMenu, addToItems, trackContextMenu } from './menus.js';
 import { RowSelector } from './rowselect.js';
 import { heartButton, refreshHearts } from './heart.js';
@@ -179,7 +179,7 @@ export class TrackPanel {
     clear(this.meta);
     parts.forEach((p, i) => this.meta.append(...(i ? [' · '] : []), p));
     const mode = store.get('listBackground');
-    if (head?.handle && mode === 'blur') bindArt(this.bg, head.handle, 160, ['parent', 'front']);
+    if (head?.handle && mode === 'blur') bindArt(this.bg, head.handle, 160, albumArtTypes(store.get('separateDiscs')));
     this.#renderCover();
     const rows = () => this.visibleRows();
     clear(this.buttons).append(
@@ -210,7 +210,7 @@ export class TrackPanel {
     const disc = this.disc !== 'all' && this.discs.find((d) => d.number === this.disc);
     const handle = disc?.first?.handle || this.group?.head?.handle;
     // "All discs" prefers the box-set cover in the folder above the discs.
-    if (handle) bindArt(this.cover, handle, 260, disc ? ['front'] : ['parent', 'front']);
+    if (handle) bindArt(this.cover, handle, 260, disc ? ['front'] : albumArtTypes(store.get('separateDiscs')));
     // Album colours follow the cover shown: a disc's own cover when one is picked.
     this.#applyColours(store.get('listBackground') === 'art' ? handle : null);
     this.coverLabel.hidden = !disc;

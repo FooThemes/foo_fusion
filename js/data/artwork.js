@@ -182,6 +182,15 @@ function splitPath(handle) {
   return { dir, parent: j > 0 ? dir.slice(0, j) : '', folder: j > 0 ? dir.slice(j + 1) : dir };
 }
 
+/**
+ * Art to try for an album tile or the expanded album. Combined albums prefer
+ * the box-set cover above the disc folders; with "Separate albums by disc"
+ * each disc is its own album, so its own cover comes first.
+ */
+export function albumArtTypes(separateDiscs) {
+  return separateDiscs ? ['front', 'parent'] : ['parent', 'front'];
+}
+
 /** URL of a cover in the folder above a disc folder, or null. */
 export function parentCoverUrl(handle, cssSize) {
   if (!handle) return Promise.resolve(null);

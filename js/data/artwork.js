@@ -17,7 +17,7 @@ const loadedUrls = new Set(); // URLs the browser has already decoded once
 // frame instead of fetching fb2k:// again (that refetch was the "flash").
 const keepAlive = new Map(); // url -> HTMLImageElement, oldest first
 const KEEP = 400;
-function markLoaded(url) {
+function markLoaded(url, decoded = null) {
   loadedUrls.add(url);
   if (keepAlive.has(url)) {
     const im = keepAlive.get(url);
@@ -25,8 +25,8 @@ function markLoaded(url) {
     keepAlive.set(url, im);
     return;
   }
-  const im = new Image();
-  im.src = url;
+  const im = decoded || new Image();
+  if (!decoded) im.src = url;
   keepAlive.set(url, im);
   while (keepAlive.size > KEEP) {
     const [old] = keepAlive.keys();
@@ -274,6 +274,30 @@ export function clearCache() {
 function readyRaw(path, type) {
   const url = resolved.get(`${type}|0|${path}`);
   return url && loadedUrls.has(url) ? url : null;
+}
+
+/**
+ * Fetch and decode a cover ahead of time (e.g. every disc of the open album),
+ * so a later bindArt for it shows it in the same frame.
+ */
+export async function preloadArt(path, cssSize, types = ['front']) {
+  for (const type of types) {
+    const keep = type === 'front' && keepOriginal(path);
+    const url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
+    if (!url) continue;
+    if (loadedUrls.has(url)) return;
+    const im = new Image();
+    im.crossOrigin = 'anonymous'; // same request mode as the expanded album's cover
+    im.src = url;
+    try {
+      await im.decode();
+      markLoaded(url, im);
+    } catch {
+      /* try the next type */
+      continue;
+    }
+    return;
+  }
 }
 
 /** Synchronous lookup: the URL if it is already known and decoded. */

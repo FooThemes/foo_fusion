@@ -121,11 +121,26 @@ export function palette(data) {
   }
   const [h, s, l] = toHsl(base);
   const darkSleeve = neutral ? l0 < 0.5 : l < 0.5;
-  let bg = neutral && base !== colours[0].rgb
-    ? fromHsl(h, Math.min(Math.max(s, 0.35), 0.6), darkSleeve ? 0.17 : 0.86)
-    : fromHsl(h, Math.min(s, 0.55), l > 0.5 ? Math.max(0.78, Math.min(l, neutral ? 0.95 : 0.9)) : Math.min(Math.max(l, 0.1), 0.24));
-  const dark = luminance(bg) < 0.35;
-  const text = dark ? [240, 240, 240] : [24, 24, 24];
+  const WHITE = [240, 240, 240];
+  const INK = [24, 24, 24];
+  let bg;
+  if (neutral && base !== colours[0].rgb) {
+    bg = fromHsl(h, Math.min(Math.max(s, 0.35), 0.6), darkSleeve ? 0.17 : 0.86);
+  } else if (!neutral && s >= 0.35) {
+    // A strong colour: keep it rich (orange stays orange, not peach) with
+    // white text, darkening it only as far as white text needs to stay legible.
+    let ll = Math.min(Math.max(l, 0.32), 0.6);
+    const ss = Math.min(s, 0.8);
+    bg = fromHsl(h, ss, ll);
+    while (contrast(WHITE, bg) < 3.2 && ll > 0.25) {
+      ll -= 0.02;
+      bg = fromHsl(h, ss, ll);
+    }
+  } else {
+    bg = fromHsl(h, Math.min(s, 0.55), l > 0.5 ? Math.max(0.78, Math.min(l, neutral ? 0.95 : 0.9)) : Math.min(Math.max(l, 0.1), 0.24));
+  }
+  const dark = contrast(WHITE, bg) >= 3.2 || contrast(WHITE, bg) >= contrast(INK, bg);
+  const text = dark ? WHITE : INK;
 
   // Title/accent: a vivid, reasonably common colour with enough contrast.
   let accent = null;

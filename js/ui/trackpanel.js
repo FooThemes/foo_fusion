@@ -13,7 +13,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes } from '../data/artwork.js';
+import { bindArt, albumArtTypes, preloadArt } from '../data/artwork.js';
 import { showMenu, addToItems, trackContextMenu } from './menus.js';
 import { RowSelector } from './rowselect.js';
 import { heartButton, refreshHearts } from './heart.js';
@@ -239,6 +239,8 @@ export class TrackPanel {
     this.discs = discs;
     if (fresh) this.disc = 'all';
     this.#renderDiscBar();
+    // Get every disc's cover ready, so picking a disc shows it at once.
+    if (this.multiDisc) for (const d of this.discs) if (d.first?.handle) preloadArt(d.first.handle, 260, ['front']);
     this.#measure();
     this.grid.relayout();
     this.#renderRows(tracks);
@@ -254,7 +256,7 @@ export class TrackPanel {
       const thumb = handle ? el('img', { alt: '', decoding: 'async' }) : null;
       const node = el(
         'button.tp-disc' + (on ? '.on' : ''),
-        { role: 'tab', 'aria-selected': String(on), title, onclick: () => this.showDisc(key) },
+        { role: 'tab', 'aria-selected': String(on), title, dataset: { disc: String(key) }, onclick: () => this.showDisc(key) },
         thumb ? el('span.art.ph-album.tp-disc-art', null, thumb) : icon('disc'),
         el('span.ellipsis', { text: label }),
       );
@@ -271,7 +273,12 @@ export class TrackPanel {
   showDisc(key) {
     if (key === this.disc) return;
     this.disc = key;
-    this.#renderDiscBar();
+    // Just move the highlight; rebuilding the chips reloaded their pictures.
+    for (const b of this.discBar.children) {
+      const on = b.dataset.disc === String(key);
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    }
     this.#measure();
     this.grid.relayout();
     this.#renderRows(this.tracks);

@@ -122,22 +122,23 @@ class View extends Emitter {
     // order doesn't match the view's sort yet (remembered across sessions).
     const sortKey = this.currentSortKey();
     const desc = !!store.get('sortDescending');
-    const applied = store.get('appliedSort')[pl.guid];
-    const wantSort = opts.sort || (store.get('sortOnOpen') && this.isLibrary && applied !== sortKey + (pl.isLocked ? '' : desc ? ':desc' : ''));
+    const pattern = (SORTS[sortKey] || SORTS.album).pattern;
+    // Remember the pattern itself, so a changed pattern (in an update) re-sorts.
+    const stamp = pattern + (pl.isLocked ? '' : desc ? ':desc' : '');
+    const wantSort = opts.sort || (store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp);
     this.reversed = false;
     if (wantSort && pl.trackCount > 0 && this.canSort(pl)) {
-      const pattern = (SORTS[sortKey] || SORTS.album).pattern;
       this.#ownSortUntil = performance.now() + 30000;
       if (!pl.isLocked) {
         await tryCall('playlist.sort', { playlist: pl.index, pattern, descending: desc });
-        store.update('appliedSort', { [pl.guid]: sortKey + (desc ? ':desc' : '') });
+        store.update('appliedSort', { [pl.guid]: stamp });
         this.#ownSortUntil = performance.now() + 600;
       } else {
         // foobar2000 refills a re-created autoplaylist in the background; let
         // its change events trigger the reload instead of ignoring them.
         this.#ownSortUntil = 0;
         if (await this.#resortAutoplaylist(pl, pattern)) {
-          store.update('appliedSort', { [pl.guid]: sortKey });
+          store.update('appliedSort', { [pl.guid]: stamp });
           // The refill doesn't always announce itself; look again shortly.
           setTimeout(() => this.load(), 400);
           setTimeout(() => this.load(), 1500);
@@ -268,7 +269,7 @@ class View extends Emitter {
           playlist: this.playlist.index,
           rows: missing.slice(i, i + 500),
           fields: TRACK_FIELDS,
-          formats: { n: TF.trackNumber },
+          formats: { n: TF.trackNumber, ds: TF.discSubtitle },
         });
         if (gen !== this.#generation) return rows.map(() => null);
         res?.tracks.forEach((t) => this.#trackCache.set(t.index, t));

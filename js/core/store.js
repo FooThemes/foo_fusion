@@ -10,23 +10,23 @@ const KEY = 'fusion.settings';
 export const SORTS = {
   album: {
     label: 'Album',
-    pattern: "$if2(%album%,'Single(s)') | %album artist% | $if(%album%,%date%,'9999') | %discnumber% | %tracknumber% | %title%",
+    pattern: "$if2(%album%,'Single(s)') | %album artist% | $if(%album%,%date%,'9999') | $num(%discnumber%,3) | $num(%tracknumber%,3) | %title%",
   },
   artist: {
     label: 'Artist',
-    pattern: "$if2(%album artist%,'Unknown Artist') | $if(%album%,%date%,'9999') | $if2(%album%,'Single(s)') | %discnumber% | %tracknumber% | %title%",
+    pattern: "$if2(%album artist%,'Unknown Artist') | $if(%album%,%date%,'9999') | $if2(%album%,'Single(s)') | $num(%discnumber%,3) | $num(%tracknumber%,3) | %title%",
   },
   year: {
     label: 'Year',
-    pattern: "$if2(%date%,'9999') | %album artist% | $if2(%album%,'Single(s)') | %discnumber% | %tracknumber% | %title%",
+    pattern: "$if2(%date%,'9999') | %album artist% | $if2(%album%,'Single(s)') | $num(%discnumber%,3) | $num(%tracknumber%,3) | %title%",
   },
   genre: {
     label: 'Genre',
-    pattern: "$if2(%genre%,'Unknown Genre') | %album artist% | $if(%album%,%date%,'9999') | $if2(%album%,'Single(s)') | %discnumber% | %tracknumber% | %title%",
+    pattern: "$if2(%genre%,'Unknown Genre') | %album artist% | $if(%album%,%date%,'9999') | $if2(%album%,'Single(s)') | $num(%discnumber%,3) | $num(%tracknumber%,3) | %title%",
   },
   added: {
     label: 'Date added',
-    pattern: "$if2(%added%,0) | %album artist% | $if2(%album%,'Single(s)') | %discnumber% | %tracknumber%",
+    pattern: "$if2(%added%,0) | %album artist% | $if2(%album%,'Single(s)') | $num(%discnumber%,3) | $num(%tracknumber%,3)",
   },
   title: { label: 'Title', pattern: '%title% | %artist%' },
   length: { label: 'Length', pattern: '$num(%length_seconds%,6)' },
@@ -48,7 +48,7 @@ export const ACCENTS = [
 ];
 
 const DEFAULTS = {
-  version: 1,
+  version: 2,
   dark: false,
   accent: '#107C10',
   view: 'albums', // albums | artists | genres | songs
@@ -56,7 +56,7 @@ const DEFAULTS = {
   sortDescending: false,
   sidebarWidth: 250,
   sidebarCollapsed: false,
-  separateDiscs: true,
+  separateDiscs: false, // one tile per album; discs are split inside the expanded list
   tileSize: 150, // minimum tile width in px
   artistTileSize: 130,
   showAlbumYear: true,
@@ -88,6 +88,10 @@ export async function load() {
         if (k in res.value) data[k] = res.value[k];
       }
       data.sort = { ...DEFAULTS.sort, ...(res.value.sort || {}) };
+      // v2: discs are handled inside the album list, so stop splitting tiles
+      // by disc unless the user turns it back on.
+      if ((res.value.version || 1) < 2) data.separateDiscs = false;
+      data.version = DEFAULTS.version;
     }
   } catch {
     // First run, or the store is unavailable: defaults are fine.

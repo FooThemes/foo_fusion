@@ -28,7 +28,7 @@ function buildLibrary() {
     for (let a = 0; a < albums; a++) {
       const album = `${pick(WORDS)} ${pick(NOUNS)}`;
       const year = String(1968 + Math.floor(r() * 56));
-      const discs = r() < 0.08 ? 2 : 1;
+      const discs = ai === 2 && a === 0 ? 10 : r() < 0.08 ? 2 : 1;
       const hasArt = r() > 0.12;
       for (let d = 1; d <= discs; d++) {
         const n = 6 + Math.floor(r() * 9);
@@ -48,6 +48,7 @@ function buildLibrary() {
             trackNumber: t,
             discNumber: d,
             totalDiscs: discs,
+            discSubtitle: d === 2 ? 'Acoustic' : discs > 2 && d % 3 === 0 ? `Live ${d}` : '',
             duration: 120 + Math.floor(r() * 300),
             codec: 'FLAC',
             bitrate: 700 + Math.floor(r() * 400),
@@ -58,6 +59,7 @@ function buildLibrary() {
             mood: r() < 0.1 ? 'Like it' : '',
             added: added++,
             hasArt,
+            artSeed: discs > 1 ? d : 0,
           });
         }
       }
@@ -72,7 +74,8 @@ function tfEval(pattern, t) {
   const al = t.album || 'Single(s)';
   const map = {
     [TF.albumKey]: () => `${aa}|${al}`,
-    [TF.albumDiscKey]: () => `${aa}|${al}${t.totalDiscs > 1 ? '|' + t.discNumber : ''}`,
+    [TF.albumDiscKey]: () => `${aa}|${al}|${t.discNumber}`,
+    [TF.discSubtitle]: () => t.discSubtitle || '',
     [TF.artistKey]: () => aa,
     [TF.genreKey]: () => t.genre || 'Unknown Genre',
     [TF.albumTitle]: () => al,
@@ -85,14 +88,14 @@ function tfEval(pattern, t) {
   if (map[pattern]) return map[pattern]();
   // Sort patterns: approximate with the leading field.
   const lead = pattern.split('|')[0];
-  if (lead.includes('%album artist%')) return `${aa}|${t.date}|${al}|${t.discNumber}|${String(t.trackNumber).padStart(3, '0')}`;
-  if (lead.includes('%date%')) return `${t.date}|${aa}|${al}|${t.discNumber}|${String(t.trackNumber).padStart(3, '0')}`;
-  if (lead.includes('%genre%')) return `${t.genre}|${aa}|${t.date}|${al}|${t.discNumber}|${String(t.trackNumber).padStart(3, '0')}`;
+  if (lead.includes('%album artist%')) return `${aa}|${t.date}|${al}|${String(t.discNumber).padStart(3, '0')}|${String(t.trackNumber).padStart(3, '0')}`;
+  if (lead.includes('%date%')) return `${t.date}|${aa}|${al}|${String(t.discNumber).padStart(3, '0')}|${String(t.trackNumber).padStart(3, '0')}`;
+  if (lead.includes('%genre%')) return `${t.genre}|${aa}|${t.date}|${al}|${String(t.discNumber).padStart(3, '0')}|${String(t.trackNumber).padStart(3, '0')}`;
   if (lead.includes('%added%')) return String(t.added).padStart(8, '0');
   if (lead.includes('%title%')) return t.title;
   if (lead.includes('%length')) return String(t.duration).padStart(6, '0');
   if (lead.includes('%path%')) return t.path;
-  return `${al}|${aa}|${t.date}|${t.discNumber}|${String(t.trackNumber).padStart(3, '0')}`;
+  return `${al}|${aa}|${t.date}|${String(t.discNumber).padStart(3, '0')}|${String(t.trackNumber).padStart(3, '0')}`;
 }
 
 function coverSvg(seed, label) {
@@ -135,6 +138,8 @@ export async function installMock() {
     } else {
       out = { ...t, index: i, playCount: 3, lastPlayed: '2026-10-30 21:14:00', added: '2025-02-11 10:00:00' };
       delete out.hasArt;
+      delete out.artSeed;
+      delete out.discSubtitle;
       delete out.mood;
     }
     if (formats) out.formats = Object.fromEntries(Object.entries(formats).map(([k, p]) => [k, tfEval(p, t)]));
@@ -396,7 +401,7 @@ export async function installMock() {
           const t = byPath.get(it.path);
           const type = it.type || p.type || 'front';
           const ok = t && t.hasArt && type === 'front';
-          return { path: it.path, available: !!ok, type, dataUrl: ok ? coverSvg(hashStr(t.albumArtist + t.album), t.album) : undefined };
+          return { path: it.path, available: !!ok, type, dataUrl: ok ? coverSvg(hashStr(t.albumArtist + t.album) + t.artSeed * 7, t.artSeed ? `${t.album} CD${t.discNumber}` : t.album) : undefined };
         }),
       };
     },

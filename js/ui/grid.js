@@ -277,6 +277,11 @@ export class Grid {
     this.#reveal();
   }
 
+  /** The open album list changed height (disc picked, tracks loaded). */
+  relayout() {
+    if (this.expanded >= 0) this.#relayoutTiles();
+  }
+
   collapse() {
     if (this.expanded < 0) return;
     this.expanded = -1;

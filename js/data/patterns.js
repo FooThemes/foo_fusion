@@ -5,13 +5,14 @@ export const TF = {
   // Group keys. The playlist is shown in its own order; adjacent rows with the
   // same key form one tile.
   albumKey: "$if2(%album artist%,'Unknown Artist')|$if2(%album%,'Single(s)')",
-  albumDiscKey: "$if2(%album artist%,'Unknown Artist')|$if2(%album%,'Single(s)')$ifgreater(%totaldiscs%,1,|%discnumber%,)",
+  // Not every rip has TOTALDISCS, so split on DISCNUMBER alone.
+  albumDiscKey: "$if2(%album artist%,'Unknown Artist')|$if2(%album%,'Single(s)')[|%discnumber%]",
   artistKey: "$if2(%album artist%,'Unknown Artist')",
   genreKey: "$if2(%genre%,'Unknown Genre')",
 
   // Text shown on tiles (read from the first row of each group).
   albumTitle: "$if(%album%,%album%,$if(%album artist%,'Single(s)','Unknown Album'))",
-  albumDiscTitle: "$if(%album%,%album%$ifgreater(%totaldiscs%,1,[' (Disc '%discnumber%')'],),$if(%album artist%,'Single(s)','Unknown Album'))",
+  albumDiscTitle: "$if(%album%,%album%$if($or($greater(%totaldiscs%,1),$greater(%discnumber%,1)),' (Disc '%discnumber%[': '%discsubtitle%]')',),$if(%album artist%,'Single(s)','Unknown Album'))",
   albumArtist: "$if2(%album artist%,'Unknown Artist')",
   year: '$year(%date%)',
   genre: "$if2(%genre%,'Unknown Genre')",
@@ -19,6 +20,7 @@ export const TF = {
   // Track rows.
   trackNumber: "$if2(%tracknumber%,'')",
   trackArtist: '[%track artist%]',
+  discSubtitle: '[%discsubtitle%]',
 };
 
 /** Build a foobar2000 query that matches every word in `text` somewhere. */

@@ -1,5 +1,10 @@
 // The expanded album: cover, details and the album's tracks laid out in
 // columns, drawn under the row of the clicked tile.
+//
+// Multi-disc albums get a disc bar: "All discs" shows each disc as its own
+// section (header with DISCSUBTITLE, its own cover thumbnail), and picking a
+// disc shows just that one with its cover in the big art slot. Albums with
+// more than three discs open on disc 1 so a 10-disc box set stays compact.
 
 import { el, clear, formatTime, formatDuration, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -15,6 +20,9 @@ const COL_MIN = 300;
 const MIN_H = 350; // "List height min" in the original
 const PAD = 30;
 const HEAD_H = 76;
+const DISCBAR_H = 52;
+const SECTION_H = 48; // disc header inside "All discs"
+const ALL_DISCS_MAX = 3; // open on "All discs" up to this many discs
 
 export class TrackPanel {
   constructor(grid) {
@@ -22,15 +30,20 @@ export class TrackPanel {
     this.group = null;
     this.index = -1;
     this.rows = [];
+    this.discs = []; // [{ number, subtitle, rows, first }]
+    this.disc = 'all'; // 'all' or a disc number
     this.height = 0;
     this.width = 0;
+    this.cols = 1;
 
     this.bg = el('img.tp-bg', { alt: '', decoding: 'async' });
     this.cover = el('img', { alt: '', decoding: 'async' });
     this.coverBox = el('div.art.ph-album.tp-cover', null, this.cover);
+    this.coverLabel = el('div.tp-cover-label', { hidden: true });
     this.title = el('h2.tp-title.ellipsis');
     this.meta = el('div.tp-meta.ellipsis');
     this.buttons = el('div.tp-buttons');
+    this.discBar = el('div.tp-discs', { role: 'tablist', 'aria-label': 'Discs', hidden: true });
     this.list = el('div.tp-list', { role: 'listbox', 'aria-multiselectable': 'true' });
     this.notch = el('div.tp-notch');
     this.node = el(
@@ -38,9 +51,24 @@ export class TrackPanel {
       { hidden: true },
       el('div.tp-bg-wrap', null, this.bg),
       this.notch,
-      el('div.tp-inner', null, this.coverBox, el('div.tp-body', null, el('div.tp-head', null, this.title, this.meta, this.buttons), this.list)),
+      el(
+        'div.tp-inner',
+        null,
+        el('div.tp-left', null, this.coverBox, this.coverLabel),
+        el('div.tp-body', null, el('div.tp-head', null, this.title, this.meta, this.buttons), this.discBar, this.list),
+      ),
     );
-    this.selector = new RowSelector(this.list, () => this.rows);
+    // Long disc bars scroll sideways with the mouse wheel.
+    this.discBar.addEventListener(
+      'wheel',
+      (e) => {
+        if (this.discBar.scrollWidth <= this.discBar.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        e.preventDefault();
+        this.discBar.scrollLeft += e.deltaY;
+      },
+      { passive: false },
+    );
+    this.selector = new RowSelector(this.list, () => this.visibleRows());
     this.list.addEventListener('dblclick', (e) => {
       const r = rowOf(e);
       if (r != null) view.play(r);
@@ -53,37 +81,61 @@ export class TrackPanel {
     });
   }
 
+  /** Rows currently listed (the selected disc, or the whole album). */
+  visibleRows() {
+    if (this.disc === 'all' || this.discs.length < 2) return this.rows;
+    return this.discs.find((d) => d.number === this.disc)?.rows || this.rows;
+  }
+
+  get multiDisc() {
+    return this.discs.length > 1;
+  }
+
   layout(width) {
     this.width = width;
-    if (this.group) this.#measure();
+    if (this.group) {
+      this.#measure();
+      this.#position();
+    }
   }
 
   #measure() {
-    const n = this.rows.length;
     const artLeft = store.get('listArtLeft') && this.width > 640;
     const coverSize = artLeft ? Math.min(260, MIN_H - PAD * 2) : 0;
     const listW = this.width - 40 * 2 - (artLeft ? coverSize + PAD : 0);
-    this.cols = Math.max(1, Math.min(Math.floor(listW / COL_MIN), Math.ceil(n / 4)));
-    const minRows = Math.floor((MIN_H - PAD * 2 - HEAD_H) / ROW_H);
-    this.perCol = Math.max(Math.ceil(n / this.cols), Math.min(n, minRows));
-    this.height = Math.max(MIN_H, PAD * 2 + HEAD_H + this.perCol * ROW_H);
+    const maxCols = Math.max(1, Math.floor(listW / COL_MIN));
+
+    const sections = this.disc === 'all' && this.multiDisc ? this.discs.map((d) => d.rows.length) : [this.visibleRows().length];
+    const biggest = Math.max(...sections);
+    this.cols = Math.max(1, Math.min(maxCols, Math.ceil(biggest / 4)));
+    this.perCol = sections.map((n) => Math.ceil(n / this.cols));
+
+    let body = this.perCol.reduce((h, rows) => h + rows * ROW_H, 0);
+    if (sections.length > 1) body += sections.length * SECTION_H;
+    const extra = this.multiDisc ? DISCBAR_H : 0;
+    this.height = Math.max(MIN_H, PAD * 2 + HEAD_H + extra + body);
+
     this.node.style.height = this.height + 'px';
     this.node.classList.toggle('no-cover', !artLeft);
     this.coverBox.style.width = this.coverBox.style.height = coverSize + 'px';
-    this.list.style.gridTemplateRows = `repeat(${this.perCol}, ${ROW_H}px)`;
-    this.list.style.gridTemplateColumns = `repeat(${this.cols}, minmax(0, 1fr))`;
+    this.node.style.setProperty('--tp-cols', this.cols);
   }
 
   open(group, index) {
+    const same = this.group && group && this.group.key === group.key && this.group.start === group.start;
     this.group = group;
     this.index = index;
     this.rows = view.groupRows(group);
+    if (!same) {
+      this.discs = [];
+      this.disc = 'all';
+    }
     this.#measure();
     this.#position();
     this.node.hidden = false;
     this.node.dataset.bg = store.get('listBackground');
     this.refreshHead(group);
-    this.#renderRows();
+    this.#load();
   }
 
   close() {
@@ -107,74 +159,173 @@ export class TrackPanel {
     const head = group.head;
     const [artist, album] = group.key.split('|');
     this.title.textContent = head?.title || album || '';
-    const total = this.#totalLength();
-    this.meta.textContent = [head?.artist || artist, head?.year, head?.genre, plural(this.rows.length, 'song'), total ? formatDuration(total) : null].filter(Boolean).join(' · ');
-    if (head?.handle) {
-      bindArt(this.cover, head.handle, 260, ['front']);
-      if (store.get('listBackground') !== 'plain') bindArt(this.bg, head.handle, 160, ['front']);
-    }
+    const total = this.#totalLength(this.rows);
+    const discs = this.multiDisc ? plural(this.discs.length, 'disc') : null;
+    this.meta.textContent = [head?.artist || artist, head?.year, head?.genre, discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null].filter(Boolean).join(' · ');
+    if (head?.handle && store.get('listBackground') !== 'plain') bindArt(this.bg, head.handle, 160, ['front']);
+    this.#renderCover();
+    const rows = () => this.visibleRows();
     clear(this.buttons).append(
-      btn('play', 'Play', () => view.play(this.rows[0])),
-      btn('add', 'Add to', () => showMenu(addToItems(this.rows))),
-      btn('queue', 'Add to queue', () => view.queueRows(this.rows)),
+      btn('play', 'Play', () => view.play(rows()[0])),
+      btn('add', 'Add to', () => showMenu(addToItems(rows()))),
+      btn('queue', 'Add to queue', () => view.queueRows(rows())),
       btn('close', 'Close', () => this.grid.collapse()),
     );
   }
 
-  #totalLength() {
+  #renderCover() {
+    const disc = this.disc !== 'all' && this.discs.find((d) => d.number === this.disc);
+    const handle = disc?.first?.handle || this.group?.head?.handle;
+    if (handle) bindArt(this.cover, handle, 260, ['front']);
+    this.coverLabel.hidden = !disc;
+    this.coverLabel.textContent = disc ? discLabel(disc) : '';
+  }
+
+  #totalLength(rows) {
     let t = 0;
-    for (const r of this.rows) t += view.cachedTrack(r)?.duration || 0;
+    for (const r of rows) t += view.cachedTrack(r)?.duration || 0;
     return t;
   }
 
-  async #renderRows() {
+  async #load() {
     const group = this.group;
-    const rows = this.rows;
-    clear(this.list);
-    const frag = document.createDocumentFragment();
-    const nodes = rows.map((r) => {
-      const node = el('div.tp-row', { role: 'option', dataset: { row: r }, tabindex: -1 }, el('span.tp-num'), el('span.tp-name.ellipsis'), el('span.tp-len'));
-      frag.append(node);
-      return node;
-    });
-    this.list.append(frag);
-    this.refreshSelection();
-    this.refreshPlaying();
-    const tracks = await view.tracks(rows);
+    // Draw placeholders straight away so the panel never looks empty.
+    if (!this.discs.length) this.#renderRows(null);
+    const tracks = await view.tracks(this.rows);
     if (this.group !== group) return;
-    const albumArtist = group.head?.artist || '';
-    tracks.forEach((t, n) => {
-      if (!t) return;
-      const node = nodes[n];
-      node.children[0].textContent = t.formats?.n || (t.trackNumber ? t.trackNumber : '');
-      const name = node.children[1];
-      name.textContent = t.title || t.handle.split('\\').pop();
-      if (t.artist && albumArtist && t.artist.toLowerCase() !== albumArtist.toLowerCase()) {
-        name.append(el('span.tp-artist', { text: ` · ${t.artist}` }));
-      }
-      name.title = name.textContent;
-      node.children[2].textContent = formatTime(t.duration);
-    });
+    const discs = splitDiscs(this.rows, tracks);
+    const fresh = this.discs.length !== discs.length;
+    this.discs = discs;
+    if (fresh) this.disc = discs.length > ALL_DISCS_MAX ? discs[0].number : 'all';
+    this.#renderDiscBar();
+    this.#measure();
+    this.grid.relayout();
+    this.#renderRows(tracks);
     this.refreshHead(group);
   }
 
+  #renderDiscBar() {
+    clear(this.discBar);
+    this.discBar.hidden = !this.multiDisc;
+    if (!this.multiDisc) return;
+    const chip = (key, label, title, handle) => {
+      const on = this.disc === key;
+      const thumb = handle ? el('img', { alt: '', decoding: 'async' }) : null;
+      const node = el(
+        'button.tp-disc' + (on ? '.on' : ''),
+        { role: 'tab', 'aria-selected': String(on), title, onclick: () => this.showDisc(key) },
+        thumb ? el('span.art.ph-album.tp-disc-art', null, thumb) : icon('disc'),
+        el('span.ellipsis', { text: label }),
+      );
+      if (thumb) bindArt(thumb, handle, 32, ['front']);
+      return node;
+    };
+    this.discBar.append(chip('all', 'All discs', `All ${this.discs.length} discs`, null));
+    for (const d of this.discs) {
+      const label = d.subtitle ? `${d.number || '?'} · ${d.subtitle}` : `Disc ${d.number || '?'}`;
+      this.discBar.append(chip(d.number, label, `${discLabel(d)} · ${plural(d.rows.length, 'song')}`, d.first?.handle));
+    }
+  }
+
+  showDisc(key) {
+    if (key === this.disc) return;
+    this.disc = key;
+    this.#renderDiscBar();
+    this.#measure();
+    this.grid.relayout();
+    this.#renderRows(this.discs.flatMap((d) => d.tracks));
+    this.#renderCover();
+  }
+
+  #renderRows(tracks) {
+    clear(this.list);
+    const byRow = new Map();
+    (tracks || []).forEach((t) => t && byRow.set(t.index, t));
+    const albumArtist = this.group?.head?.artist || '';
+    const makeRows = (rows, perCol) => {
+      const grid = el('div.tp-grid', { style: { gridTemplateRows: `repeat(${perCol}, ${ROW_H}px)` } });
+      for (const r of rows) grid.append(trackRow(r, byRow.get(r), albumArtist));
+      return grid;
+    };
+    if (this.multiDisc && this.disc === 'all') {
+      this.discs.forEach((d, i) => {
+        const len = this.#totalLength(d.rows);
+        const thumb = el('img', { alt: '', decoding: 'async' });
+        if (d.first?.handle) bindArt(thumb, d.first.handle, 40, ['front']);
+        this.list.append(
+          el(
+            'div.tp-section',
+            { style: { height: SECTION_H + 'px' } },
+            el('span.art.ph-album.tp-section-art', null, thumb),
+            el('span.tp-section-title.ellipsis', { text: discLabel(d) }),
+            el('span.tp-section-meta', { text: [plural(d.rows.length, 'song'), len ? formatDuration(len) : null].filter(Boolean).join(' · ') }),
+            el('button.btn-icon.tp-section-play', { title: `Play ${discLabel(d)}`, onclick: () => view.play(d.rows[0]) }, icon('play')),
+          ),
+          makeRows(d.rows, this.perCol[i]),
+        );
+      });
+    } else {
+      this.list.append(makeRows(this.visibleRows(), this.perCol[0]));
+    }
+    this.refreshSelection();
+    this.refreshPlaying();
+  }
+
   refreshSelection() {
-    for (const node of this.list.children) node.classList.toggle('selected', view.selection.has(Number(node.dataset.row)));
+    for (const node of this.list.querySelectorAll('.tp-row')) node.classList.toggle('selected', view.selection.has(Number(node.dataset.row)));
   }
 
   refreshPlaying() {
     const playing = player.playingPlaylist === view.playlist?.index ? player.playingIndex : -1;
-    for (const node of this.list.children) {
+    for (const node of this.list.querySelectorAll('.tp-row')) {
       const on = Number(node.dataset.row) === playing;
       node.classList.toggle('playing', on);
       const num = node.children[0];
       if (on && !num.querySelector('.icon')) num.replaceChildren(icon(player.state === 'paused' ? 'pause' : 'nowPlaying'));
-      else if (!on && num.querySelector('.icon')) {
-        const t = view.cachedTrack(Number(node.dataset.row));
-        num.textContent = t?.formats?.n || '';
-      }
+      else if (!on && num.querySelector('.icon')) num.textContent = trackNum(view.cachedTrack(Number(node.dataset.row)));
     }
   }
+}
+
+/** Split an album's rows by DISCNUMBER, keeping playlist order. */
+function splitDiscs(rows, tracks) {
+  const discs = [];
+  const byNumber = new Map();
+  rows.forEach((r, i) => {
+    const t = tracks[i];
+    const n = t?.discNumber || 0;
+    let d = byNumber.get(n);
+    if (!d) {
+      d = { number: n, subtitle: t?.formats?.ds || '', rows: [], tracks: [], first: t };
+      byNumber.set(n, d);
+      discs.push(d);
+    }
+    d.rows.push(r);
+    d.tracks.push(t);
+    if (!d.subtitle && t?.formats?.ds) d.subtitle = t.formats.ds;
+  });
+  discs.sort((a, b) => a.number - b.number);
+  return discs.length > 1 ? discs : [];
+}
+
+function discLabel(d) {
+  if (!d) return '';
+  return `Disc ${d.number || '?'}${d.subtitle ? ` · ${d.subtitle}` : ''}`;
+}
+
+function trackNum(t) {
+  return t ? t.formats?.n || (t.trackNumber ? String(t.trackNumber).padStart(2, '0') : '') : '';
+}
+
+function trackRow(r, t, albumArtist) {
+  const name = el('span.tp-name.ellipsis');
+  const node = el('div.tp-row', { role: 'option', dataset: { row: r }, tabindex: -1 }, el('span.tp-num', { text: trackNum(t) }), name, el('span.tp-len', { text: t ? formatTime(t.duration) : '' }));
+  if (t) {
+    name.textContent = t.title || t.handle.split('\\').pop();
+    if (t.artist && albumArtist && t.artist.toLowerCase() !== albumArtist.toLowerCase()) name.append(el('span.tp-artist', { text: ` · ${t.artist}` }));
+    name.title = name.textContent;
+  }
+  return node;
 }
 
 function rowOf(e) {

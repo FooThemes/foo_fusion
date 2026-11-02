@@ -287,10 +287,121 @@
 }
 
 .tp-list {
+  min-height: 0;
+}
+
+.tp-grid {
   display: grid;
   grid-auto-flow: column;
+  grid-template-columns: repeat(var(--tp-cols, 1), minmax(0, 1fr));
   column-gap: 30px;
-  min-height: 0;
+}
+
+.tp-left {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trackpanel.no-cover .tp-left {
+  display: none;
+}
+
+.tp-cover-label {
+  max-width: 230px;
+  font-size: 12px;
+  color: var(--list-text2);
+  text-align: center;
+}
+
+/* Disc picker */
+.tp-discs {
+  display: flex;
+  gap: 6px;
+  height: 52px;
+  padding-bottom: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.tp-disc {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  height: 36px;
+  padding: 0 12px 0 4px;
+  border: 1px solid color-mix(in srgb, var(--list-text) 22%, transparent);
+  background: color-mix(in srgb, var(--list-bg) 50%, transparent);
+  font-size: 13px;
+}
+
+.tp-disc > .icon {
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+}
+
+.tp-disc:hover {
+  background: var(--hover);
+}
+
+.tp-disc.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.tp-disc-art {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+/* Disc header inside "All discs" */
+.tp-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 0 0;
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.tp-section-art {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.tp-section-title {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.tp-section-meta {
+  color: var(--list-text2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tp-section-play {
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  opacity: 0.6;
+}
+
+.tp-section-play:hover {
+  opacity: 1;
+}
+
+.tp-section-play .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .tp-row {

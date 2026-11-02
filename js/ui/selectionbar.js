@@ -26,8 +26,17 @@ export function mountSelectionBar(root) {
       b('heart', 'Add to Favorites', async () => {
         const handles = await view.handlesFor(rows);
         try {
-          await favourites.set(handles, true);
+          await favourites.set(handles, 'like');
           toast(`Added ${rows.length} to Favorites`);
+        } catch {
+          toast("Couldn't update the files' tags");
+        }
+      }),
+      b('heartBroken', 'Dislike (MOOD: Hate it)', async () => {
+        const handles = await view.handlesFor(rows);
+        try {
+          await favourites.set(handles, 'hate');
+          toast(`Marked ${rows.length} as disliked`);
         } catch {
           toast("Couldn't update the files' tags");
         }

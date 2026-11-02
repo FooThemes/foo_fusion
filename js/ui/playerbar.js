@@ -17,7 +17,7 @@ export function mountPlayerBar(root, app) {
   const coverBox = el('button.art.ph-album.pb-cover', { title: 'Show now playing', onclick: () => app.showPlaying() }, cover);
   const title = el('div.pb-title.ellipsis');
   const artist = el('div.pb-artist.ellipsis');
-  const heart = heartButton('', false);
+  const heart = heartButton('', '');
   heart.classList.add('pb-heart');
   const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist), heart);
 
@@ -55,7 +55,7 @@ export function mountPlayerBar(root, app) {
     nowBox.title = on ? `${t.title}\n${t.artist}\n${t.album}` : '';
     heart.dataset.handle = on ? t.handle : '';
     heart.hidden = !on;
-    if (on) favourites.load([t.handle]).then(([loved]) => heart.dataset.handle === t.handle && setHeart(heart, loved));
+    if (on) favourites.load([t.handle]).then(([state]) => heart.dataset.handle === t.handle && setHeart(heart, state));
     const key = on ? t.handle : null;
     if (key === artTrack) return;
     artTrack = key;
@@ -208,7 +208,7 @@ export function mountPlayerBar(root, app) {
     return showAppMenu(app);
   }
   player.on('track', renderTrack);
-  favourites.on('change', ({ handles, on }) => handles.includes(heart.dataset.handle) && setHeart(heart, on));
+  favourites.on('change', ({ handles, state }) => handles.includes(heart.dataset.handle) && setHeart(heart, state));
   player.on('state', () => {
     renderState();
     startTicking();

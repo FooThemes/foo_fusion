@@ -70,7 +70,7 @@ export class TrackPanel {
       { passive: false },
     );
     this.selector = new RowSelector(this.list, () => this.visibleRows());
-    favourites.on('change', ({ handles, on }) => refreshHearts(this.list, handles, on));
+    favourites.on('change', ({ handles, state }) => refreshHearts(this.list, handles, state));
     draggableRows(this.list, (e) => {
       const r = rowOf(e);
       return r == null ? null : selectionOr(r);
@@ -334,7 +334,7 @@ function trackRow(r, t, albumArtist) {
     { role: 'option', dataset: { row: r }, tabindex: -1, draggable: true },
     el('span.tp-num', { text: trackNum(t) }),
     name,
-    t ? heartButton(t.handle, favourites.isLoved(t)) : null,
+    t ? heartButton(t.handle, favourites.state(t)) : null,
     el('span.tp-len', { text: t ? formatTime(t.duration) : '' }),
   );
   if (t) {

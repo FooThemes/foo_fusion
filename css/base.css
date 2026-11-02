@@ -348,3 +348,8 @@ button.heart.on {
   opacity: 1;
   color: var(--accent);
 }
+
+button.heart.hate {
+  opacity: 1;
+  color: var(--text2);
+}

@@ -1,62 +1,76 @@
-// Favourite ("loved") songs, as in the original skin: a song is a favourite
-// when its MOOD tag is "Like it". The Favorites autoplaylist collects them.
-// Writing goes to the files' tags, so favourites survive library rebuilds and
-// show up in any other player that reads MOOD.
+// Song mood, as in the original skin, stored in the file's MOOD tag:
+//   ''        nothing
+//   'like'    MOOD = "Like it"  (listed in the Favorites autoplaylist)
+//   'hate'    MOOD = "Hate it"
+// The heart button cycles nothing -> like -> hate -> nothing. Writing goes to
+// the tags, so moods survive library rebuilds and work in other players.
 
 import { call, tryCall } from '../core/bridge.js';
 import { Emitter } from '../core/emitter.js';
 
-export const LOVED_VALUE = 'Like it';
 export const MOOD_TF = '[%mood%]';
+const VALUE = { like: 'Like it', hate: 'Hate it' };
+export const NEXT = { '': 'like', like: 'hate', hate: '' };
 
 class Favourites extends Emitter {
-  #known = new Map(); // handle -> boolean (what we last read or wrote)
+  #known = new Map(); // handle -> state (what we last read or wrote)
 
-  /** From a track row fetched with formats: { m: MOOD_TF }. */
-  isLoved(track) {
-    if (!track) return false;
+  /** State of a track row fetched with formats: { m: MOOD_TF }. */
+  state(track) {
+    if (!track) return '';
     if (this.#known.has(track.handle)) return this.#known.get(track.handle);
-    return isLovedValue(track.formats?.m);
+    return parseMood(track.formats?.m);
   }
 
-  /** Read the state for handles we have no row for (e.g. the playing track). */
+  isLoved(track) {
+    return this.state(track) === 'like';
+  }
+
+  /** Read states for handles we have no row for (e.g. the playing track). */
   async load(handles) {
     if (!handles.length) return [];
     const res = await tryCall('titleformat.evalBatch', { paths: handles, pattern: MOOD_TF });
     return handles.map((h, i) => {
-      const on = isLovedValue(res?.results?.[i]?.result);
-      this.#known.set(h, on);
-      return on;
+      const st = parseMood(res?.results?.[i]?.result);
+      this.#known.set(h, st);
+      return st;
     });
   }
 
-  async set(handles, on) {
+  async set(handles, state) {
     if (!handles.length) return;
-    handles.forEach((h) => this.#known.set(h, on));
-    this.emit('change', { handles, on });
+    const before = handles.map((h) => this.#known.get(h));
+    handles.forEach((h) => this.#known.set(h, state));
+    this.emit('change', { handles, state });
     try {
       for (let i = 0; i < handles.length; i += 200) {
         await call('metadata.writeBatch', {
-          items: handles.slice(i, i + 200).map((path) => ({ path, tags: { MOOD: on ? LOVED_VALUE : null } })),
+          items: handles.slice(i, i + 200).map((path) => ({ path, tags: { MOOD: VALUE[state] || null } })),
         });
       }
     } catch (err) {
       // Put the hearts back the way they were if the write was refused.
-      handles.forEach((h) => this.#known.set(h, !on));
-      this.emit('change', { handles, on: !on });
+      handles.forEach((h, i) => (before[i] == null ? this.#known.delete(h) : this.#known.set(h, before[i])));
+      handles.forEach((h, i) => this.emit('change', { handles: [h], state: before[i] || '' }));
       throw err;
     }
   }
 
-  toggle(handle, current) {
-    return this.set([handle], !current);
+  /** Advance one song to its next state; returns the new state. */
+  async cycle(handle, current) {
+    const next = NEXT[current || ''];
+    await this.set([handle], next);
+    return next;
   }
 }
 
-function isLovedValue(v) {
-  return String(v || '')
+function parseMood(v) {
+  const parts = String(v || '')
     .split(/[;,]/)
-    .some((s) => s.trim().toLowerCase() === LOVED_VALUE.toLowerCase());
+    .map((s) => s.trim().toLowerCase());
+  if (parts.includes('like it')) return 'like';
+  if (parts.includes('hate it')) return 'hate';
+  return '';
 }
 
 export const favourites = new Favourites();

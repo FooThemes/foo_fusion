@@ -58,7 +58,7 @@ export class SongList {
       const node = e.target.closest('[data-row]');
       return node ? selectionOr(Number(node.dataset.row)) : null;
     });
-    this.offFav = favourites.on('change', ({ handles, on }) => refreshHearts(this.sizer, handles, on));
+    this.offFav = favourites.on('change', ({ handles, state }) => refreshHearts(this.sizer, handles, state));
   }
 
   destroy() {
@@ -125,7 +125,7 @@ export class SongList {
     c[4].textContent = t ? (t.date || '').slice(0, 4) : '';
     c[5].textContent = t?.genre || '';
     if (t) {
-      const loved = favourites.isLoved(t);
+      const loved = favourites.state(t);
       const b = c[6].firstChild;
       if (b && b.dataset.handle === t.handle) setHeart(b, loved);
       else c[6].replaceChildren(heartButton(t.handle, loved));

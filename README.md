@@ -21,8 +21,9 @@ new.
   hidden foobar2000 menu bar (the full foobar2000 menu is still there).
 - **Multi-disc albums**: a disc bar with each disc's own cover and DISCSUBTITLE,
   shown as separate sections or one disc at a time.
-- **Favourites**: hearts on songs set the `MOOD` tag to "Like it", the same as
-  the original skin; the Favorites autoplaylist lists them.
+- **Like / dislike**: the heart on each song cycles nothing → Like it (heart) →
+  Hate it (broken heart) → nothing, in the `MOOD` tag, the same as the original
+  skin; the Favorites autoplaylist lists the liked ones.
 - **Playlist manager** (Ctrl+M), standing in for foobar2000's Default UI panel:
   reorder by dragging, multi-select, rename, duplicate, delete, load and save,
   and create or edit autoplaylists.

@@ -29,7 +29,6 @@ else:
     html = html.replace('<link rel="stylesheet"', block + '\n  <link rel="stylesheet"', 1)
 
 html = re.sub(r'href="(css/[^"?]+)(\?v=[^"]*)?"', lambda m: f'href="{m.group(1)}?v={h(root / m.group(1))}"', html)
-html = re.sub(r'src="(js/main\.js)(\?v=[^"]*)?"', lambda m: f'src="/{m.group(1)}?v={h(root / m.group(1))}"', html)
-html = html.replace('src="//js/main.js', 'src="/js/main.js')
+html = re.sub(r'src="/?(js/main\.js)(\?v=[^"]*)?"', lambda m: f'src="/{m.group(1)}?v={h(root / m.group(1))}"', html)
 index.write_text(html, encoding='utf-8')
 print(f'stamped {len(imports)} modules')

@@ -3,9 +3,10 @@
 // bundled help pages (doc\Query Syntax Help.html, doc\titleformat_help.html)
 // right inside the dialog instead of in a browser.
 //
-// foobar2000 doesn't let components read an existing autoplaylist's query, so
-// Fusion remembers the definitions of autoplaylists it creates or edits. For
-// any other autoplaylist the dialog offers foobar2000's own editor instead.
+// foobar2000 keeps each autoplaylist's query and sort in the playlist's
+// properties (profile\playlists-v2.0\playlist-<GUID>-props.sqlite), which
+// foo_ui_webview2 doesn't expose, so Fusion reads that file directly. If it
+// can't, it falls back to what it remembers, then to foobar2000's own editor.
 
 import { el } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -19,6 +20,53 @@ const HELP = {
   sort: { file: 'titleformat_help.html', title: 'Title formatting' },
 };
 const helpCache = new Map();
+
+// The standard autoplaylist manager's client GUID, {51B653F4-A2D7-4810-99BD-06724712175A},
+// as stored (little-endian) at the start of the property blob, followed by
+// the query and sort pattern as length-prefixed UTF-8 strings.
+const CLIENT = [0xf4, 0x53, 0xb6, 0x51, 0xd7, 0xa2, 0x10, 0x48, 0x99, 0xbd, 0x06, 0x72, 0x47, 0x12, 0x17, 0x5a];
+
+/** Read an autoplaylist's stored definition from its properties file. */
+export async function readDefinition(p) {
+  const prof = await tryCall('misc.getProfilePath');
+  const dir = (prof?.path || prof?.value || '').replace(/[\\/]$/, '');
+  if (!dir || !p?.guid) return null;
+  const base = `${dir}\\playlists-v2.0\\playlist-${p.guid.replace(/[{}]/g, '').toUpperCase()}-props.sqlite`;
+  // A newer copy can sit in the write-ahead log until SQLite checkpoints it.
+  for (const path of [`${base}-wal`, base]) {
+    const res = await tryCall('file.read', { path, encoding: 'binary' });
+    if (!res?.content) continue;
+    const def = parseDefinition(base64Bytes(res.content));
+    if (def) return def;
+  }
+  return null;
+}
+
+function base64Bytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** Find the last stored definition in the bytes (the latest write wins). */
+function parseDefinition(bytes) {
+  const dec = new TextDecoder();
+  const u32 = (o) => bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16) | (bytes[o + 3] << 24);
+  let found = null;
+  outer: for (let i = 4; i + 24 <= bytes.length; i++) {
+    for (let k = 0; k < 16; k++) if (bytes[i + k] !== CLIENT[k]) continue outer;
+    let o = i + 16;
+    const qlen = u32(o);
+    if (qlen <= 0 || qlen > 65536 || o + 4 + qlen > bytes.length) continue;
+    const query = dec.decode(bytes.subarray(o + 4, o + 4 + qlen));
+    o += 4 + qlen;
+    const slen = o + 4 <= bytes.length ? u32(o) : 0;
+    const sort = slen > 0 && slen < 65536 && o + 4 + slen <= bytes.length ? dec.decode(bytes.subarray(o + 4, o + 4 + slen)) : '';
+    found = { query, sort, keepSorted: (u32(i - 4) & 1) === 1 };
+  }
+  return found;
+}
 
 /** What Fusion knows about an autoplaylist's definition, or null. */
 export function knownDefinition(p) {
@@ -46,7 +94,7 @@ export async function newAutoplaylist() {
 
 /** Edit an existing autoplaylist (falls back to foobar2000's editor). */
 export async function editAutoplaylist(p) {
-  const known = knownDefinition(p);
+  const known = (await readDefinition(p)) || knownDefinition(p);
   const def = await showDialog({
     title: 'Autoplaylist properties',
     name: p.name,

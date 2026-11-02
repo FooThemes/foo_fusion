@@ -76,7 +76,8 @@ export class NowPlaying {
       const res = await tryCall('playlist.getTracks', { playlist: player.playingPlaylist, start, count: UP_NEXT, fields: ['handle', 'title', 'artist', 'album', 'duration'] });
       items = (res?.tracks || []).map((t) => ({ t, row: t.index }));
     }
-    const plName = playlists.list[player.playingPlaylist]?.name;
+    const pl = playlists.list[player.playingPlaylist];
+    const plName = playlists.isHidden(pl) ? 'Songs' : pl?.name;
     this.listTitle.textContent = fromQueue ? `Queue · ${items.length}` : items.length ? `Up next${plName ? ` from ${plName}` : ''}` : '';
     clear(this.list);
     items.forEach(({ t, queue, row }, n) => {

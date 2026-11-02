@@ -137,7 +137,7 @@ export class SongList {
 
   #state(node, row) {
     node.classList.toggle('selected', view.selection.has(row));
-    const playing = player.playingPlaylist === view.playlist?.index && player.playingIndex === row;
+    const playing = view.isPlayingRow(row);
     node.classList.toggle('playing', playing);
     const num = node.children[0];
     if (playing) num.replaceChildren(icon(player.state === 'paused' ? 'pause' : 'nowPlaying'));

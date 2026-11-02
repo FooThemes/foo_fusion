@@ -11,6 +11,9 @@ import * as store from '../core/store.js';
 
 export const COLLECTION = 'Collection';
 export const FAVORITES = 'Favorites';
+// Plays the Songs view of an autoplaylist in the order it's shown (foobar2000
+// can't reorder a locked playlist). Kept out of Fusion's playlist lists.
+export const PLAYBACK = 'Fusion playback';
 
 class Playlists extends Emitter {
   list = [];
@@ -30,7 +33,11 @@ class Playlists extends Emitter {
 
   /** Playlists shown under "New playlist" (everything except the two specials). */
   get userPlaylists() {
-    return this.list.filter((p) => !this.isSpecial(p));
+    return this.list.filter((p) => !this.isSpecial(p) && !this.isHidden(p));
+  }
+
+  isHidden(p) {
+    return !!p && p.name === PLAYBACK;
   }
 
   async init() {

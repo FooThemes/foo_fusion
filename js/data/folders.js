@@ -24,7 +24,7 @@ class Folders extends Emitter {
 
   /** Tree for display: folders sit where their first playlist is. */
   tree() {
-    const all = playlists.list;
+    const all = playlists.list.filter((p) => !playlists.isHidden(p));
     const byGuid = new Map(all.map((p) => [p.guid, p]));
     const out = [];
     const placed = new Set();

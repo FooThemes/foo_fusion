@@ -12,8 +12,9 @@ import { debounce, serialize } from '../core/util.js';
 import * as store from '../core/store.js';
 import { SORTS } from '../core/store.js';
 import { TF, searchQuery } from './patterns.js';
-import { playlists, COLLECTION, FAVORITES } from './playlists.js';
+import { playlists, COLLECTION, FAVORITES, PLAYBACK } from './playlists.js';
 import { MOOD_TF } from './favourites.js';
+import { player } from './player.js';
 
 const HEAD_CHUNK = 1000;
 export const TRACK_FIELDS = ['handle', 'title', 'artist', 'album', 'albumArtist', 'date', 'genre', 'duration', 'trackNumber', 'discNumber'];
@@ -388,7 +389,55 @@ class View extends Emitter {
 
   play(row) {
     if (!this.playlist) return;
+    if (this.#sortedView()) return this.#playSorted(row);
     return call('playlist.playTrack', { playlist: this.playlist.index, index: row });
+  }
+
+  /** The songs view shows a locked playlist in an order of our own. */
+  #sortedView() {
+    return this.mode === 'songs' && this.playlist?.isLocked && Array.isArray(this.rows) && !this.playlist?.name?.startsWith(PLAYBACK);
+  }
+
+  #playbackKey = null; // what the playback playlist currently holds
+
+  /**
+   * Play from the songs view in the order shown: the rows are copied, in that
+   * order, to a hidden "Fusion playback" playlist (reused while the list
+   * hasn't changed) and played from there, so Next and the playback order
+   * modes follow the list on screen.
+   */
+  async #playSorted(row) {
+    const rows = this.rows;
+    const at = rows.indexOf(row);
+    if (at < 0) return call('playlist.playTrack', { playlist: this.playlist.index, index: row });
+    const key = `${this.playlist.guid}|${this.playlist.trackCount}|${this.currentSortKey()}|${store.get('sortDescending')}|${this.filter}`;
+    let pb = playlists.byName(PLAYBACK);
+    if (!pb || this.#playbackKey !== key || pb.trackCount !== rows.length) {
+      const t0 = performance.now();
+      const handles = await this.handlesFor(rows);
+      if (!pb) {
+        await call('playlist.create', { name: PLAYBACK, position: playlists.list.length });
+        await playlists.refresh();
+        pb = playlists.byName(PLAYBACK);
+        if (!pb) return;
+      } else await call('playlist.clear', { playlistGuid: pb.guid });
+      for (let i = 0; i < handles.length; i += 5000) await call('playlist.addHandles', { playlistGuid: pb.guid, handles: handles.slice(i, i + 5000) });
+      this.#playbackKey = key;
+      logInfo(`playback list: ${handles.length} songs in ${Math.round(performance.now() - t0)} ms`);
+    }
+    // Creating a playlist can activate it; keep the user where they are.
+    const keep = this.playlist.guid;
+    await call('playlist.playTrack', { playlistGuid: pb.guid, index: at });
+    if (playlists.activePlaylist?.guid !== keep) tryCall('playlist.setActive', { playlistGuid: keep });
+  }
+
+  /** Is this playlist row of the current view the one playing? */
+  isPlayingRow(row) {
+    if (player.playingIndex < 0) return false;
+    if (player.playingPlaylist === this.playlist?.index) return player.playingIndex === row;
+    const pb = playlists.byName(PLAYBACK);
+    if (pb && player.playingPlaylist === pb.index && this.#sortedView() && this.#playbackKey?.startsWith(this.playlist.guid + '|')) return this.rows[player.playingIndex] === row;
+    return false;
   }
 
   playGroup(g) {

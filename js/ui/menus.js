@@ -62,7 +62,7 @@ export async function trackContextMenu(rows) {
 }
 
 export function addToItems(rows) {
-  const targets = playlists.list.filter((p) => !p.isAutoplaylist && !p.isLocked && p.index !== view.playlist?.index);
+  const targets = playlists.list.filter((p) => !p.isAutoplaylist && !p.isLocked && !playlists.isHidden(p) && p.index !== view.playlist?.index);
   return [
     {
       label: 'New playlist…',

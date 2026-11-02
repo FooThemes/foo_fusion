@@ -106,7 +106,27 @@ class View extends Emitter {
 
   /** Re-read the active playlist and regroup it. */
   #headsFor = '';
-  #refillUntil = 0;
+  #sortCache = null; // { guid, count, pattern, rows }
+
+  /**
+   * Row order for the songs view of a locked playlist, sorted here: runs of
+   * the sort key come from foobar2000 (off the UI thread) and are sorted with
+   * a natural, case-insensitive compare. Cached until the playlist changes.
+   */
+  async #sortedRows(pl, pattern, desc) {
+    const c = this.#sortCache;
+    let rows = c && c.guid === pl.guid && c.count === pl.trackCount && c.pattern === pattern ? c.rows : null;
+    if (!rows) {
+      const res = await tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns: [pattern] });
+      if (!res) return null;
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+      const runs = res.runs.slice().sort((a, b) => collator.compare(a.key, b.key) || a.start - b.start);
+      rows = [];
+      for (const r of runs) for (let i = 0; i < r.count; i++) rows.push(r.start + i);
+      this.#sortCache = { guid: pl.guid, count: pl.trackCount, pattern, rows };
+    }
+    return desc ? rows.slice().reverse() : rows;
+  }
 
   load = serialize(async (opts = {}) => {
     const gen = ++this.#generation;
@@ -137,7 +157,10 @@ class View extends Emitter {
     // order, so switching to those tabs never re-sorts (re-sorting a library
     // autoplaylist means foobar2000 rebuilds it, which takes a while).
     const valueView = (this.mode === 'artists' || this.mode === 'genres') && !this.drill;
-    const wantSort = opts.sort || (!valueView && store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp);
+    // Songs in an autoplaylist are sorted here instead (see #sortedRows), so
+    // going between Songs and Albums doesn't rebuild the library either.
+    const clientSongs = this.mode === 'songs' && pl.isLocked;
+    const wantSort = !clientSongs && (opts.sort || (!valueView && store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp));
     this.reversed = false;
     if (wantSort && pl.trackCount > 0 && this.canSort(pl)) {
       this.#ownSortUntil = performance.now() + 30000;
@@ -149,31 +172,28 @@ class View extends Emitter {
         // foobar2000 refills a re-created autoplaylist in the background; let
         // its change events trigger the reload instead of ignoring them.
         this.#ownSortUntil = 0;
-        this.#refillUntil = performance.now() + 3000;
         const t0 = performance.now();
+        const before = pl.trackCount;
         const ok = await this.#resortAutoplaylist(pl, pattern);
-        logInfo(`re-sorted ${pl.name} (${pl.trackCount} tracks) by ${sortKey} in ${Math.round(performance.now() - t0)} ms`);
         if (ok) {
           store.update('appliedSort', { [pl.guid]: stamp });
-          // The refill doesn't always announce itself; look again shortly.
-          setTimeout(() => this.load(), 400);
+          // Wait (briefly) for foobar2000 to refill it, checking often,
+          // instead of showing it half full or waiting on fixed timers.
+          while (performance.now() - t0 < 3000) {
+            await new Promise((r) => setTimeout(r, 50));
+            await playlists.refresh();
+            const now = playlists.activePlaylist;
+            if (!now || now.guid !== pl.guid || now.trackCount >= before) break;
+          }
+          // In case it was still filling when we gave up.
           setTimeout(() => this.load(), 1500);
-          setTimeout(() => this.load(), 3200);
         }
+        logInfo(`re-sorted ${pl.name} (${before} tracks) by ${sortKey} in ${Math.round(performance.now() - t0)} ms`);
       }
     }
     // Autoplaylists are locked against reordering, so "descending" is applied
     // to what we show rather than to the playlist itself.
     this.reversed = pl.isLocked && desc;
-
-    // A re-created autoplaylist is briefly empty (or half full) while
-    // foobar2000 refills it. Keep showing the old grid until it's back,
-    // rather than flashing an empty view; the follow-up loads catch up.
-    if (performance.now() < this.#refillUntil && pl.trackCount < this.total && this.groups.length) {
-      this.loading = false;
-      this.emit('loading', false);
-      return;
-    }
 
     let matched = null;
     const q = this.filter ? searchQuery(this.filter) : '';
@@ -185,6 +205,17 @@ class View extends Emitter {
 
     if (this.mode === 'songs' || this.mode === 'nowplaying') {
       this.groups = [];
+      if (clientSongs) {
+        const sorted = await this.#sortedRows(pl, pattern, desc);
+        if (gen !== this.#generation) return;
+        if (sorted) {
+          const keep = matched && new Set(matched);
+          this.rows = keep ? sorted.filter((r) => keep.has(r)) : sorted;
+          this.total = this.rows.length;
+          await this.syncSelection(false);
+          return this.#done(gen);
+        }
+      }
       this.rows = this.reversed ? (matched || Array.from({ length: pl.trackCount }, (_, i) => i)).reverse() : matched;
       this.total = matched ? matched.length : pl.trackCount;
       await this.syncSelection(false);

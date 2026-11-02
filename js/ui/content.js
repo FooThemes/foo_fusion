@@ -30,6 +30,8 @@ export function mountContent(root) {
   let currentKind = '';
   let lastKey = '';
   const scrollMemo = new Map(); // view key -> scrollTop
+  let pendingRestore = null; // key whose scroll position to restore once loaded
+  let blankShown = false; // the current key is only showing the blank loading page
 
   // A click on empty space (not on a song, tile or control) clears the selection.
   scroller.addEventListener('click', (e) => {
@@ -59,19 +61,26 @@ export function mountContent(root) {
     const keep = !fresh && key === lastKey;
     // Back from an artist/genre goes to where you were in the list.
     const cameBack = !keep && !view.drill && lastKey.startsWith(key.split('|').slice(0, 2).join('|') + '|') && lastKey.split('|')[2];
-    if (!keep && lastKey && !fresh) scrollMemo.set(lastKey, scroller.scrollTop);
+    if (!keep && lastKey && !fresh && !blankShown) scrollMemo.set(lastKey, scroller.scrollTop);
     lastKey = key;
+    if (cameBack || view.returning) pendingRestore = key;
     if (currentKind !== 'nowplaying') current.setData(keep);
-    // Back from an album's artist/genre link: the page and album you were on.
-    const ret = view.returning;
-    if (ret && view.groups.length) {
+    // The page is blank while it loads; restore the place once it has content.
+    if (!view.groups.length && !view.rows?.length && view.loading) {
+      blankShown = !keep;
+      renderMessage();
+      return;
+    }
+    blankShown = false;
+    if (pendingRestore === key) {
+      pendingRestore = null;
+      const ret = view.returning;
       view.returning = null;
-      if (scrollMemo.has(key)) scroller.scrollTop = scrollMemo.get(key);
-      current.render?.();
-      if (ret.expandedKey) current.expandKey?.(ret.expandedKey);
-    } else if (cameBack && scrollMemo.has(key)) {
-      scroller.scrollTop = scrollMemo.get(key);
-      current.render?.();
+      if (scrollMemo.has(key)) {
+        scroller.scrollTop = scrollMemo.get(key);
+        current.render?.();
+      }
+      if (ret?.expandedKey) current.expandKey?.(ret.expandedKey);
     }
     renderMessage();
   }

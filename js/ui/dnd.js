@@ -14,6 +14,26 @@ const PLAYLIST = 'application/x-fusion-playlist';
 const FOLDER = 'application/x-fusion-folder';
 
 /**
+ * Run fn once the drag has fully finished. A drop arrives while Windows is
+ * still inside its drag-and-drop loop; asking foobar2000 to reorder or change
+ * playlists at that moment could leave the window not taking clicks. So the
+ * work waits for dragend (or a short timeout) and the next turn of the loop.
+ */
+export function afterDrag(fn) {
+  return new Promise((resolve) => {
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      document.removeEventListener('dragend', go, true);
+      setTimeout(() => resolve(fn()), 30);
+    };
+    document.addEventListener('dragend', go, true);
+    setTimeout(go, 300);
+  });
+}
+
+/**
  * Songs dragged out of `container` (rows inside it must be draggable).
  * getRows(e) returns the playlist rows to drag, read at drag time.
  */
@@ -80,14 +100,14 @@ export function playlistDropTarget(node, getPlaylist) {
     if (!p) return;
     e.preventDefault();
     const fid = e.dataTransfer.getData(FOLDER);
-    if (fid) return folders.moveFolder(fid, folders.folderOf(p.guid)?.id || null);
+    if (fid) return afterDrag(() => folders.moveFolder(fid, folders.folderOf(p.guid)?.id || null));
     const guid = e.dataTransfer.getData(PLAYLIST);
-    if (guid) return movePlaylist(guid, p, after);
+    if (guid) return afterDrag(() => movePlaylist(guid, p, after));
     const payload = e.dataTransfer.getData(ROWS);
     if (!payload) return;
     const { guid: src, rows } = JSON.parse(payload);
     if (src !== view.playlist?.guid || p.guid === src) return;
-    const n = await view.addRowsTo(p.index, rows);
+    const n = await afterDrag(() => view.addRowsTo(p.index, rows));
     toast(`Added ${n === 1 ? '1 song' : `${n} songs`} to ${p.name}`);
   });
 }
@@ -120,8 +140,7 @@ export function folderDropTarget(node, folder) {
     const fid = e.dataTransfer.getData(FOLDER);
     if (!guid && !fid) return;
     e.preventDefault();
-    if (guid) folders.move([guid], folder.id);
-    else folders.moveFolder(fid, folder.id);
+    afterDrag(() => (guid ? folders.move([guid], folder.id) : folders.moveFolder(fid, folder.id)));
   });
 }
 

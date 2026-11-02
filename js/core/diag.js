@@ -90,6 +90,7 @@ export function installDiagnostics(view) {
   );
   document.addEventListener('dragstart', () => logInfo(`drag start (${lastAction})`), true);
   document.addEventListener('dragend', (e) => logInfo(`drag end (dropEffect ${e.dataTransfer?.dropEffect})`), true);
+  document.addEventListener('drop', (e) => logInfo(`drop on ${e.target.closest('[class]')?.className || e.target.tagName}`), true);
 
   // Frozen-UI check the user can run: Ctrl+Shift+D writes a snapshot.
   document.addEventListener(

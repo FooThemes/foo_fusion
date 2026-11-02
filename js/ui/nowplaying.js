@@ -2,6 +2,7 @@
 // playback queue (or, when the queue is empty, what plays next).
 
 import { setTitle } from './titles.js';
+import { afterDrag } from './dnd.js';
 import { el, clear, formatTime } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall, call } from '../core/bridge.js';
@@ -200,6 +201,7 @@ export class NowPlaying {
       e.preventDefault();
       const src = JSON.parse(raw);
       const queue = o.queue;
+      await afterDrag(() => {});
       if (o.kind === 'queue') {
         // Rebuild the queue with the dragged song at the drop position.
         const refs = queue.map((_, i) => ({ queueIndex: i }));

@@ -6,6 +6,7 @@
 // entries each), and URLs are cached for the session.
 
 import { tryCall } from '../core/bridge.js';
+import { logInfo } from '../core/log.js';
 
 const cache = new Map(); // key -> Promise<string|null>
 const resolved = new Map(); // key -> string|null, once known (for instant reuse)
@@ -77,6 +78,7 @@ const COVER_FILES = ['cover', 'folder', 'front', 'albumart', 'album'];
 const dirKind = new Map(); // folder -> 'keep' (png/gif) | 'scale'
 const dirProbe = new Map(); // folder -> Promise
 let probing = 0;
+let probeLogs = 40; // folders with PNG/GIF pictures to note in fusion.log
 const probeQueue = [];
 
 function dirOf(handle) {
@@ -100,8 +102,17 @@ function probeDir(dir) {
           const res = await tryCall('artwork.getFolderImages', { directory: dir });
           const images = res?.images || [];
           const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
-          const pick = COVER_FILES.map((c) => images.find((im) => base(im.name) === c)).find(Boolean) || (images.length === 1 ? images[0] : null);
+          // Which picture foobar2000 uses isn't reported, so guess like its
+          // default search: cover/folder/front/album by name, then any name
+          // containing those words, then the only picture or the only kind.
+          const words = /cover|front|folder|album|jacket/i;
+          const pick =
+            COVER_FILES.map((c) => images.find((im) => base(im.name) === c)).find(Boolean) ||
+            images.find((im) => words.test(base(im.name))) ||
+            (images.length === 1 ? images[0] : null) ||
+            (images.length && images.every((im) => /\.(png|gif)$/i.test(im.name)) ? images[0] : null);
           const kind = pick && /\.(png|gif)$/i.test(pick.name) ? 'keep' : 'scale';
+          if (probeLogs-- > 0 && images.some((im) => /\.(png|gif)$/i.test(im.name))) logInfo(`cover check ${dir.split('\\').pop()}: [${images.map((im) => im.name).join(', ')}] -> ${pick?.name || 'none'} (${kind})`);
           dirKind.set(dir, kind);
           resolve(kind);
         });

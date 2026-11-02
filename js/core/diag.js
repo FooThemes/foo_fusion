@@ -88,8 +88,8 @@ export function installDiagnostics(view) {
     },
     { capture: true, passive: true },
   );
-  document.addEventListener('dragstart', () => logInfo(`drag start (${lastAction})`), true);
-  document.addEventListener('dragend', (e) => logInfo(`drag end (dropEffect ${e.dataTransfer?.dropEffect})`), true);
+  // Fusion's own drags no longer use HTML5 drag and drop; only drops from
+  // outside (files from Explorer) still do.
   document.addEventListener('drop', (e) => logInfo(`drop on ${e.target.closest('[class]')?.className || e.target.tagName}`), true);
 
   // Frozen-UI check the user can run: Ctrl+Shift+D writes a snapshot.

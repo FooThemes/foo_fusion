@@ -2,7 +2,7 @@
 // playback queue (or, when the queue is empty, what plays next).
 
 import { setTitle } from './titles.js';
-import { afterDrag } from './dnd.js';
+import { dragSource, dropTarget } from './dnd.js';
 import { el, clear, formatTime } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall, call } from '../core/bridge.js';
@@ -159,7 +159,6 @@ export class NowPlaying {
     const node = el(
       'div.np-row' + (o.current ? '.current' : '') + (o.previous ? '.previous' : ''),
       {
-        draggable: !o.previous,
         ondblclick: o.onplay,
         title: `${t.title} - ${t.artist}`,
         // foobar2000's own track menu (Properties, tagging, and so on).
@@ -181,52 +180,38 @@ export class NowPlaying {
     node.dataset.index = o.index;
     // Drag to reorder the queue, drag a song into the queue, or reorder an
     // ordinary (unlocked) playlist.
-    node.addEventListener('dragstart', (e) => {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData(NP_MIME, JSON.stringify({ kind: o.kind, index: o.index, playlistGuid: o.playlist?.guid }));
-    });
-    node.addEventListener('dragover', (e) => {
-      if (!e.dataTransfer.types.includes(NP_MIME) || o.previous) return;
-      if (o.kind === 'pl' && !o.editable) return;
-      e.preventDefault();
-      const after = e.offsetY > node.offsetHeight / 2;
-      node.classList.toggle('drop-before', !after);
-      node.classList.toggle('drop-after', after);
-    });
-    node.addEventListener('dragleave', () => node.classList.remove('drop-before', 'drop-after'));
-    node.addEventListener('drop', async (e) => {
-      const after = node.classList.contains('drop-after');
-      node.classList.remove('drop-before', 'drop-after');
-      const raw = e.dataTransfer.getData(NP_MIME);
-      if (!raw) return;
-      e.preventDefault();
-      const src = JSON.parse(raw);
-      const queue = o.queue;
-      await afterDrag(() => {});
-      if (o.kind === 'queue') {
-        // Rebuild the queue with the dragged song at the drop position.
-        const refs = queue.map((_, i) => ({ queueIndex: i }));
-        let at = o.index + (after ? 1 : 0);
-        let moving;
-        if (src.kind === 'queue') {
-          moving = refs.splice(src.index, 1)[0];
-          if (src.index < at) at--;
-        } else moving = { playlistGuid: src.playlistGuid, item: src.index };
-        if (!moving?.playlistGuid && moving?.queueIndex == null) return;
-        refs.splice(at, 0, moving);
-        await tryCall('queue.setContents', { items: refs });
-      } else if (src.kind === 'pl' && o.editable && src.playlistGuid === o.playlist.guid) {
-        let target = o.index + (after ? 1 : 0);
-        if (src.index < target) target--;
-        if (target !== src.index) await tryCall('playlist.moveTracks', { playlistGuid: src.playlistGuid, items: [src.index], delta: target - src.index });
-        this.renderList();
-      }
-    });
+    if (!o.previous) {
+      dragSource(node, () => ({ type: 'np', kind: o.kind, index: o.index, playlistGuid: o.playlist?.guid, label: t.title }));
+      dropTarget(node, {
+        accept: (d) => d.type === 'np' && (o.kind === 'queue' || (o.kind === 'pl' && o.editable && d.kind === 'pl' && d.playlistGuid === o.playlist?.guid)),
+        over: (d, info) => (info.after ? 'after' : 'before'),
+        drop: async (src, info) => {
+          const queue = o.queue;
+          if (o.kind === 'queue') {
+            // Rebuild the queue with the dragged song at the drop position.
+            const refs = queue.map((_, i) => ({ queueIndex: i }));
+            let at = o.index + (info.after ? 1 : 0);
+            let moving;
+            if (src.kind === 'queue') {
+              moving = refs.splice(src.index, 1)[0];
+              if (src.index < at) at--;
+            } else moving = { playlistGuid: src.playlistGuid, item: src.index };
+            if (!moving?.playlistGuid && moving?.queueIndex == null) return;
+            refs.splice(at, 0, moving);
+            await tryCall('queue.setContents', { items: refs });
+          } else {
+            let target = o.index + (info.after ? 1 : 0);
+            if (src.index < target) target--;
+            if (target !== src.index) await tryCall('playlist.moveTracks', { playlistGuid: src.playlistGuid, items: [src.index], delta: target - src.index });
+            this.renderList();
+          }
+        },
+      });
+    }
     return node;
   }
 }
 
-const NP_MIME = 'application/x-fusion-np';
 
 function playQueued(t) {
   if (t.playlist != null && t.playlistItem != null) return call('playlist.playTrack', { playlist: t.playlist, index: t.playlistItem });

@@ -219,7 +219,7 @@ export class Grid {
     const play = el('button.tile-play', { title: 'Play', tabindex: -1 }, icon('play'));
     const node = el(
       'div.tile',
-      { tabindex: 0, role: 'button', draggable: true },
+      { tabindex: 0, role: 'button' },
       el('div.art', null, img, play),
       el('div.tile-t1.ellipsis'),
       el('div.tile-t2.ellipsis'),

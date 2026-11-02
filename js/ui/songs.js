@@ -105,7 +105,7 @@ export class SongList {
   }
 
   #make() {
-    const node = el('div.song-row', { role: 'option', draggable: true }, COLUMNS.map(([k]) => el(`div.c-${k}.ellipsis`)));
+    const node = el('div.song-row', { role: 'option' }, COLUMNS.map(([k]) => el(`div.c-${k}.ellipsis`)));
     this.sizer.append(node);
     return node;
   }

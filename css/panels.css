@@ -666,8 +666,11 @@
 
 #drag-badge {
   position: fixed;
-  top: -100px;
+  top: 0;
   left: 0;
+  z-index: 2000;
+  pointer-events: none;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
   padding: 4px 10px;
   background: var(--accent);
   color: var(--accent-text);
@@ -957,4 +960,11 @@
 .set-radio-text small {
   font-size: 11.5px;
   color: var(--text2);
+}
+
+/* While dragging (pointer drag): no text selection, grabbing cursor. */
+body.pdragging,
+body.pdragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
 }

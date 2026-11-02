@@ -370,7 +370,7 @@ function trackRow(r, t, albumArtist) {
   const name = el('span.tp-name.ellipsis');
   const node = el(
     'div.tp-row',
-    { role: 'option', dataset: { row: r }, tabindex: -1, draggable: true },
+    { role: 'option', dataset: { row: r }, tabindex: -1 },
     el('span.tp-num', { text: trackNum(t) }),
     name,
     t ? heartButton(t.handle, favourites.state(t)) : null,

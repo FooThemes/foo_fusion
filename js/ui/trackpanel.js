@@ -178,8 +178,6 @@ export class TrackPanel {
     for (const t of [discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null]) if (t) parts.push(t);
     clear(this.meta);
     parts.forEach((p, i) => this.meta.append(...(i ? [' · '] : []), p));
-    const mode = store.get('listBackground');
-    if (head?.handle && mode === 'blur') bindArt(this.bg, head.handle, 160, albumArtTypes(store.get('separateDiscs')));
     this.#renderCover();
     const rows = () => this.visibleRows();
     clear(this.buttons).append(
@@ -210,7 +208,10 @@ export class TrackPanel {
     const disc = this.disc !== 'all' && this.discs.find((d) => d.number === this.disc);
     const handle = disc?.first?.handle || this.group?.head?.handle;
     // "All discs" prefers the box-set cover in the folder above the discs.
-    if (handle) bindArt(this.cover, handle, 260, disc ? ['front'] : albumArtTypes(store.get('separateDiscs')));
+    const types = disc ? ['front'] : albumArtTypes(store.get('separateDiscs'));
+    if (handle) bindArt(this.cover, handle, 260, types);
+    // The blurred background follows the cover shown too.
+    if (handle && store.get('listBackground') === 'blur') bindArt(this.bg, handle, 160, types);
     // Album colours follow the cover shown: a disc's own cover when one is picked.
     this.#applyColours(store.get('listBackground') === 'art' ? handle : null, disc ? `disc${disc.number}` : 'all');
     this.coverLabel.hidden = !disc;

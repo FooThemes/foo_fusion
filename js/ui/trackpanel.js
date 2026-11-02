@@ -19,8 +19,7 @@ import { favourites } from '../data/favourites.js';
 
 const ROW_H = 35;
 const COL_MIN = 300;
-const MIN_H = 350; // "List height min" in the original
-const PAD = 30;
+const PAD = 40; // same as the left margin, so the panel is evenly padded
 const HEAD_H = 76;
 const DISCBAR_H = 52;
 const SECTION_H = 48; // disc header inside "All discs"
@@ -58,16 +57,6 @@ export class TrackPanel {
         el('div.tp-left', null, this.coverBox, this.coverLabel),
         el('div.tp-body', null, el('div.tp-head', null, this.title, this.meta, this.buttons), this.discBar, this.list),
       ),
-    );
-    // Long disc bars scroll sideways with the mouse wheel.
-    this.discBar.addEventListener(
-      'wheel',
-      (e) => {
-        if (this.discBar.scrollWidth <= this.discBar.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-        e.preventDefault();
-        this.discBar.scrollLeft += e.deltaY;
-      },
-      { passive: false },
     );
     this.selector = new RowSelector(this.list, () => this.visibleRows());
     favourites.on('change', ({ handles, state }) => refreshHearts(this.list, handles, state));
@@ -109,7 +98,7 @@ export class TrackPanel {
 
   #measure() {
     const artLeft = store.get('listArtLeft') && this.width > 640;
-    const coverSize = artLeft ? Math.min(260, MIN_H - PAD * 2) : 0;
+    const coverSize = artLeft ? 260 : 0;
     const listW = this.width - 40 * 2 - (artLeft ? coverSize + PAD : 0);
     const maxCols = Math.max(1, Math.floor(listW / COL_MIN));
 
@@ -120,8 +109,10 @@ export class TrackPanel {
 
     let body = this.perCol.reduce((h, rows) => h + rows * ROW_H, 0);
     if (sections.length > 1) body += sections.length * SECTION_H;
-    const extra = this.multiDisc ? DISCBAR_H : 0;
-    this.height = Math.max(MIN_H, PAD * 2 + HEAD_H + extra + body);
+    // The disc bar wraps onto more lines for big box sets; use its real height.
+    const extra = this.multiDisc ? this.discBar.offsetHeight || DISCBAR_H : 0;
+    // Fit the content: the cover or the track list, whichever is taller.
+    this.height = PAD * 2 + Math.max(coverSize, HEAD_H + extra + body);
 
     this.node.style.height = this.height + 'px';
     this.node.classList.toggle('no-cover', !artLeft);
@@ -171,7 +162,7 @@ export class TrackPanel {
     const total = this.#totalLength(this.rows);
     const discs = this.multiDisc ? plural(this.discs.length, 'disc') : null;
     this.meta.textContent = [head?.artist || artist, head?.year, head?.genre, discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null].filter(Boolean).join(' · ');
-    if (head?.handle && store.get('listBackground') !== 'plain') bindArt(this.bg, head.handle, 160, ['front']);
+    if (head?.handle && store.get('listBackground') !== 'plain') bindArt(this.bg, head.handle, 160, ['parent', 'front']);
     this.#renderCover();
     const rows = () => this.visibleRows();
     clear(this.buttons).append(
@@ -185,7 +176,8 @@ export class TrackPanel {
   #renderCover() {
     const disc = this.disc !== 'all' && this.discs.find((d) => d.number === this.disc);
     const handle = disc?.first?.handle || this.group?.head?.handle;
-    if (handle) bindArt(this.cover, handle, 260, ['front']);
+    // "All discs" prefers the box-set cover in the folder above the discs.
+    if (handle) bindArt(this.cover, handle, 260, disc ? ['front'] : ['parent', 'front']);
     this.coverLabel.hidden = !disc;
     this.coverLabel.textContent = disc ? discLabel(disc) : '';
   }

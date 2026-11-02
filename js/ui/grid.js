@@ -59,6 +59,14 @@ export class Grid {
 
   /** New data from the view model. Keeps scroll position when possible. */
   setData(keepScroll = false) {
+    // Same groups as on screen (e.g. a reload after a re-sort that changed
+    // nothing visible): just refresh the text, don't rebuild the tiles.
+    const sig = view.groups.map((g) => `${g.key}:${firstRow(g)}:${g.count}`).join('|');
+    if (keepScroll && sig === this.sig && this.kind === (view.drill ? 'albums' : view.mode)) {
+      this.refreshHeads();
+      return;
+    }
+    this.sig = sig;
     this.kind = view.drill ? 'albums' : view.mode;
     for (const node of this.tiles.values()) this.#recycle(node);
     this.tiles.clear();
@@ -105,18 +113,23 @@ export class Grid {
     this.render();
   }
 
+  /** Height the open album takes in the grid, including the gap below it. */
+  get panelSpace() {
+    return this.expanded >= 0 && this.panel.height ? this.panel.height + 28 : 0;
+  }
+
   get expandedRow() {
     return this.expanded < 0 ? -1 : Math.floor(this.expanded / this.cols);
   }
 
   #updateHeight() {
-    const extra = this.expanded >= 0 ? this.panel.height : 0;
+    const extra = this.expanded >= 0 ? this.panelSpace : 0;
     this.sizer.style.height = this.rowCount * this.tileH + extra + 60 + 'px';
   }
 
   rowTop(row) {
     const er = this.expandedRow;
-    return 16 + row * this.tileH + (er >= 0 && row > er ? this.panel.height : 0);
+    return 16 + row * this.tileH + (er >= 0 && row > er ? this.panelSpace : 0);
   }
 
   render() {
@@ -129,7 +142,7 @@ export class Grid {
     const top = this.scroller.scrollTop;
     const bottom = top + this.scroller.clientHeight;
     const er = this.expandedRow;
-    const ph = er >= 0 ? this.panel.height : 0;
+    const ph = er >= 0 ? this.panelSpace : 0;
     const toRow = (y) => {
       if (er >= 0 && y > 16 + (er + 1) * this.tileH) y = Math.max(16 + (er + 1) * this.tileH, y - ph);
       return Math.floor((y - 16) / this.tileH);
@@ -223,7 +236,7 @@ export class Grid {
       node.title = `${t1.textContent}\n${head?.artist || artist}`;
     } else if (this.kind === 'artists') {
       t1.textContent = g.key;
-      t2.textContent = plural(g.sub?.length || 1, 'album');
+      t2.textContent = plural(g.albumCount || g.sub?.length || 1, 'album');
       art.classList.add('round', 'ph-artist');
       node.title = g.key;
     } else {
@@ -231,10 +244,10 @@ export class Grid {
       t2.textContent = '';
       art.classList.add('ph-genre');
       art.dataset.label = g.key;
-      node.title = `${g.key}\n${plural(g.sub?.length || 1, 'album')}`;
+      node.title = `${g.key}\n${plural(g.albumCount || g.sub?.length || 1, 'album')}`;
     }
     art.dataset.label = this.kind === 'genres' ? g.key : '';
-    if (head?.handle) bindArt(img, head.handle, this.artSize, this.kind === 'artists' ? ['artist', 'front'] : ['front']);
+    if (head?.handle) bindArt(img, head.handle, this.artSize, this.kind === 'artists' ? ['artist', 'front'] : this.kind === 'albums' ? ['parent', 'front'] : ['front']);
     else {
       delete img.dataset.artToken;
       img.removeAttribute('src');
@@ -323,7 +336,7 @@ export class Grid {
   #reveal() {
     const row = this.expandedRow;
     const top = this.rowTop(row);
-    const bottom = top + this.tileH + this.panel.height;
+    const bottom = top + this.tileH + this.panelSpace;
     const viewTop = this.scroller.scrollTop;
     const viewH = this.scroller.clientHeight;
     let target = null;

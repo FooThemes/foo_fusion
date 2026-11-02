@@ -11,9 +11,10 @@ import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import * as store from '../core/store.js';
-import { playlistMenu, promptText, renamePlaylist, deletePlaylists, runMainMenuAny } from './menus.js';
-import { draggablePlaylist, playlistDropTarget } from './dnd.js';
-import { newAutoplaylist } from './autoplaylist.js';
+import { playlistMenu, promptText, renamePlaylist, deletePlaylists, runMainMenuAny, folderMenu } from './menus.js';
+import { draggablePlaylist, playlistDropTarget, folderDropTarget } from './dnd.js';
+import { newPlaylistDialog } from './autoplaylist.js';
+import { folders } from '../data/folders.js';
 
 export function mountPlaylistManager(root, app) {
   const list = el('div.plm-list', { role: 'listbox', 'aria-label': 'Playlists', 'aria-multiselectable': 'true', tabindex: 0 });
@@ -25,12 +26,12 @@ export function mountPlaylistManager(root, app) {
     el(
       'div.plm-tools',
       null,
-      tool('add', 'New', 'New playlist (Ctrl+N)', async () => {
-        const name = await promptText('Name this playlist', 'New playlist');
-        if (name) playlists.create(name);
+      tool('add', 'New', 'New playlist or autoplaylist (Ctrl+N)', () => newPlaylistDialog()),
+      tool('folder', 'Folder', 'New folder (for the selected playlists)', async () => {
+        const name = await promptText('Name this folder', 'New folder');
+        if (name) folders.create(name, chosen().filter((p) => !playlists.isSpecial(p)).map((p) => p.guid));
       }),
-      tool('autoplaylist', 'Auto', 'New autoplaylist from a query', newAutoplaylist),
-      tool('folder', 'Load', 'Load a playlist file', () => runMainMenuAny(['File/Load playlist...', 'File/Load playlist…', 'Load playlist...'])),
+      tool('open', 'Load', 'Load a playlist file', () => runMainMenuAny(['File/Load playlist...', 'File/Load playlist…', 'Load playlist...'])),
       tool('sortAsc', 'Sort', 'Sort playlists by name', sortByName),
     ),
     list,
@@ -44,9 +45,9 @@ export function mountPlaylistManager(root, app) {
   function render() {
     clear(list);
     const np = view.mode === 'nowplaying';
-    for (const p of playlists.list) {
+    const playlistRow = (p, nested) => {
       const row = el(
-        'div.plm-row',
+        'div.plm-row' + (nested ? '.nested' : ''),
         { role: 'option', tabindex: -1, dataset: { guid: p.guid }, title: `${p.name}\n${plural(p.trackCount, 'song')}${p.isAutoplaylist ? ' · autoplaylist' : ''}${p.isLocked ? ' · locked' : ''}` },
         icon(p.isAutoplaylist ? 'autoplaylist' : playlists.isSpecial(p) ? 'collection' : 'playlist'),
         el('span.plm-name.ellipsis', { text: p.name }),
@@ -70,10 +71,30 @@ export function mountPlaylistManager(root, app) {
         const targets = selected.has(p.guid) ? chosen() : [p];
         playlistMenu(p, targets);
       });
-      list.append(row);
+      return row;
+    };
+    for (const node of folders.tree()) {
+      if (node.type === 'playlist') {
+        list.append(playlistRow(node.p, false));
+        continue;
+      }
+      const f = node.folder;
+      const head = el(
+        'div.plm-row.plm-folder',
+        { title: `${f.name}\n${plural(node.members.length, 'playlist')}`, 'aria-expanded': String(!f.collapsed) },
+        icon(f.collapsed ? 'chevronRight' : 'chevronDown', 'chev'),
+        icon('folder'),
+        el('span.plm-name.ellipsis', { text: f.name }),
+        el('span.plm-count', { text: String(node.members.length) }),
+      );
+      head.addEventListener('click', () => folders.toggle(f.id));
+      head.addEventListener('contextmenu', (e) => (e.preventDefault(), folderMenu(f)));
+      folderDropTarget(head, f);
+      list.append(head);
+      if (!f.collapsed) for (const p of node.members) list.append(playlistRow(p, true));
     }
-    const total = playlists.list.reduce((n, p) => n + p.trackCount, 0);
-    status.textContent = `${plural(playlists.list.length, 'playlist')} · ${plural(total, 'song')}${selected.size > 1 ? ` · ${selected.size} selected` : ''}`;
+    // Playlists overlap (Collection holds everything), so a song total would mislead.
+    status.textContent = `${plural(playlists.list.length, 'playlist')}${selected.size > 1 ? ` · ${selected.size} selected` : ''}`;
   }
 
   function select(p, e) {
@@ -125,8 +146,12 @@ export function mountPlaylistManager(root, app) {
   });
 
   async function sortByName() {
+    // A–Z, keeping Collection/Favorites on top and each folder's playlists together.
+    const cmp = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
     const special = playlists.list.filter((p) => playlists.isSpecial(p));
-    const rest = playlists.list.filter((p) => !playlists.isSpecial(p)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    const nodes = folders.tree().filter((n) => n.type === 'folder' || !playlists.isSpecial(n.p));
+    nodes.sort((a, b) => cmp(a.type === 'folder' ? a.folder.name : a.p.name, b.type === 'folder' ? b.folder.name : b.p.name));
+    const rest = nodes.flatMap((n) => (n.type === 'folder' ? [...n.members].sort((a, b) => cmp(a.name, b.name)) : [n.p]));
     await call('playlist.reorderPlaylists', { newOrderGuids: [...special, ...rest].map((p) => p.guid) });
   }
 
@@ -144,6 +169,7 @@ export function mountPlaylistManager(root, app) {
   }
 
   playlists.on('change', () => panel.classList.contains('open') && render());
+  folders.on('change', () => panel.classList.contains('open') && render());
   playlists.on('active', () => panel.classList.contains('open') && render());
   player.on('track', () => panel.classList.contains('open') && render());
 

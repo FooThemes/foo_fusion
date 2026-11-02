@@ -6,6 +6,7 @@ import { el } from '../core/util.js';
 import { tryCall } from '../core/bridge.js';
 import { view } from '../data/view.js';
 import { playlists } from '../data/playlists.js';
+import { folders } from '../data/folders.js';
 import { toast } from './toast.js';
 
 const ROWS = 'application/x-fusion-rows';
@@ -86,6 +87,27 @@ async function movePlaylist(guid, target, after) {
   if (after) at++;
   order.splice(at, 0, guid);
   await tryCall('playlist.reorderPlaylists', { newOrderGuids: order });
+  // Dropped next to a playlist: join (or leave) that playlist's folder.
+  const into = folders.folderOf(target.guid);
+  if (into?.id !== folders.folderOf(guid)?.id) await folders.move([guid], into ? into.id : null);
+}
+
+/** A folder header that takes dropped playlists into the folder. */
+export function folderDropTarget(node, folder) {
+  node.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer.types.includes(PLAYLIST)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    node.classList.add('drop-into');
+  });
+  node.addEventListener('dragleave', () => node.classList.remove('drop-into'));
+  node.addEventListener('drop', (e) => {
+    node.classList.remove('drop-into');
+    const guid = e.dataTransfer.getData(PLAYLIST);
+    if (!guid) return;
+    e.preventDefault();
+    folders.move([guid], folder.id);
+  });
 }
 
 function dragBadge(text) {

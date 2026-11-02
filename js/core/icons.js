@@ -23,6 +23,7 @@ const P = {
   settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M6 18l1.6-1.6M16.4 7.6 18 6"/>',
   back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   chevronDown: '<path d="M7 10l5 5 5-5"/>',
+  chevronRight: '<path d="M10 7l5 5-5 5"/>',
   sortAsc: '<path d="M8 18V6M5 9l3-3 3 3M14 7h5M14 12h4M14 17h3"/>',
   sortDesc: '<path d="M8 6v12M5 15l3 3 3-3M14 7h3M14 12h4M14 17h5"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
@@ -42,6 +43,7 @@ const P = {
   autoplaylist: '<path d="M4 7h11M4 12h7M4 17h7"/><path d="M17 11l1 2.2 2.3.3-1.7 1.6.4 2.4-2-1.2-2 1.2.4-2.4-1.7-1.6 2.3-.3z"/>',
   library: '<path d="M4 20V4M8 20V4M12 20V7M16.5 20l-3-13 2.9-.7 3 13z"/>',
   minimise: '<path d="M6 12h12"/>',
+  open: '<path d="M4 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h7A1.5 1.5 0 0 1 20 9v1H8l-4 8z"/><path d="M4 18l3-8h15l-3 8z"/>',
   folder: '<path d="M4 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h7A1.5 1.5 0 0 1 20 9v8.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/>',
 };
 

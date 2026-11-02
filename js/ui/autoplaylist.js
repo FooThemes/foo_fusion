@@ -82,9 +82,22 @@ function remember(guid, def) {
 }
 
 /** New autoplaylist. */
-export async function newAutoplaylist() {
-  const def = await showDialog({ title: 'New autoplaylist', name: '', query: '', sort: '', keepSorted: false });
+/** New playlist dialog with Playlist / Autoplaylist tabs. */
+export async function newPlaylistDialog(tab = 'playlist') {
+  const def = await showDialog({ title: 'New', tabs: true, tab, name: '', query: '', sort: '', keepSorted: false });
   if (!def) return;
+  if (def.kind === 'playlist') {
+    await playlists.create(def.name || 'New playlist');
+    return;
+  }
+  await createAuto(def);
+}
+
+export async function newAutoplaylist() {
+  return newPlaylistDialog('auto');
+}
+
+async function createAuto(def) {
   const res = await tryCall('playlist.createAutoplaylist', { name: def.name || def.query, query: def.query, sort: def.sort, keepSorted: def.keepSorted });
   if (!res) return toast("foobar2000 didn't accept that query");
   remember(res.guid, def);
@@ -121,10 +134,36 @@ export async function editAutoplaylist(p) {
   else if (pl.name !== COLLECTION) remember(pl.guid, def);
 }
 
+/**
+ * Links in the help pages: "#section" scrolls within the page (the frame has no
+ * real address, so letting it navigate would blank it), links to the other
+ * help page switch pages, and web links open in the browser.
+ */
+function wireHelpLinks(frame, openFile) {
+  const doc = frame.contentDocument;
+  if (!doc) return;
+  doc.addEventListener('click', (e) => {
+    const a = e.target.closest?.('a[href]');
+    if (!a) return;
+    e.preventDefault();
+    const href = a.getAttribute('href');
+    if (href.startsWith('#')) {
+      const id = decodeURIComponent(href.slice(1));
+      (doc.getElementById(id) || doc.querySelector(`[name="${CSS.escape(id)}"]`))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (/^https?:/i.test(href)) {
+      tryCall('shell.openExternal', { url: href });
+    } else {
+      const file = href.split('#')[0].split('/').pop();
+      if (file) openFile(file);
+    }
+  });
+}
+
 function showDialog(opts) {
   return new Promise((resolve) => {
     const root = document.getElementById('overlay-root');
-    const name = el('input.dialog-input', { type: 'text', value: opts.name, spellcheck: false, disabled: !!opts.nameLocked, placeholder: 'Uses the query if left empty' });
+    let mode = opts.tabs ? opts.tab || 'playlist' : 'auto';
+    const name = el('input.dialog-input', { type: 'text', value: opts.name, spellcheck: false, disabled: !!opts.nameLocked });
     const query = el('input.dialog-input.mono', { type: 'text', value: opts.query, spellcheck: false, placeholder: 'e.g. GENRE HAS rock AND %rating% GREATER 3' });
     // Collection and Favorites are kept in the view's order by Fusion's Sort
     // menu, so their sort fields are shown but not editable here.
@@ -132,7 +171,9 @@ function showDialog(opts) {
     const sort = el('input.dialog-input.mono', { type: 'text', value: managed ? '' : opts.sort, spellcheck: false, disabled: managed, placeholder: managed ? 'Set by the Sort menu above the albums' : 'Optional, e.g. %album artist% | %date% | %album%' });
     const forced = el('input', { type: 'checkbox', checked: !!opts.keepSorted, disabled: managed });
     const helpTitle = el('div.ap-help-title');
-    const helpFrame = el('iframe.ap-help-frame', { sandbox: '', title: 'Help' });
+    // allow-same-origin (but no scripts) so Fusion can handle clicks inside it.
+    const helpFrame = el('iframe.ap-help-frame', { sandbox: 'allow-same-origin', title: 'Help' });
+    helpFrame.addEventListener('load', () => wireHelpLinks(helpFrame, showHelpFile));
     const help = el('div.ap-help', { hidden: true }, el('div.ap-help-head', null, helpTitle, el('button.btn-icon', { title: 'Close help', onclick: () => (help.hidden = true, box.classList.remove('with-help')) }, icon('close'))), helpFrame);
 
     const close = (v) => {
@@ -140,16 +181,23 @@ function showDialog(opts) {
       resolve(v);
     };
     const ok = () => {
+      if (mode === 'playlist') return close({ kind: 'playlist', name: name.value.trim() });
       const q = query.value.trim();
       if (!q) {
         query.focus();
         query.classList.add('invalid');
         return;
       }
-      close({ name: name.value.trim(), query: q, sort: sort.value.trim(), keepSorted: forced.checked });
+      close({ kind: 'auto', name: name.value.trim(), query: q, sort: sort.value.trim(), keepSorted: forced.checked });
     };
     const field = (label, input, helpKey) =>
       el('label.ap-field', null, el('span.ap-label', { text: label }), input, helpKey ? el('button.btn-icon.ap-q', { type: 'button', title: `${HELP[helpKey].title} help`, onclick: (e) => (e.preventDefault(), showHelp(helpKey)) }, '?') : el('span.ap-q-gap'));
+
+    // A link in one help page to the other (e.g. title formatting from the query page).
+    function showHelpFile(file) {
+      const key = Object.keys(HELP).find((k) => HELP[k].file.toLowerCase() === file.toLowerCase());
+      if (key) showHelp(key);
+    }
 
     async function showHelp(key) {
       box.classList.add('with-help');
@@ -169,22 +217,51 @@ function showDialog(opts) {
       helpFrame.srcdoc = helpCache.get(key);
     }
 
+    // Tabs (new playlist only): Playlist | Autoplaylist.
+    const tabs = opts.tabs
+      ? el(
+          'div.ap-tabs',
+          { role: 'tablist' },
+          [['playlist', 'Playlist'], ['auto', 'Autoplaylist']].map(([k, label]) =>
+            el('button.ap-tab', { type: 'button', role: 'tab', dataset: { k }, text: label, onclick: () => setMode(k) }),
+          ),
+        )
+      : null;
+    const autoPart = el(
+      'div.ap-auto',
+      null,
+      field('Query pattern', query, 'query'),
+      field('Sort pattern', sort, 'sort'),
+      el('label.ap-check', null, forced, el('span', { text: 'Force-sorted' }), el('span.ap-hint', { text: 'keeps the sort order as songs are added; the playlist can’t be reordered by hand' })),
+    );
+    function setMode(k) {
+      mode = k;
+      autoPart.hidden = k !== 'auto';
+      if (k !== 'auto') {
+        help.hidden = true;
+        box.classList.remove('with-help');
+      }
+      name.placeholder = k === 'auto' ? 'Uses the query if left empty' : 'New playlist';
+      tabs?.querySelectorAll('.ap-tab').forEach((t) => {
+        t.classList.toggle('on', t.dataset.k === k);
+        t.setAttribute('aria-selected', String(t.dataset.k === k));
+      });
+      (k === 'auto' && name.value ? query : name).focus();
+    }
     const box = el(
       'div.dialog.ap-dialog',
       { role: 'dialog', 'aria-modal': 'true', 'aria-label': opts.title },
       el(
         'div.ap-main',
         null,
-        el('h2', { text: opts.title }),
+        tabs || el('h2', { text: opts.title }),
         field('Name', name),
-        field('Query pattern', query, 'query'),
-        field('Sort pattern', sort, 'sort'),
-        el('label.ap-check', null, forced, el('span', { text: 'Force-sorted' }), el('span.ap-hint', { text: 'keeps the sort order as songs are added; the playlist can’t be reordered by hand' })),
+        autoPart,
         opts.unknown
           ? el(
               'p.ap-note',
               null,
-              "foobar2000 doesn't share this autoplaylist's current query, so it's blank here. Enter a new one, or ",
+              "Fusion couldn't read this autoplaylist's current query, so it's blank here. Enter a new one, or ",
               el('button.ap-link', { type: 'button', text: "use foobar2000's editor", onclick: () => (close(null), tryCall('playlist.showAutoplaylistUI', { playlistGuid: opts.playlist.guid })) }),
               '.',
             )
@@ -200,6 +277,7 @@ function showDialog(opts) {
       e.stopPropagation();
     });
     root.append(back);
-    (opts.nameLocked || opts.name ? query : name).focus();
+    if (opts.tabs) setMode(mode);
+    else (opts.nameLocked || opts.name ? query : name).focus();
   });
 }

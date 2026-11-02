@@ -69,7 +69,12 @@ async function boot() {
       if (settings.isOpen) return settings.open(false);
       if (plm.isOpen) return plm.open(false);
       const grid = content.current;
-      if (grid?.expanded >= 0) return grid.collapse();
+      if (grid?.expanded >= 0) {
+        grid.collapse();
+        // Don't leave a focus ring on the album that was open.
+        document.activeElement?.blur();
+        return;
+      }
       if (view.drill) return view.closeDrill();
       if (view.filter) return view.setFilter('');
       if (view.selection.size) return view.clearSelection();

@@ -281,6 +281,10 @@ body.no-sidebar #sidebar {
   opacity: 1;
 }
 
+.art img.instant {
+  transition: none;
+}
+
 .art.round {
   border-radius: 50%;
 }

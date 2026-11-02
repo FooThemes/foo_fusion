@@ -4,7 +4,7 @@ import { tryCall } from '../core/bridge.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { runMainMenu, promptText, runSelectionCommand } from './menus.js';
-import { playlists } from '../data/playlists.js';
+import { newPlaylistDialog } from './autoplaylist.js';
 
 export const SHORTCUTS = [
   ['Enter', 'Play the focused song (or open the focused album)'],
@@ -42,10 +42,7 @@ export function mountKeyboard(app) {
       'Ctrl+I': () => view.select(all().filter((r) => !view.selection.has(r))),
       'Ctrl+F': () => app.focusSearch(),
       'Ctrl+M': () => app.togglePlaylistManager(),
-      'Ctrl+N': async () => {
-        const name = await promptText('Name this playlist', 'New playlist');
-        if (name) playlists.create(name);
-      },
+      'Ctrl+N': () => newPlaylistDialog(),
       'Ctrl+P': () => tryCall('misc.showPreferences'),
       'Ctrl+O': () => view.selection.size && runSelectionCommand('Open containing folder'),
       F5: () => view.load(),

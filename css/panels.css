@@ -629,3 +629,35 @@
   border: 0;
   background: #fff;
 }
+
+.plm-row.nested {
+  padding-left: 46px;
+}
+
+.plm-folder .chev {
+  width: 14px !important;
+  height: 14px !important;
+  margin-right: -6px;
+}
+
+.plm-folder .plm-name {
+  font-weight: 600;
+}
+
+.ap-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 18px;
+}
+
+.ap-tab {
+  height: 32px;
+  padding: 0 18px;
+  background: var(--tab-off-bg);
+  color: var(--tab-off-text);
+}
+
+.ap-tab.on {
+  background: var(--accent);
+  color: var(--accent-text);
+}

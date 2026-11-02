@@ -7,9 +7,9 @@ import { favourites, NEXT } from '../data/favourites.js';
 import { toast } from './toast.js';
 
 const LOOK = {
-  '': { icon: 'heart', title: 'Like (MOOD: Like it)' },
-  like: { icon: 'heartFill', title: 'Liked. Click to dislike (MOOD: Hate it)' },
-  hate: { icon: 'heartBroken', title: 'Disliked. Click to clear the mood' },
+  '': { icon: 'heart', title: 'Like' },
+  like: { icon: 'heartFill', title: 'Liked (click to dislike)' },
+  hate: { icon: 'heartBroken', title: 'Disliked (click to clear)' },
 };
 
 export function heartButton(handle, state) {

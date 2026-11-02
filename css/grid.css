@@ -218,7 +218,7 @@
   display: flex;
   gap: 30px;
   height: 100%;
-  padding: 30px var(--margin);
+  padding: 40px var(--margin);
 }
 
 .trackpanel.no-cover .tp-cover {
@@ -314,33 +314,31 @@
   text-align: center;
 }
 
-/* Disc picker */
+/* Disc picker: wraps onto as many lines as it needs (no scrolling) */
 .tp-discs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  height: 52px;
-  padding-bottom: 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  padding-bottom: 16px;
 }
 
 .tp-disc {
-  flex: none;
+  flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  max-width: 240px;
-  height: 36px;
-  padding: 0 12px 0 4px;
+  max-width: 260px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 12px 0 3px;
   border: 1px solid color-mix(in srgb, var(--list-text) 22%, transparent);
-  background: color-mix(in srgb, var(--list-bg) 50%, transparent);
+  background: color-mix(in srgb, var(--list-bg) 55%, transparent);
   font-size: 13px;
 }
 
 .tp-disc > .icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   margin-left: 6px;
 }
 
@@ -355,8 +353,8 @@
 }
 
 .tp-disc-art {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   flex: none;
 }
 

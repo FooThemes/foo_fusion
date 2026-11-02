@@ -166,23 +166,33 @@ class View extends Emitter {
       return this.#done(gen);
     }
 
+    // foobar2000 finds runs of adjacent rows with the same key (fast, off the
+    // UI thread). Runs with the same key are then merged, so an album or artist
+    // shows once however the playlist is sorted, and multi-value fields
+    // (ARTISTS, GENRE: "A; B") put a song under each of its values.
     const albumKey = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
-    const parentKey = (this.drill?.kind || this.mode) === 'genres' ? TF.genreKey : TF.artistKey;
-    const patterns = this.mode === 'albums' && !this.drill ? [albumKey] : [parentKey, albumKey];
+    const kind = this.drill?.kind || this.mode;
+    const parentKey = kind === 'genres' ? TF.genresMulti : TF.artistsMulti;
+    const patterns = kind === 'albums' ? [albumKey] : [parentKey, albumKey];
     const res = await tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns });
     if (gen !== this.#generation) return;
-    let runs = res?.runs || [];
+    const runs = res?.runs || [];
 
-    if (this.drill) {
-      // Albums of one artist/genre. The playlist is sorted by that field, so
-      // its rows are adjacent; merge every run with the same key just in case.
-      const k = this.drill.key.toLowerCase();
-      runs = runs.filter((r) => r.key.toLowerCase() === k).flatMap((r) => r.sub || []);
+    let groups;
+    if (kind === 'albums') {
+      groups = mergeRuns(runs.map((r) => ({ key: r.key, start: r.start, count: r.count })));
+    } else if (this.drill) {
+      // Albums of one artist/genre: the album runs inside every run that lists it.
+      const want = this.drill.key.toLowerCase();
+      const subs = runs.filter((r) => splitValues(r.key).some((v) => v.toLowerCase() === want)).flatMap((r) => r.sub || []);
+      groups = mergeRuns(subs);
+    } else {
+      groups = groupByValues(runs, kind === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST);
     }
-
-    let groups = runs.map((r) => ({ key: r.key, start: r.start, count: r.count, sub: r.sub }));
     if (matched) groups = intersect(groups, matched);
-    if (this.reversed) groups.reverse();
+    // Artist/genre tiles are alphabetical, so "descending" flips them directly.
+    const valueTiles = kind !== 'albums' && !this.drill;
+    if (valueTiles ? store.get('sortDescending') : this.reversed) groups.reverse();
     this.groups = groups;
     this.total = groups.reduce((n, g) => n + g.count, 0);
     this.rows = null;
@@ -355,16 +365,85 @@ export function firstRow(g) {
 /** Keep only matched rows inside each group; drop groups left empty. */
 function intersect(groups, matched) {
   const out = [];
+  const set = new Set(matched);
   for (const g of groups) {
-    const lo = lowerBound(matched, g.start);
-    const hi = lowerBound(matched, g.start + g.count);
-    if (hi > lo) {
-      const rows = matched.slice(lo, hi);
-      const sub = g.sub ? intersect(g.sub, rows) : undefined;
-      out.push({ ...g, rows, count: rows.length, sub });
+    let rows;
+    if (g.rows) rows = g.rows.filter((r) => set.has(r));
+    else {
+      const lo = lowerBound(matched, g.start);
+      const hi = lowerBound(matched, g.start + g.count);
+      rows = matched.slice(lo, hi);
+    }
+    if (rows.length) out.push({ ...g, rows, count: rows.length });
+  }
+  return out;
+}
+
+const UNKNOWN_ARTIST = 'Unknown Artist';
+const UNKNOWN_GENRE = 'Unknown Genre';
+const SEP = '|||';
+
+/** Values of a multi-value key: split on the field separator and on ";". */
+function splitValues(key) {
+  const out = [];
+  const seen = new Set();
+  for (const part of key.split(SEP)) {
+    for (const v of part.split(';')) {
+      const t = v.trim();
+      if (t && !seen.has(t.toLowerCase())) {
+        seen.add(t.toLowerCase());
+        out.push(t);
+      }
     }
   }
   return out;
+}
+
+/** Merge runs with the same key (case-insensitive) into one group each. */
+function mergeRuns(runs) {
+  const map = new Map();
+  for (const r of runs) {
+    const k = r.key.toLowerCase();
+    let g = map.get(k);
+    if (!g) map.set(k, (g = { key: r.key, ranges: [] }));
+    g.ranges.push([r.start, r.count]);
+  }
+  return [...map.values()].map(finishGroup);
+}
+
+/** Artists/genres: a group per value, holding every run that lists it. */
+function groupByValues(runs, unknown) {
+  const map = new Map();
+  for (const r of runs) {
+    const values = splitValues(r.key);
+    if (!values.length) values.push(unknown);
+    const albums = (r.sub || []).map((s) => s.key.toLowerCase());
+    for (const v of values) {
+      const k = v.toLowerCase();
+      let g = map.get(k);
+      if (!g) map.set(k, (g = { key: v, ranges: [], albums: new Set() }));
+      g.ranges.push([r.start, r.count]);
+      albums.forEach((a) => g.albums.add(a));
+    }
+  }
+  const unknownKey = unknown.toLowerCase();
+  return [...map.values()]
+    .map((g) => ({ ...finishGroup(g), albumCount: g.albums.size }))
+    .sort((a, b) => {
+      // "Unknown ..." (blank tag) is pinned first, the rest alphabetical.
+      const ua = a.key.toLowerCase() === unknownKey;
+      const ub = b.key.toLowerCase() === unknownKey;
+      if (ua !== ub) return ua ? -1 : 1;
+      return a.key.localeCompare(b.key, undefined, { numeric: true, sensitivity: 'base' });
+    });
+}
+
+/** One range stays {start, count}; several become an explicit row list. */
+function finishGroup(g) {
+  if (g.ranges.length === 1) return { key: g.key, start: g.ranges[0][0], count: g.ranges[0][1] };
+  const rows = [];
+  for (const [start, count] of g.ranges.sort((a, b) => a[0] - b[0])) for (let i = 0; i < count; i++) rows.push(start + i);
+  return { key: g.key, rows, count: rows.length };
 }
 
 function lowerBound(arr, v) {

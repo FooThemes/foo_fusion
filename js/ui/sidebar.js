@@ -6,8 +6,10 @@ import * as store from '../core/store.js';
 import { playlists, COLLECTION, FAVORITES } from '../data/playlists.js';
 import { player } from '../data/player.js';
 import { view } from '../data/view.js';
-import { playlistMenu, promptText } from './menus.js';
-import { draggablePlaylist, playlistDropTarget } from './dnd.js';
+import { playlistMenu, promptText, folderMenu } from './menus.js';
+import { folders } from '../data/folders.js';
+import { newPlaylistDialog } from './autoplaylist.js';
+import { draggablePlaylist, playlistDropTarget, folderDropTarget } from './dnd.js';
 
 export function mountSidebar(root, app) {
   const search = el('input.search-input', {
@@ -28,10 +30,7 @@ export function mountSidebar(root, app) {
   });
   const queueBadge = el('span.badge', { hidden: true });
   const navNow = navItem('nowPlaying', 'Now playing', () => view.setMode('nowplaying'), queueBadge);
-  const newPlaylist = navItem('add', 'New playlist', async () => {
-    const name = await promptText('Name this playlist', 'New playlist');
-    if (name) playlists.create(name);
-  });
+  const newPlaylist = navItem('add', 'New playlist', () => newPlaylistDialog());
   newPlaylist.classList.add('nav-new');
   const manage = el('button.btn-icon.side-manage', { title: 'Playlist manager (Ctrl+M)', onclick: () => app.togglePlaylistManager() }, icon('playlist'));
   const newRow = el('div.side-newrow', null, newPlaylist, manage);
@@ -41,7 +40,7 @@ export function mountSidebar(root, app) {
   const toggle = el('button.btn-icon.side-toggle', { title: 'Collapse or expand the left panel', onclick: () => store.set('sidebarCollapsed', !store.get('sidebarCollapsed')) }, icon('menu'));
 
   root.append(
-    el('div.side-head', null, toggle, el('div.side-title', { text: 'Fusion' })),
+    el('div.side-head', null, toggle, el('div.side-title', { text: 'foobar2000' })),
     searchBox,
     el('div.side-sep'),
     el('nav.side-nav', null, navCollection, navFavorites, navNow),
@@ -80,9 +79,9 @@ export function mountSidebar(root, app) {
 
     clear(list);
     const showCounts = store.get('showPlaylistCounts');
-    for (const p of playlists.userPlaylists) {
+    const item = (p, nested) => {
       const row = el(
-        'button.pl-item',
+        'button.pl-item' + (nested ? '.nested' : ''),
         {
           role: 'option',
           title: `${p.name} - ${p.trackCount.toLocaleString()} songs`,
@@ -103,7 +102,25 @@ export function mountSidebar(root, app) {
       row.setAttribute('aria-selected', String(!np && p.index === active));
       draggablePlaylist(row, p);
       playlistDropTarget(row, () => playlists.list.find((x) => x.guid === p.guid));
-      list.append(row);
+      return row;
+    };
+    for (const node of folders.tree()) {
+      if (node.type === 'playlist') {
+        if (!playlists.isSpecial(node.p)) list.append(item(node.p, false));
+        continue;
+      }
+      const f = node.folder;
+      const head = el(
+        'button.pl-item.pl-folder',
+        { title: `${f.name} - ${node.members.length} playlists`, 'aria-expanded': String(!f.collapsed), onclick: () => folders.toggle(f.id), oncontextmenu: (e) => (e.preventDefault(), folderMenu(f)) },
+        icon(f.collapsed ? 'chevronRight' : 'chevronDown', 'chev'),
+        icon('folder'),
+        el('span.label.ellipsis', { text: f.name }),
+        node.members.some((m) => m.isPlaying) ? el('span.dot') : null,
+      );
+      folderDropTarget(head, f);
+      list.append(head);
+      if (!f.collapsed) for (const p of node.members) list.append(item(p, true));
     }
   }
 
@@ -120,6 +137,7 @@ export function mountSidebar(root, app) {
   }
 
   playlists.on('change', render);
+  folders.on('change', render);
   playlists.on('active', render);
   view.on('mode', render);
   player.on('queue', renderQueue);

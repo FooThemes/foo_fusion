@@ -23,7 +23,7 @@ export function mountSelectionBar(root) {
       b('play', 'Play', () => view.play(rows[0])),
       b('add', 'Add to', () => showMenu(addToItems(rows))),
       b('queue', 'Add to queue', () => view.queueRows(rows)),
-      b('heart', 'Add to Favorites', async () => {
+      b('heart', 'Like', async () => {
         const handles = await view.handlesFor(rows);
         try {
           await favourites.set(handles, 'like');
@@ -32,7 +32,7 @@ export function mountSelectionBar(root) {
           toast("Couldn't update the files' tags");
         }
       }),
-      b('heartBroken', 'Dislike (MOOD: Hate it)', async () => {
+      b('heartBroken', 'Dislike', async () => {
         const handles = await view.handlesFor(rows);
         try {
           await favourites.set(handles, 'hate');

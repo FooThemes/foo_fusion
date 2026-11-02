@@ -42,9 +42,10 @@ function buildLibrary() {
             subsong: 0,
             title: `${pick(WORDS)} ${pick(NOUNS)}`,
             artist: r() < 0.06 ? pick(artists) : artist,
+            artistsTag: r() < 0.05 ? [artist, pick(artists)] : null,
             album,
             albumArtist: artist,
-            genre,
+            genre: ai % 7 === 3 ? '' : r() < 0.1 ? `${genre}; ${pick(GENRES)}` : genre,
             date: year,
             trackNumber: t,
             discNumber: d,
@@ -80,6 +81,8 @@ function tfEval(pattern, t) {
     [MOOD_TF]: () => t.mood || '',
     [TF.artistKey]: () => aa,
     [TF.genreKey]: () => t.genre || 'Unknown Genre',
+    [TF.artistsMulti]: () => (t.artistsTag ? t.artistsTag.join('|||') : t.artist || 'Unknown Artist'),
+    [TF.genresMulti]: () => t.genre || 'Unknown Genre',
     [TF.albumTitle]: () => al,
     [TF.albumDiscTitle]: () => (t.totalDiscs > 1 ? `${al} (Disc ${t.discNumber})` : al),
     [TF.albumArtist]: () => aa,
@@ -142,6 +145,7 @@ export async function installMock() {
       delete out.hasArt;
       delete out.artSeed;
       delete out.discSubtitle;
+      delete out.artistsTag;
       delete out.mood;
     }
     if (formats) out.formats = Object.fromEntries(Object.entries(formats).map(([k, p]) => [k, tfEval(p, t)]));

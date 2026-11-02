@@ -7,6 +7,7 @@ import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { toast } from './toast.js';
 import { editAutoplaylist } from './autoplaylist.js';
+import { folders } from '../data/folders.js';
 import * as store from '../core/store.js';
 import { player } from '../data/player.js';
 
@@ -85,6 +86,35 @@ export function addToItems(rows) {
   ].filter(Boolean);
 }
 
+export function folderMenuItems(targets) {
+  const guids = targets.map((t) => t.guid);
+  const current = folders.folderOf(guids[0]);
+  return [
+    ...folders.list.map((f) => ({ label: f.name, checked: current?.id === f.id, run: () => folders.move(guids, f.id) })),
+    folders.list.length ? '-' : null,
+    {
+      label: 'New folder…',
+      run: async () => {
+        const name = await promptText('Name this folder', 'New folder');
+        if (name) await folders.create(name, guids);
+      },
+    },
+    { label: 'Remove from folder', enabled: !!current, run: () => folders.move(guids, null) },
+  ].filter(Boolean);
+}
+
+export function folderMenu(f) {
+  return showMenu([
+    { label: f.collapsed ? 'Expand' : 'Collapse', run: () => folders.toggle(f.id) },
+    { label: 'Rename folder…', run: async () => {
+      const name = await promptText('Rename folder', f.name);
+      if (name) folders.rename(f.id, name);
+    } },
+    '-',
+    { label: 'Delete folder (keeps its playlists)', run: () => folders.remove(f.id) },
+  ]);
+}
+
 export function playlistMenu(p, targets = [p]) {
   const special = playlists.isSpecial(p);
   const many = targets.length > 1;
@@ -96,6 +126,7 @@ export function playlistMenu(p, targets = [p]) {
     { label: many ? `Duplicate ${targets.length} playlists` : 'Duplicate', run: async () => {
       for (const t of [...targets].reverse()) await tryCall('playlist.duplicate', { playlistGuid: t.guid });
     } },
+    { label: 'Folder', enabled: !targets.some((t) => playlists.isSpecial(t)), submenu: folderMenuItems(targets) },
     { label: 'Save as…', enabled: !many, run: async () => {
       await playlists.activate(p.index);
       await runMainMenuAny(['File/Save playlist...', 'File/Save playlist…', 'Save playlist...']);

@@ -61,6 +61,12 @@
   outline: 2px solid var(--accent);
 }
 
+/* The box draws the focus ring; the input inside must not add a second one. */
+.search-input:focus,
+.search-input:focus-visible {
+  outline: none;
+}
+
 .search-btn {
   width: 32px;
   display: flex;
@@ -229,4 +235,31 @@ body.side-collapsed .side-manage {
 #sidebar .pl-item {
   border-top: 2px solid transparent;
   border-bottom: 2px solid transparent;
+}
+
+/* Playlist folders */
+.pl-folder .chev {
+  width: 14px !important;
+  height: 14px !important;
+  margin-right: -8px;
+  color: var(--side-text2);
+}
+
+.pl-folder .label {
+  font-weight: 600;
+}
+
+.pl-item.nested {
+  padding-left: 40px;
+}
+
+.pl-folder .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+body.side-collapsed .pl-item.nested {
+  padding-left: 0;
 }

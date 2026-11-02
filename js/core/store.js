@@ -55,7 +55,8 @@ const DEFAULTS = {
   sort: { albums: 'album', artists: 'artist', genres: 'genre', songs: 'title' },
   sortDescending: false,
   sidebarWidth: 250,
-  sidebarCollapsed: false,
+  sidebarCollapsed: false, // icons only
+  sidebarHidden: false, // gone entirely (Ctrl+M, like the original's playlist manager toggle)
   separateDiscs: false, // one tile per album; discs are split inside the expanded list
   tileSize: 150, // minimum tile width in px
   artistTileSize: 130,

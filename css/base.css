@@ -313,3 +313,38 @@ body.no-sidebar #sidebar {
     scroll-behavior: auto !important;
   }
 }
+
+/* Favourite toggle: shown on hover, always shown when on */
+button.heart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  color: var(--text2);
+  opacity: 0;
+  border-radius: 50%;
+}
+
+button.heart .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.tp-row:hover button.heart,
+.song-row:hover button.heart,
+.pb-now:hover button.heart,
+button.heart:focus-visible {
+  opacity: 0.7;
+}
+
+button.heart:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
+button.heart.on {
+  opacity: 1;
+  color: var(--accent);
+}

@@ -7,15 +7,19 @@ import { player, ORDER_LABELS } from '../data/player.js';
 import { nowPlayingUrl } from '../data/artwork.js';
 import { view } from '../data/view.js';
 import { playlists } from '../data/playlists.js';
-import { showMenu, foobarMenuItems, runMainMenu } from './menus.js';
+import { showMenu, showAppMenu } from './menus.js';
 import { tryCall } from '../core/bridge.js';
+import { heartButton, setHeart } from './heart.js';
+import { favourites } from '../data/favourites.js';
 
 export function mountPlayerBar(root, app) {
   const cover = el('img', { alt: '' });
   const coverBox = el('button.art.ph-album.pb-cover', { title: 'Show now playing', onclick: () => app.showPlaying() }, cover);
   const title = el('div.pb-title.ellipsis');
   const artist = el('div.pb-artist.ellipsis');
-  const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist));
+  const heart = heartButton('', false);
+  heart.classList.add('pb-heart');
+  const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist), heart);
 
   const elapsed = el('span.pb-time');
   const length = el('span.pb-time');
@@ -29,7 +33,8 @@ export function mountPlayerBar(root, app) {
   const play = el('button.pb-play', { title: 'Play', onclick: () => player.playOrPause() }, icon('play'));
   const next = el('button.btn-icon', { title: 'Next', onclick: () => player.next() }, icon('next'));
   const volBtn = el('button.btn-icon', { title: 'Volume', onclick: toggleVolume }, icon('volume'));
-  const more = el('button.btn-icon', { title: 'Menu', onclick: mainMenu }, icon('more'));
+  // The original's "…" opened the settings panel; right-click keeps the menu.
+  const more = el('button.btn-icon', { title: 'Settings (right-click for the menu)', onclick: () => app.toggleSettings(), oncontextmenu: (e) => (e.preventDefault(), mainMenu()) }, icon('more'));
   const controls = el('div.pb-controls', null, orderBtn, prev, play, next, volBtn, more);
 
   const volFill = el('div.vol-fill');
@@ -48,6 +53,9 @@ export function mountPlayerBar(root, app) {
     title.textContent = on ? t.title || t.path.split(/[\\/]/).pop() : '';
     artist.textContent = on ? t.artist : '';
     nowBox.title = on ? `${t.title}\n${t.artist}\n${t.album}` : '';
+    heart.dataset.handle = on ? t.handle : '';
+    heart.hidden = !on;
+    if (on) favourites.load([t.handle]).then(([loved]) => heart.dataset.handle === t.handle && setHeart(heart, loved));
     const key = on ? t.handle : null;
     if (key === artTrack) return;
     artTrack = key;
@@ -197,25 +205,10 @@ export function mountPlayerBar(root, app) {
 
   // --- main menu (replaces the hidden foobar2000 menu bar) -----------------
   async function mainMenu() {
-    const fbItems = await foobarMenuItems();
-    showMenu([
-      { label: 'Settings', run: () => app.toggleSettings(true) },
-      { label: 'Track info panel', checked: store.get('infoPanel'), run: () => store.set('infoPanel', !store.get('infoPanel')) },
-      { label: 'Left panel', checked: !store.get('sidebarCollapsed'), run: () => store.set('sidebarCollapsed', !store.get('sidebarCollapsed')) },
-      { label: 'Dark theme', checked: store.get('dark'), run: () => store.set('dark', !store.get('dark')) },
-      '-',
-      { label: 'Stop after current', checked: player.stopAfterCurrent, run: () => tryCall('playback.toggleStopAfterCurrent') },
-      { label: 'Stop', enabled: player.active, run: () => player.stop() },
-      '-',
-      { label: 'Fullscreen', shortcut: 'F11', run: () => tryCall('window.toggleFullscreen') },
-      { label: 'Always on top', shortcut: 'Alt+A', run: () => tryCall('window.toggleAlwaysOnTop') },
-      '-',
-      { label: 'foobar2000', submenu: fbItems.length ? fbItems : [{ label: 'Unavailable', enabled: false }] },
-      { label: 'Preferences', shortcut: 'Ctrl+P', run: () => runMainMenu('File/Preferences') },
-    ]);
+    return showAppMenu(app);
   }
-
   player.on('track', renderTrack);
+  favourites.on('change', ({ handles, on }) => handles.includes(heart.dataset.handle) && setHeart(heart, on));
   player.on('state', () => {
     renderState();
     startTicking();

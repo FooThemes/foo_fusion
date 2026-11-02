@@ -70,6 +70,16 @@ export class Grid {
   layout() {
     const w = this.scroller.clientWidth;
     if (!w) return;
+    // Keep the open album (or the first visible tile) where it was on screen
+    // while the columns reflow, instead of jumping to wherever its row lands.
+    const hadLayout = this.rowCount != null && this.lastWidth;
+    let anchor = -1;
+    let anchorOffset = 0;
+    if (hadLayout) {
+      anchor = this.expanded >= 0 ? this.expanded : Math.max(0, Math.floor((this.scroller.scrollTop - 16) / this.tileH)) * this.cols;
+      anchorOffset = this.rowTop(Math.floor(anchor / this.cols)) - this.scroller.scrollTop;
+    }
+    this.lastWidth = w;
     const round = this.kind === 'artists';
     const min = round ? store.get('artistTileSize') : store.get('tileSize');
     const inner = w - MARGIN * 2;
@@ -83,6 +93,9 @@ export class Grid {
     this.rowCount = Math.ceil(view.groups.length / this.cols);
     this.panel.layout(w);
     this.#updateHeight();
+    if (anchor >= 0 && anchor < view.groups.length) {
+      this.scroller.scrollTop = Math.max(0, this.rowTop(Math.floor(anchor / this.cols)) - anchorOffset);
+    }
     for (const [i, node] of this.tiles) this.#place(node, i);
     this.render();
   }

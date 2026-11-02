@@ -7,6 +7,7 @@
 // api-params.json by tools/extract-api.py).
 
 import { TF } from '../js/data/patterns.js';
+import { MOOD_TF } from '../js/data/favourites.js';
 
 const GENRES = ['Rock', 'Electronic', 'Jazz', 'Hip-Hop', 'Classical', 'Folk', 'Pop', 'Ambient', 'Metal', 'Soul'];
 const WORDS = 'Midnight Echo Paper Glass River Neon Velvet Static Golden Hollow Silver Northern Quiet Broken Electric Distant Summer Winter Ocean Desert Signal Ghost Satellite Crimson Lantern Harbor Atlas Coral Ember Meadow'.split(' ');
@@ -76,6 +77,7 @@ function tfEval(pattern, t) {
     [TF.albumKey]: () => `${aa}|${al}`,
     [TF.albumDiscKey]: () => `${aa}|${al}|${t.discNumber}`,
     [TF.discSubtitle]: () => t.discSubtitle || '',
+    [MOOD_TF]: () => t.mood || '',
     [TF.artistKey]: () => aa,
     [TF.genreKey]: () => t.genre || 'Unknown Genre',
     [TF.albumTitle]: () => al,
@@ -411,6 +413,19 @@ export async function installMock() {
       return t.hasArt ? { available: true, type: 'front', dataUrl: coverSvg(hashStr(t.albumArtist + t.album), t.album) } : { available: false, reason: 'not_found' };
     },
     'ui.showCustomMenu': (p) => showMockMenu(p.items),
+    'metadata.writeBatch': (p) => {
+      const byPath = new Map(lib.map((t) => [t.handle, t]));
+      p.items.forEach((it) => {
+        const t = byPath.get(it.path);
+        if (t && 'MOOD' in it.tags) t.mood = it.tags.MOOD || '';
+      });
+      emit('metadb:changed', { count: p.items.length, handles: p.items.map((i) => i.path) });
+      return { successCount: p.items.length, failCount: 0, errors: [] };
+    },
+    'titleformat.evalBatch': (p) => {
+      const byPath = new Map(lib.map((t) => [t.handle, t]));
+      return { results: p.paths.map((path) => ({ path, success: true, result: byPath.get(path) ? tfEval(p.pattern, byPath.get(path)) : '' })) };
+    },
     'menu.showNativePopup': () => (console.info('[mock] native context menu'), {}),
     'menu.getMainMenu': () => ({
       items: ['File', 'Edit', 'View', 'Playback', 'Library', 'Help'].map((l) => ({ type: 'submenu', label: l, path: l, children: [{ type: 'command', label: `${l} command`, path: `${l}/${l} command`, enabled: true }] })),

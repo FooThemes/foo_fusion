@@ -109,6 +109,7 @@ export function mountSidebar(root) {
   function applyWidth() {
     const collapsed = store.get('sidebarCollapsed');
     document.body.classList.toggle('side-collapsed', collapsed);
+    document.body.classList.toggle('no-sidebar', !!store.get('sidebarHidden'));
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '56px' : clamp(store.get('sidebarWidth'), 180, 480) + 'px');
   }
 
@@ -117,7 +118,7 @@ export function mountSidebar(root) {
   view.on('mode', render);
   player.on('queue', renderQueue);
   store.subscribe((k) => {
-    if (k === 'sidebarCollapsed' || k === 'sidebarWidth') applyWidth();
+    if (k === 'sidebarCollapsed' || k === 'sidebarWidth' || k === 'sidebarHidden') applyWidth();
     if (k === 'showPlaylistCounts') render();
   });
   applyWidth();

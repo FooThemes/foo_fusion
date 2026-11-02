@@ -7,6 +7,8 @@ import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { trackContextMenu } from './menus.js';
 import { RowSelector } from './rowselect.js';
+import { heartButton, setHeart, refreshHearts } from './heart.js';
+import { favourites } from '../data/favourites.js';
 
 const ROW_H = 35;
 const PAGE = 120;
@@ -18,6 +20,7 @@ const COLUMNS = [
   ['album', 'Album'],
   ['year', 'Year'],
   ['genre', 'Genre'],
+  ['fav', ''],
   ['len', 'Length'],
 ];
 
@@ -50,9 +53,11 @@ export class SongList {
       trackContextMenu(view.selection.has(r) ? [...view.selection].sort((a, b) => a - b) : [r]);
     });
     this.loadVisible = debounce(() => this.#fetchVisible(), 40);
+    this.offFav = favourites.on('change', ({ handles, on }) => refreshHearts(this.sizer, handles, on));
   }
 
   destroy() {
+    this.offFav();
     this.ro.disconnect();
     this.scroller.removeEventListener('scroll', this.onScroll);
     this.wrap.remove();
@@ -114,7 +119,13 @@ export class SongList {
     c[3].textContent = t?.album || '';
     c[4].textContent = t ? (t.date || '').slice(0, 4) : '';
     c[5].textContent = t?.genre || '';
-    c[6].textContent = t ? formatTime(t.duration) : '';
+    if (t) {
+      const loved = favourites.isLoved(t);
+      const b = c[6].firstChild;
+      if (b && b.dataset.handle === t.handle) setHeart(b, loved);
+      else c[6].replaceChildren(heartButton(t.handle, loved));
+    } else c[6].replaceChildren();
+    c[7].textContent = t ? formatTime(t.duration) : '';
     node.title = t ? `${t.title} - ${t.artist}` : '';
     this.#state(node, row);
   }

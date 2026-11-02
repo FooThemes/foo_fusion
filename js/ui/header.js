@@ -17,7 +17,8 @@ const TABS = [
   ['songs', 'Songs'],
 ];
 
-export function mountHeader(root) {
+export function mountHeader(root, app) {
+  const showSide = el('button.btn-icon.head-side', { title: 'Show the left panel (Ctrl+M)', onclick: () => app.toggleSidebar(true) }, icon('menu'));
   const back = el('button.btn-icon.head-back', { title: 'Back', onclick: () => view.closeDrill() }, icon('back'));
   const title = el('h1.head-title.ellipsis');
   const actions = el('div.head-actions');
@@ -27,7 +28,7 @@ export function mountHeader(root) {
   const count = el('span.head-count');
   const tools = el('div.head-tools', null, tabs, sortBtn, dirBtn, count);
 
-  root.append(el('div.head-row', null, back, title, actions), tools);
+  root.append(el('div.head-row', null, showSide, back, title, actions), tools);
 
   for (const [mode, label] of TABS) {
     tabs.append(el('button.tab', { role: 'tab', dataset: { mode }, onclick: () => view.setMode(mode) }, label));
@@ -37,6 +38,7 @@ export function mountHeader(root) {
     const pl = view.playlist;
     const np = view.mode === 'nowplaying';
     back.hidden = !view.drill || np;
+    showSide.hidden = !store.get('sidebarHidden');
     title.textContent = np ? 'Now playing' : view.drill ? view.drill.label : view.filter ? `Results for "${view.filter}"` : pl?.name || 'No playlist';
 
     clear(actions);
@@ -113,7 +115,7 @@ export function mountHeader(root) {
   player.on('queue', render);
   player.on('order', render);
   playlists.on('change', render);
-  store.subscribe((k) => k === 'sortDescending' && render());
+  store.subscribe((k) => (k === 'sortDescending' || k === 'sidebarHidden') && render());
   render();
 }
 

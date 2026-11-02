@@ -47,7 +47,12 @@ async function boot() {
     showPlaying() {
       if (!content.showPlaying()) view.setMode('nowplaying');
     },
+    toggleSidebar(on = store.get('sidebarHidden')) {
+      store.set('sidebarHidden', !on);
+      if (on) store.set('sidebarCollapsed', false);
+    },
     focusSearch() {
+      if (store.get('sidebarHidden')) store.set('sidebarHidden', false);
       if (store.get('sidebarCollapsed')) store.set('sidebarCollapsed', false);
       sidebar.focusSearch();
     },
@@ -67,7 +72,7 @@ async function boot() {
   const main = document.getElementById('main');
   const head = el('header.head');
   main.append(head);
-  mountHeader(head);
+  mountHeader(head, app);
   content = mountContent(main);
   settings = mountSettings(main, app);
   mountSelectionBar(main);

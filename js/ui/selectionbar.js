@@ -6,6 +6,8 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { showMenu, addToItems } from './menus.js';
+import { favourites } from '../data/favourites.js';
+import { toast } from './toast.js';
 
 export function mountSelectionBar(root) {
   const bar = el('div.selbar', { hidden: true, role: 'toolbar', 'aria-label': 'Selected songs' });
@@ -21,6 +23,15 @@ export function mountSelectionBar(root) {
       b('play', 'Play', () => view.play(rows[0])),
       b('add', 'Add to', () => showMenu(addToItems(rows))),
       b('queue', 'Add to queue', () => view.queueRows(rows)),
+      b('heart', 'Add to Favorites', async () => {
+        const handles = await view.handlesFor(rows);
+        try {
+          await favourites.set(handles, true);
+          toast(`Added ${rows.length} to Favorites`);
+        } catch {
+          toast("Couldn't update the files' tags");
+        }
+      }),
       view.canEdit ? b('delete', 'Remove from playlist', () => view.removeRows(rows)) : null,
       b('close', 'Clear selection', () => view.clearSelection()),
     ].filter(Boolean));

@@ -12,6 +12,7 @@ import * as store from '../core/store.js';
 import { SORTS } from '../core/store.js';
 import { TF, searchQuery } from './patterns.js';
 import { playlists, COLLECTION, FAVORITES } from './playlists.js';
+import { MOOD_TF } from './favourites.js';
 
 const HEAD_CHUNK = 1000;
 export const TRACK_FIELDS = ['handle', 'title', 'artist', 'album', 'albumArtist', 'date', 'genre', 'duration', 'trackNumber', 'discNumber'];
@@ -269,7 +270,7 @@ class View extends Emitter {
           playlist: this.playlist.index,
           rows: missing.slice(i, i + 500),
           fields: TRACK_FIELDS,
-          formats: { n: TF.trackNumber, ds: TF.discSubtitle },
+          formats: { n: TF.trackNumber, ds: TF.discSubtitle, m: MOOD_TF },
         });
         if (gen !== this.#generation) return rows.map(() => null);
         res?.tracks.forEach((t) => this.#trackCache.set(t.index, t));

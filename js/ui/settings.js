@@ -5,7 +5,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { ACCENTS } from '../core/store.js';
 import { tryCall } from '../core/bridge.js';
-import { runMainMenu, confirmDialog } from './menus.js';
+import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.js';
 import { clearCache } from '../data/artwork.js';
 import { VERSION } from '../version.js';
 
@@ -19,6 +19,13 @@ export function mountSettings(root, app) {
 
   function render() {
     clear(body).append(
+      el(
+        'div.set-quick',
+        null,
+        quick('menu', 'foobar2000 menu', async () => showMenu(await foobarMenuItems())),
+        quick('settings', 'Preferences', () => runMainMenu('File/Preferences')),
+        quick('fullscreen', 'Fullscreen', () => tryCall('window.toggleFullscreen')),
+      ),
       section('Theme', [
         choice('Mode', 'dark', [
           [false, 'Light'],
@@ -42,6 +49,7 @@ export function mountSettings(root, app) {
         toggle('Show cover art', 'listArtLeft'),
       ]),
       section('Layout', [
+        toggleInverse('Left panel', 'sidebarHidden'),
         toggle('Show playlist song counts', 'showPlaylistCounts'),
         toggle('Large now playing artwork', 'largeNowPlayingArt'),
         toggle('Track info panel', 'infoPanel'),
@@ -70,6 +78,15 @@ export function mountSettings(root, app) {
   function toggle(label, key) {
     const input = el('input', { type: 'checkbox', checked: !!store.get(key), onchange: () => store.set(key, input.checked) });
     return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
+  }
+
+  function toggleInverse(label, key) {
+    const input = el('input', { type: 'checkbox', checked: !store.get(key), onchange: () => store.set(key, !input.checked) });
+    return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
+  }
+
+  function quick(iconName, label, onclick) {
+    return el('button.set-quick-btn', { onclick, title: label }, icon(iconName), el('span', { text: label }));
   }
 
   function choice(label, key, options) {
@@ -119,7 +136,9 @@ export function mountSettings(root, app) {
     open(on) {
       if (on) render();
       panel.classList.toggle('open', on);
-      if (on) panel.querySelector('button')?.focus();
+      // preventScroll: focusing inside the sliding panel must not scroll the
+      // main area sideways (that was the brief "shift" when opening).
+      if (on) setTimeout(() => panel.querySelector('.set-head button')?.focus({ preventScroll: true }), 230);
     },
     get isOpen() {
       return panel.classList.contains('open');

@@ -13,6 +13,7 @@ export const SHORTCUTS = [
   ['Ctrl+A', 'Select all'],
   ['Ctrl+I', 'Invert selection'],
   ['Ctrl+F', 'Search this playlist'],
+  ['Ctrl+M', 'Show or hide the left panel (playlist manager)'],
   ['Ctrl+N', 'New playlist'],
   ['Ctrl+P', 'foobar2000 preferences'],
   ['Ctrl+O', 'Open containing folder'],
@@ -40,6 +41,7 @@ export function mountKeyboard(app) {
       'Ctrl+A': () => view.select(all()),
       'Ctrl+I': () => view.select(all().filter((r) => !view.selection.has(r))),
       'Ctrl+F': () => app.focusSearch(),
+      'Ctrl+M': () => app.toggleSidebar(),
       'Ctrl+N': async () => {
         const name = await promptText('Name this playlist', 'New playlist');
         if (name) playlists.create(name);

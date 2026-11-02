@@ -7,6 +7,7 @@ import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt } from '../data/artwork.js';
+import { icon } from '../core/icons.js';
 
 export function mountInfoPanel(root) {
   const img = el('img', { alt: '' });
@@ -14,7 +15,8 @@ export function mountInfoPanel(root) {
   const heading = el('div.info-heading');
   const table = el('dl.info-table');
   const empty = el('p.info-empty', { text: 'Select a song, or play one, to see its properties.' });
-  root.append(el('div.info-scroll', null, art, heading, table, empty));
+  const close = el('button.btn-icon.info-close', { title: 'Close the track info panel', 'aria-label': 'Close', onclick: () => store.set('infoPanel', false) }, icon('close'));
+  root.append(close, el('div.info-scroll', null, art, heading, table, empty));
 
   const render = debounce(async () => {
     if (root.hidden) return;

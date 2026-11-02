@@ -3,8 +3,7 @@
 //
 // Multi-disc albums get a disc bar: "All discs" shows each disc as its own
 // section (header with DISCSUBTITLE, its own cover thumbnail), and picking a
-// disc shows just that one with its cover in the big art slot. Albums with
-// more than three discs open on disc 1 so a 10-disc box set stays compact.
+// disc shows just that one with its cover in the big art slot.
 
 import { el, clear, formatTime, formatDuration, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -14,6 +13,8 @@ import { player } from '../data/player.js';
 import { bindArt } from '../data/artwork.js';
 import { showMenu, addToItems, trackContextMenu } from './menus.js';
 import { RowSelector } from './rowselect.js';
+import { heartButton, refreshHearts } from './heart.js';
+import { favourites } from '../data/favourites.js';
 
 const ROW_H = 35;
 const COL_MIN = 300;
@@ -22,7 +23,6 @@ const PAD = 30;
 const HEAD_H = 76;
 const DISCBAR_H = 52;
 const SECTION_H = 48; // disc header inside "All discs"
-const ALL_DISCS_MAX = 3; // open on "All discs" up to this many discs
 
 export class TrackPanel {
   constructor(grid) {
@@ -69,6 +69,7 @@ export class TrackPanel {
       { passive: false },
     );
     this.selector = new RowSelector(this.list, () => this.visibleRows());
+    favourites.on('change', ({ handles, on }) => refreshHearts(this.list, handles, on));
     this.list.addEventListener('dblclick', (e) => {
       const r = rowOf(e);
       if (r != null) view.play(r);
@@ -92,11 +93,13 @@ export class TrackPanel {
   }
 
   layout(width) {
+    const prev = `${this.cols}|${this.perCol}`;
     this.width = width;
-    if (this.group) {
-      this.#measure();
-      this.#position();
-    }
+    if (!this.group) return;
+    this.#measure();
+    this.#position();
+    // Column count changed: rebuild the rows so each grid gets its new shape.
+    if (prev !== `${this.cols}|${this.perCol}` && this.tracks) this.#renderRows(this.tracks);
   }
 
   #measure() {
@@ -127,6 +130,7 @@ export class TrackPanel {
     this.index = index;
     this.rows = view.groupRows(group);
     if (!same) {
+      this.tracks = null;
       this.discs = [];
       this.disc = 'all';
     }
@@ -193,10 +197,11 @@ export class TrackPanel {
     if (!this.discs.length) this.#renderRows(null);
     const tracks = await view.tracks(this.rows);
     if (this.group !== group) return;
+    this.tracks = tracks;
     const discs = splitDiscs(this.rows, tracks);
     const fresh = this.discs.length !== discs.length;
     this.discs = discs;
-    if (fresh) this.disc = discs.length > ALL_DISCS_MAX ? discs[0].number : 'all';
+    if (fresh) this.disc = 'all';
     this.#renderDiscBar();
     this.#measure();
     this.grid.relayout();
@@ -233,7 +238,7 @@ export class TrackPanel {
     this.#renderDiscBar();
     this.#measure();
     this.grid.relayout();
-    this.#renderRows(this.discs.flatMap((d) => d.tracks));
+    this.#renderRows(this.tracks);
     this.#renderCover();
   }
 
@@ -319,7 +324,14 @@ function trackNum(t) {
 
 function trackRow(r, t, albumArtist) {
   const name = el('span.tp-name.ellipsis');
-  const node = el('div.tp-row', { role: 'option', dataset: { row: r }, tabindex: -1 }, el('span.tp-num', { text: trackNum(t) }), name, el('span.tp-len', { text: t ? formatTime(t.duration) : '' }));
+  const node = el(
+    'div.tp-row',
+    { role: 'option', dataset: { row: r }, tabindex: -1 },
+    el('span.tp-num', { text: trackNum(t) }),
+    name,
+    t ? heartButton(t.handle, favourites.isLoved(t)) : null,
+    el('span.tp-len', { text: t ? formatTime(t.duration) : '' }),
+  );
   if (t) {
     name.textContent = t.title || t.handle.split('\\').pop();
     if (t.artist && albumArtist && t.artist.toLowerCase() !== albumArtist.toLowerCase()) name.append(el('span.tp-artist', { text: ` · ${t.artist}` }));

@@ -10,7 +10,8 @@
   z-index: 10;
 }
 
-body.side-collapsed #playerbar {
+body.side-collapsed #playerbar,
+body.no-sidebar #playerbar {
   grid-template-columns: 250px minmax(0, 1fr) auto;
 }
 

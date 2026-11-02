@@ -6,6 +6,8 @@ import { el } from '../core/util.js';
 import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { toast } from './toast.js';
+import * as store from '../core/store.js';
+import { player } from '../data/player.js';
 
 /** Show a native menu built from [{ id, label, checked, enabled, submenu, run }]. */
 export async function showMenu(items) {
@@ -25,6 +27,26 @@ export async function showMenu(items) {
   const id = res?.selectedId;
   if (id && actions.has(id)) await actions.get(id)();
   return id || null;
+}
+
+/** Fusion's menu: panels, playback extras and the full foobar2000 menu bar. */
+export async function showAppMenu(app) {
+  const fbItems = await foobarMenuItems();
+  return showMenu([
+    { label: 'Settings', run: () => app.toggleSettings(true) },
+    { label: 'Left panel', shortcut: 'Ctrl+M', checked: !store.get('sidebarHidden'), run: () => app.toggleSidebar() },
+    { label: 'Track info panel', checked: store.get('infoPanel'), run: () => store.set('infoPanel', !store.get('infoPanel')) },
+    { label: 'Dark theme', checked: store.get('dark'), run: () => store.set('dark', !store.get('dark')) },
+    '-',
+    { label: 'Stop after current', checked: player.stopAfterCurrent, run: () => tryCall('playback.toggleStopAfterCurrent') },
+    { label: 'Stop', enabled: player.active, run: () => player.stop() },
+    '-',
+    { label: 'Fullscreen', shortcut: 'F11', run: () => tryCall('window.toggleFullscreen') },
+    { label: 'Always on top', shortcut: 'Alt+A', run: () => tryCall('window.toggleAlwaysOnTop') },
+    '-',
+    { label: 'foobar2000', submenu: fbItems.length ? fbItems : [{ label: 'Unavailable', enabled: false }] },
+    { label: 'Preferences', shortcut: 'Ctrl+P', run: () => runMainMenu('File/Preferences') },
+  ]);
 }
 
 /** foobar2000's own context menu for playlist rows. */

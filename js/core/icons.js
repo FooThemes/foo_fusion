@@ -18,7 +18,8 @@ const P = {
   more: '<circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
   heart: '<path d="M12 19.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z"/>',
   heartFill: '<path d="M12 19.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z" fill="currentColor"/>',
-  heartBroken: '<path d="M12 19.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z" fill="currentColor" fill-opacity=".25"/><path d="M12 7.5l-1.6 3.6 2.6 1.6-1.8 4"/>',
+  // Two filled halves split along a zigzag and tipped apart from the point.
+  heartBroken: '<defs><clipPath id="hb-l"><path d="M0 0H12V7.8L10.4 11.4L13.2 13.6L11 16.6L12 24H0z"/></clipPath><clipPath id="hb-r"><path d="M12 0H24V24H12L11 16.6L13.2 13.6L10.4 11.4L12 7.8z"/></clipPath></defs><path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z" fill="currentColor" stroke="none" clip-path="url(#hb-l)" transform="rotate(-9 12 20) translate(-0.6 0)"/><path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.2c0 5.4-7.5 10-7.5 10z" fill="currentColor" stroke="none" clip-path="url(#hb-r)" transform="rotate(9 12 20) translate(0.6 0)"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M6 18l1.6-1.6M16.4 7.6 18 6"/>',
   back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   chevronDown: '<path d="M7 10l5 5 5-5"/>',

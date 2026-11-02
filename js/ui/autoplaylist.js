@@ -111,7 +111,11 @@ function showDialog(opts) {
         const base = await tryCall('misc.getFoobarPath');
         const dir = (base?.path || base?.value || '').replace(/[\\/]$/, '');
         const res = dir ? await tryCall('file.read', { path: `${dir}\\doc\\${HELP[key].file}` }) : null;
-        helpCache.set(key, res?.content || `<p style="font:14px Segoe UI,sans-serif">Couldn't find <b>doc\\${HELP[key].file}</b> in the foobar2000 folder.</p>`);
+        let html = res?.content || `<p style="font:14px Segoe UI,sans-serif">Couldn't find <b>doc\\${HELP[key].file}</b> in the foobar2000 folder.</p>`;
+        // The pages share a stylesheet; inline it, since the frame has no base folder.
+        const css = html.includes('titleformat_help.css') ? await tryCall('file.read', { path: `${dir}\\doc\\titleformat_help.css` }) : null;
+        html = html.replace(/<link[^>]*titleformat_help\.css[^>]*>/i, `<style>${css?.content || ''} body{font-family:'Segoe UI',sans-serif;padding:0 16px 24px}</style>`);
+        helpCache.set(key, html);
       }
       // Sandboxed (no scripts, no navigation away): it's a static help page.
       helpFrame.srcdoc = helpCache.get(key);

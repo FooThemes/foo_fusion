@@ -15,7 +15,16 @@ export function mountContent(root) {
   const scroller = el('div.content', { tabindex: -1 });
   const message = el('div.message', { hidden: true });
   const loading = el('div.loading', { hidden: true, text: 'Loading…' });
-  root.append(scroller, message, loading);
+  // A thin moving strip under the header while a load takes more than a
+  // moment, so a slow regroup never looks like a freeze.
+  const busy = el('div.busy-bar', { hidden: true });
+  root.append(scroller, message, loading, busy);
+  let busyTimer = 0;
+  view.on('loading', (on) => {
+    clearTimeout(busyTimer);
+    if (on) busyTimer = setTimeout(() => (busy.hidden = false), 120);
+    else busy.hidden = true;
+  });
 
   let current = null;
   let currentKind = '';

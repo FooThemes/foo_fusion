@@ -6,6 +6,7 @@
 // copying every track over the bridge. Only what is on screen is fetched.
 
 import { call, tryCall, on, onAny } from '../core/bridge.js';
+import { logInfo } from '../core/log.js';
 import { Emitter } from '../core/emitter.js';
 import { debounce, serialize } from '../core/util.js';
 import * as store from '../core/store.js';
@@ -69,7 +70,9 @@ class View extends Emitter {
     this.mode = mode;
     this.drill = null;
     this.emit('mode', mode);
-    if (regroup) this.load({ sort: this.isLibrary });
+    // Re-sort only if this tab's sort isn't applied yet (load() checks the
+    // remembered stamp); forcing it here rebuilt the library on every switch.
+    if (regroup) this.load();
   }
 
   setFilter(text) {
@@ -107,6 +110,7 @@ class View extends Emitter {
 
   load = serialize(async (opts = {}) => {
     const gen = ++this.#generation;
+    const t0 = performance.now();
     this.loading = true;
     this.emit('loading', true);
     await playlists.refresh();
@@ -129,7 +133,11 @@ class View extends Emitter {
     const pattern = (SORTS[sortKey] || SORTS.album).pattern;
     // Remember the pattern itself, so a changed pattern (in an update) re-sorts.
     const stamp = pattern + (pl.isLocked ? '' : desc ? ':desc' : '');
-    const wantSort = opts.sort || (store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp);
+    // Artist and genre tiles are listed alphabetically whatever the playlist
+    // order, so switching to those tabs never re-sorts (re-sorting a library
+    // autoplaylist means foobar2000 rebuilds it, which takes a while).
+    const valueView = (this.mode === 'artists' || this.mode === 'genres') && !this.drill;
+    const wantSort = opts.sort || (!valueView && store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp);
     this.reversed = false;
     if (wantSort && pl.trackCount > 0 && this.canSort(pl)) {
       this.#ownSortUntil = performance.now() + 30000;
@@ -142,7 +150,10 @@ class View extends Emitter {
         // its change events trigger the reload instead of ignoring them.
         this.#ownSortUntil = 0;
         this.#refillUntil = performance.now() + 3000;
-        if (await this.#resortAutoplaylist(pl, pattern)) {
+        const t0 = performance.now();
+        const ok = await this.#resortAutoplaylist(pl, pattern);
+        logInfo(`re-sorted ${pl.name} (${pl.trackCount} tracks) by ${sortKey} in ${Math.round(performance.now() - t0)} ms`);
+        if (ok) {
           store.update('appliedSort', { [pl.guid]: stamp });
           // The refill doesn't always announce itself; look again shortly.
           setTimeout(() => this.load(), 400);

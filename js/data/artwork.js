@@ -10,6 +10,28 @@ import { tryCall } from '../core/bridge.js';
 const cache = new Map(); // key -> Promise<string|null>
 const resolved = new Map(); // key -> string|null, once known (for instant reuse)
 const loadedUrls = new Set(); // URLs the browser has already decoded once
+// Holding an Image per loaded URL keeps it in the browser's in-memory image
+// cache, so a tile that is handed an album seen before shows it the same
+// frame instead of fetching fb2k:// again (that refetch was the "flash").
+const keepAlive = new Map(); // url -> HTMLImageElement, oldest first
+const KEEP = 400;
+function markLoaded(url) {
+  loadedUrls.add(url);
+  if (keepAlive.has(url)) {
+    const im = keepAlive.get(url);
+    keepAlive.delete(url);
+    keepAlive.set(url, im);
+    return;
+  }
+  const im = new Image();
+  im.src = url;
+  keepAlive.set(url, im);
+  while (keepAlive.size > KEEP) {
+    const [old] = keepAlive.keys();
+    keepAlive.delete(old);
+    loadedUrls.delete(old);
+  }
+}
 let pending = []; // { key, path, type, size, resolve }
 let scheduled = false;
 
@@ -138,6 +160,7 @@ export function clearCache() {
   parentResolved.clear();
   resolved.clear();
   loadedUrls.clear();
+  keepAlive.clear();
 }
 
 /** Synchronous lookup: the URL if it is already known and decoded. */
@@ -169,11 +192,14 @@ export function bindArt(img, path, cssSize, types = ['front']) {
   }
   if (ready) {
     img.onload = img.onerror = null;
+    img.decoding = 'sync';
     img.src = ready;
+    markLoaded(ready);
     img.classList.add('loaded', 'instant');
     return;
   }
   img.classList.remove('loaded', 'instant');
+  img.decoding = 'async';
   img.removeAttribute('src');
   const attempt = async (i) => {
     if (i >= types.length || img.dataset.artToken !== token) return;
@@ -181,7 +207,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     if (img.dataset.artToken !== token) return;
     if (!url) return attempt(i + 1);
     img.onload = () => {
-      loadedUrls.add(url);
+      markLoaded(url);
       if (img.dataset.artToken === token) img.classList.add('loaded');
     };
     img.onerror = () => img.dataset.artToken === token && attempt(i + 1);

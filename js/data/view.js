@@ -102,6 +102,9 @@ class View extends Emitter {
   }
 
   /** Re-read the active playlist and regroup it. */
+  #headsFor = '';
+  #refillUntil = 0;
+
   load = serialize(async (opts = {}) => {
     const gen = ++this.#generation;
     this.loading = true;
@@ -138,17 +141,28 @@ class View extends Emitter {
         // foobar2000 refills a re-created autoplaylist in the background; let
         // its change events trigger the reload instead of ignoring them.
         this.#ownSortUntil = 0;
+        this.#refillUntil = performance.now() + 3000;
         if (await this.#resortAutoplaylist(pl, pattern)) {
           store.update('appliedSort', { [pl.guid]: stamp });
           // The refill doesn't always announce itself; look again shortly.
           setTimeout(() => this.load(), 400);
           setTimeout(() => this.load(), 1500);
+          setTimeout(() => this.load(), 3200);
         }
       }
     }
     // Autoplaylists are locked against reordering, so "descending" is applied
     // to what we show rather than to the playlist itself.
     this.reversed = pl.isLocked && desc;
+
+    // A re-created autoplaylist is briefly empty (or half full) while
+    // foobar2000 refills it. Keep showing the old grid until it's back,
+    // rather than flashing an empty view; the follow-up loads catch up.
+    if (performance.now() < this.#refillUntil && pl.trackCount < this.total && this.groups.length) {
+      this.loading = false;
+      this.emit('loading', false);
+      return;
+    }
 
     let matched = null;
     const q = this.filter ? searchQuery(this.filter) : '';
@@ -193,6 +207,13 @@ class View extends Emitter {
     // Artist/genre tiles are alphabetical, so "descending" flips them directly.
     const valueTiles = kind !== 'albums' && !this.drill;
     if (valueTiles ? store.get('sortDescending') : this.reversed) groups.reverse();
+    // Keep what we already know about each group (title, art path), so tiles
+    // that only moved don't blank out until the heads are fetched again.
+    if (this.groups.length && this.#headsFor === `${pl.guid}|${kind}|${this.drill?.key || ''}|${albumKey}`) {
+      const old = new Map(this.groups.map((g) => [g.key, g.head]));
+      for (const g of groups) if (!g.head && old.get(g.key)) g.head = old.get(g.key);
+    }
+    this.#headsFor = `${pl.guid}|${kind}|${this.drill?.key || ''}|${albumKey}`;
     this.groups = groups;
     this.total = groups.reduce((n, g) => n + g.count, 0);
     this.rows = null;

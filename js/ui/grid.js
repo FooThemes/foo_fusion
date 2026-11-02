@@ -67,8 +67,16 @@ export class Grid {
       return;
     }
     this.sig = sig;
-    this.kind = view.drill ? 'albums' : view.mode;
-    for (const node of this.tiles.values()) this.#recycle(node);
+    const kind = view.drill ? 'albums' : view.mode;
+    // Tiles whose album is still on screen keep their node (and its loaded
+    // image) and just move; only new arrivals get a pooled node.
+    for (const node of this.stale?.values() || []) this.#recycle(node);
+    this.stale = new Map();
+    for (const node of this.tiles.values()) {
+      if (kind === this.kind && node.dataset.key != null) this.stale.set(node.dataset.key, node);
+      else this.#recycle(node);
+    }
+    this.kind = kind;
     this.tiles.clear();
     if (this.expanded >= view.groups.length) this.expanded = -1;
     if (!keepScroll) {
@@ -135,6 +143,8 @@ export class Grid {
   render() {
     const groups = view.groups;
     if (!groups.length) {
+      for (const node of this.stale?.values() || []) this.#recycle(node);
+      this.stale = null;
       for (const node of this.tiles.values()) this.#recycle(node);
       this.tiles.clear();
       return;
@@ -161,12 +171,19 @@ export class Grid {
     for (let i = first; i <= last; i++) {
       let node = this.tiles.get(i);
       if (!node) {
-        node = this.free.pop() || this.#makeTile();
+        const key = groups[i].key;
+        node = this.stale?.get(key);
+        if (node) this.stale.delete(key);
+        else node = this.free.pop() || this.#makeTile();
         node.hidden = false;
         this.tiles.set(i, node);
         this.#place(node, i);
         this.#fill(node, i);
       }
+    }
+    if (this.stale) {
+      for (const node of this.stale.values()) this.#recycle(node);
+      this.stale = null;
     }
   }
 
@@ -207,6 +224,7 @@ export class Grid {
 
   #recycle(node) {
     node.hidden = true;
+    delete node.dataset.key;
     node.classList.remove('expanded', 'playing');
     this.free.push(node);
   }
@@ -220,6 +238,8 @@ export class Grid {
   #fill(node, i) {
     const g = view.groups[i];
     node.dataset.index = i;
+    const sameAlbum = node.dataset.key === g.key;
+    node.dataset.key = g.key;
     const head = g.head;
     const [t1, t2] = node.querySelectorAll('.tile-t1, .tile-t2');
     const art = node.querySelector('.art');
@@ -248,7 +268,7 @@ export class Grid {
     }
     art.dataset.label = this.kind === 'genres' ? g.key : '';
     if (head?.handle) bindArt(img, head.handle, this.artSize, this.kind === 'artists' ? ['artist', 'front'] : this.kind === 'albums' ? ['parent', 'front'] : ['front']);
-    else {
+    else if (!sameAlbum) {
       delete img.dataset.artToken;
       img.removeAttribute('src');
       img.classList.remove('loaded');

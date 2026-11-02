@@ -413,7 +413,9 @@ function trackNum(t) {
 }
 
 function trackRow(r, t, albumArtist) {
-  const name = el('span.tp-name.ellipsis');
+  // The text sits in an inner span so a cut-off title can slide on hover.
+  const text = el('span.tp-name-in');
+  const name = el('span.tp-name.ellipsis', null, text);
   const node = el(
     'div.tp-row',
     { role: 'option', dataset: { row: r }, tabindex: -1 },
@@ -423,9 +425,9 @@ function trackRow(r, t, albumArtist) {
     el('span.tp-len', { text: t ? formatTime(t.duration) : '' }),
   );
   if (t) {
-    setTitle(name, t.title || t.handle.split('\\').pop());
+    setTitle(text, t.title || t.handle.split('\\').pop());
     const note = artistNote(t.artist, albumArtist);
-    if (note) name.append(el('span.tp-artist', { text: ` · ${note}` }));
+    if (note) text.append(el('span.tp-artist', { text: ` · ${note}` }));
     name.title = name.textContent;
   }
   return node;

@@ -498,31 +498,30 @@
   line-height: 1.3;
 }
 
-/* A title that still doesn't fit scrolls into view while hovered. */
-.tp-name.clipped {
-  text-overflow: ellipsis;
-}
-
+/* A title that still doesn't fit slides into view while hovered. Moved with
+   a transform (smooth, no relayout per frame). */
 .tp-row:hover .tp-name.clipped {
   text-overflow: clip;
 }
 
-.tp-row:hover .tp-name.clipped {
-  animation: tp-name-scroll var(--mq-dur, 2s) ease-in-out 0.25s infinite alternate;
+.tp-row:hover .tp-name.clipped .tp-name-in {
+  display: inline-block;
+  will-change: transform;
+  animation: tp-name-scroll var(--mq-dur, 2s) ease-in-out 0.25s infinite alternate both;
 }
 
 @keyframes tp-name-scroll {
   0% {
-    text-indent: 0;
+    transform: translateX(0);
   }
-  80%,
+  85%,
   100% {
-    text-indent: var(--mq-dist);
+    transform: translateX(var(--mq-dist));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tp-row:hover .tp-name.clipped {
+  .tp-row:hover .tp-name.clipped .tp-name-in {
     animation: none;
   }
 }

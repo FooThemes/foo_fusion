@@ -11,7 +11,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes } from '../data/artwork.js';
+import { bindArt, albumArtTypes, warmArt } from '../data/artwork.js';
 import { trackContextMenu } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 import { draggableRows } from './dnd.js';
@@ -120,6 +120,7 @@ export class Grid {
     }
     for (const [i, node] of this.tiles) this.#place(node, i);
     this.render();
+    this.#warm();
   }
 
   /** Height the open album takes in the grid, including the gap below it. */
@@ -188,8 +189,19 @@ export class Grid {
     }
   }
 
+  /** Get every cover of this list ready in the background (disk cache). */
+  #warm() {
+    clearTimeout(this.warmTimer);
+    this.warmTimer = setTimeout(() => {
+      if (!this.artSize) return;
+      const types = this.kind === 'artists' ? ['artist', 'front'] : this.kind === 'albums' ? albumArtTypes(store.get('separateDiscs')) : ['front'];
+      warmArt(view.groups.map((g) => g.head?.handle), this.artSize, types);
+    }, 300);
+  }
+
   /** Text/art arrived for groups [from, to). */
   refreshHeads() {
+    this.#warm();
     for (const [i, node] of this.tiles) this.#fill(node, i);
     if (this.expanded >= 0) this.panel.refreshHead(view.groups[this.expanded]);
   }

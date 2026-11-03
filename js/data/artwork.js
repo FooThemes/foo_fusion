@@ -17,7 +17,7 @@ const loadedUrls = new Set(); // URLs the browser has already decoded once
 // cache, so a tile that is handed an album seen before shows it the same
 // frame instead of fetching fb2k:// again (that refetch was the "flash").
 const keepAlive = new Map(); // url -> HTMLImageElement, oldest first
-const KEEP = 800;
+const KEEP = 1500; // small covers (mostly the disk cache's copies)
 function markLoaded(url, decoded = null) {
   loadedUrls.add(url);
   if (keepAlive.has(url)) {
@@ -330,6 +330,54 @@ export async function preloadArt(path, cssSize, types = ['front']) {
     }
     return;
   }
+}
+
+/**
+ * Decode, in idle moments, the disk-cached covers of a whole list (e.g. every
+ * album of the playlist on screen), so tiles that appear later, or after a
+ * playlist switch, show their covers in the first frame instead of fading in.
+ */
+const warmQueue = [];
+const warmSeen = new Set();
+let warming = false;
+export function warmArt(handles, cssSize, types) {
+  const px = sizeBucket(cssSize);
+  for (const h of handles) {
+    if (!h) continue;
+    for (const t of types) {
+      const pick = coverFile(t, h);
+      if (pick === undefined) break;
+      if (pick === null) {
+        if (t === 'parent') continue;
+        break;
+      }
+      const url = cachedUrl(pick, px, false);
+      if (url && !loadedUrls.has(url) && !warmSeen.has(url)) {
+        warmSeen.add(url);
+        warmQueue.push(url);
+      }
+      break;
+    }
+  }
+  if (!warming) warmNext();
+}
+
+function warmNext() {
+  const url = warmQueue.shift();
+  if (!url) {
+    warming = false;
+    return;
+  }
+  warming = true;
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 30));
+  idle(() => {
+    const im = new Image();
+    im.src = url;
+    im.decode().then(
+      () => (markLoaded(url, im), warmNext()),
+      () => warmNext(),
+    );
+  });
 }
 
 /** Synchronous lookup: the URL if it is already known and decoded. */

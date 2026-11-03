@@ -77,11 +77,11 @@ function keyFor(pick, px) {
 }
 
 /** URL of the cached copy of this cover at this size, or null. */
-export function cachedUrl(pick, px) {
+export function cachedUrl(pick, px, count = true) {
   if (!base || !pick) return null;
   const key = keyFor(pick, px);
   if (!index.files[key]) return null;
-  stats.hits++;
+  if (count) stats.hits++;
   return `/${FOLDER}/${index.gen}/${key}.webp`;
 }
 

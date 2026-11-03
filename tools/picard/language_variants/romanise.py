@@ -228,8 +228,9 @@ def romanise(text, enabled, lang=None, script=None):
             return None, None
         if CYRILLIC.search(text) or GREEK.search(text):
             return (letters(text), 'transliteration table') if 'cyrillic' in enabled else (None, None)
-    except ImportError:
-        return None, None
+    except ImportError as e:
+        _vendor['error'] = _vendor['error'] or 'import failed: %s' % e
+        raise RuntimeError('romanisation library missing: %s' % e)
     return None, None
 
 

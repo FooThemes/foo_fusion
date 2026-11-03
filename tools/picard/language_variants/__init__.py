@@ -37,7 +37,7 @@ versions filled in automatically (Japanese, Chinese, Korean, Cyrillic, Greek;
 MusicBrainz versions always come first).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.4'
+PLUGIN_VERSION = '1.4.1'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
 # GPL-3 because the bundled pykakasi (Japanese romanisation) is GPL-3.
 PLUGIN_LICENSE = 'GPL-3.0-or-later'
@@ -455,8 +455,9 @@ class LanguageVariants:
                 MBAPIHelper(album.tagger.webservice).get_release_by_id(
                     release['id'], partial(self._relations_loaded, st), inc=['release-rels'])
             rg = (release.get('release-group') or {}).get('id')
-            log.info('%s %s: "%s" (other releases: %s)', PLUGIN_NAME, PLUGIN_VERSION, release.get('title'),
-                     'on' if setting('other_releases') else 'off')
+            log.info('%s %s: "%s" (other releases: %s; romanise: %s)', PLUGIN_NAME, PLUGIN_VERSION, release.get('title'),
+                     'on' if setting('other_releases') else 'off',
+                     ', '.join(k for k, _ in auto_rom.SCRIPTS if setting('rom_' + k)) or 'off')
             if setting('other_releases') and rg and self._is_foreign(st):
                 self._browse_siblings(st, rg, 0)
         finally:
@@ -693,10 +694,16 @@ class LanguageVariants:
                 rom = found['alias']
             # Nothing from MusicBrainz: romanise it here, if that's on.
             if not rom and auto and auto_rom.needs_romanisation(orig):
-                auto_rom.load_vendor(USER_DIR, PLUGIN_VERSION)
-                rom, by = auto_rom.romanise(orig, auto, st.lang, st.script)
+                if not auto_rom.load_vendor(USER_DIR, PLUGIN_VERSION):
+                    log.error('%s: romanisation libraries unavailable: %s', PLUGIN_NAME, auto_rom.vendor_error())
+                try:
+                    rom, by = auto_rom.romanise(orig, auto, st.lang, st.script)
+                except Exception as e:  # pylint: disable=broad-except
+                    log.error('%s: could not romanise "%s": %s', PLUGIN_NAME, orig, e)
+                    rom, by = None, None
                 if by:
                     romanised_by.add(by)
+                log.debug('%s: romanised %s "%s" -> %s (%s; release %s/%s)', PLUGIN_NAME, field, orig, rom, by, st.lang, st.script)
             # An "English" title that's really the romanisation with a typo
             # ("KokoroToluNa..." for "KokoroToIuNa...") isn't English.
             if en and rom and not found.get('en') and loose(en) == loose(rom):

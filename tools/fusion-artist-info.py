@@ -179,10 +179,48 @@ def wikipedia_intro(web, mb, lang='en'):
         if wp:
             title = urllib.parse.unquote(wp.rsplit('/wiki/', 1)[-1]).replace('_', ' ')
     if not title:
-        return ''
-    q = urllib.parse.urlencode({'action': 'query', 'prop': 'extracts', 'exintro': 1, 'explaintext': 1, 'format': 'json', 'titles': title})
+        return '', None
+    q = urllib.parse.urlencode({'action': 'query', 'prop': 'extracts|info', 'inprop': 'url', 'exintro': 1, 'explaintext': 1, 'format': 'json', 'titles': title})
     pages = (web.get(f'https://{lang}.wikipedia.org/w/api.php?{q}') or {}).get('query', {}).get('pages', {})
-    return next((p.get('extract', '') for p in pages.values()), '').strip()
+    page = next(iter(pages.values()), {})
+    text = clean_bio(page.get('extract', ''))
+    return text, (page.get('fullurl') if text else None)
+
+
+IPA = set('əɪʊˈˌːŋʃʒθðæɑɔɛʌɜɒɐɘɵɨʉɯɤɞɶɸβçʝɣχʁħʕɦɬɮɹɻɭʎʟɲɳɴɱʋɰⁿʲʷˤ̃')
+
+
+def clean_bio(text):
+    """Tidy a biography: no pronunciation guides, reference marks ([2],
+    [citation needed]) or link/HTML formatting."""
+    if not text:
+        return ''
+    t = re.sub(r'<[^>]+>', '', text)                         # HTML tags
+    t = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', r'\1', t)  # [text](url)
+    t = re.sub(r'\[\[(?:[^|\]]*\|)?([^\]]+)\]\]', r'\1', t)      # [[link|text]]
+    t = re.sub(r'\[\s*(?:\d+|[a-z]|citation needed|note \d+|nb \d+|clarification needed|when\?|who\?)\s*\]', '', t, flags=re.I)
+
+    def tidy(m):
+        parts = [p.strip() for p in m.group(1).split(';')]
+        keep = []
+        for p in parts:
+            if not p or p in (',', '/'):
+                continue
+            if any(ch in IPA for ch in p):                       # IPA
+                continue
+            if re.fullmatch(r"(?:[a-zA-Z]*[A-Z]{2,}[a-zA-Z]*-?|[a-z]+-)+[a-zA-Z]*", p):  # respelling: ə-DEL, AD-kinz
+                continue
+            if re.match(r'(?i)^(listen|pronounced|pronunciation|[A-Z][a-z]+ pronunciation:?)\b', p):
+                continue
+            keep.append(p)
+        return f" ({'; '.join(keep)})" if keep else ''
+
+    # Pronunciation sits in the first bracket of the opening sentence.
+    t = re.sub(r'\s*\(([^()]*)\)', tidy, t, count=1)
+    t = re.sub(r'\(\s*[;,]\s*', '(', t)
+    t = re.sub(r'[ \t]{2,}', ' ', t)
+    t = re.sub(r' +([,.;:])', r'\1', t)
+    return t.strip()
 
 
 def best(images):
@@ -219,7 +257,7 @@ def split_list(s):
     return [p.strip() for p in re.split(r'[/,;]', s or '') if p.strip()]
 
 
-def build_nfo(name, mbid, adb, mb, bio):
+def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
     adb = adb or {}
     tags = []
 
@@ -247,6 +285,8 @@ def build_nfo(name, mbid, adb, mb, bio):
     add('died', died)
     add('disbanded', disbanded)
     add('biography', bio)
+    # Not a Kodi field (Kodi ignores it); Fusion shows it as a link.
+    add('wikipedia', wiki_url)
     body = '\n'.join(tags)
     return f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n{MARK}\n<artist>\n{body}\n</artist>\n'
 
@@ -344,16 +384,20 @@ def main():
                     # Wikipedia first (current, and what MusicBrainz shows),
                     # then TheAudioDB's text (often an older Wikipedia copy).
                     bio = ''
+                    wiki_url = None
                     for source in order:
                         if source == 'wikipedia' and mb:
-                            bio = wikipedia_intro(web, mb, lang.lower())
+                            bio, wiki_url = wikipedia_intro(web, mb, lang.lower())
                         elif source == 'audiodb' and adb:
-                            bio = (adb.get(f'strBiography{lang}') or (adb.get('strBiography') if lang == 'EN' else '') or '').strip()
+                            bio = clean_bio(adb.get(f'strBiography{lang}') or (adb.get('strBiography') if lang == 'EN' else '') or '')
                         if bio:
                             break
+                    if not wiki_url and mb:
+                        # Link the article even when the biography came from elsewhere.
+                        _, wiki_url = wikipedia_intro(web, mb, lang.lower()) if 'wikipedia' not in order else ('', None)
                     if not args.dry_run:
                         with open(nfo_path, 'w', encoding='utf-8', newline='\n') as f:
-                            f.write(build_nfo(name, mbid, adb, mb, bio))
+                            f.write(build_nfo(name, mbid, adb, mb, bio, wiki_url))
                     wrote.append('artist.nfo')
                 where = os.path.relpath(folder, cfg['music_root'])
                 note(f'+  {name} -> {where}: {", ".join(wrote) or "nothing new"}')

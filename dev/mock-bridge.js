@@ -453,7 +453,7 @@ export async function installMock() {
     'file.write': (p) => ((window.__mockWrites ||= []).push({ path: p.path, bytes: (p.content || '').length }), { bytesWritten: (p.content || '').length }),
     'file.read': (p) =>
       p.path.endsWith('artist.nfo')
-        ? { content: `<?xml version="1.0"?><artist><name>${p.path.split('\\').slice(-2, -1)[0]}</name><genre>Soul</genre><style>Rock/Pop</style><yearsactive>2000s - 2010s</yearsactive><formed>2006</formed><biography>First paragraph of a long biography. `.concat('Lorem ipsum dolor sit amet. '.repeat(30), `\nSecond paragraph here.</biography></artist>`) }
+        ? { content: `<?xml version="1.0"?><artist><musicBrainzArtistID>cc2c9c3c-b7bc-4b8b-84d8-4fbd8779e493</musicBrainzArtistID><wikipedia>https://en.wikipedia.org/wiki/Adele</wikipedia><name>${p.path.split('\\').slice(-2, -1)[0]}</name><genre>Soul</genre><style>Rock/Pop</style><yearsactive>2000s - 2010s</yearsactive><formed>2006</formed><biography>First paragraph of a long biography. `.concat('Lorem ipsum dolor sit amet. '.repeat(30), `\nSecond paragraph here.</biography></artist>`) }
         : p.path.endsWith('artist.png')
           ? { content: 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAaElEQVR4Xu3RAQkAIQAEQTXXJzGnAeVTLMJMgjt2nm+Pl62Xx/8cqClQU6CmQE2BmgI1BWoK1BSoKVBToKZATYGaAjUFagrUFKgpUFOgpkBNgZoCNQVqCtQUqClQU6CmQE2BmgI1BWoXdNwByjj3hm8AAAAASUVORK5CYII=' }
           : p.path.endsWith('fanart.png')

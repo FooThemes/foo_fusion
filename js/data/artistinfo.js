@@ -129,8 +129,10 @@ function parseNfo(xml) {
     born: one('born'),
     died: one('died'),
     disbanded: one('disbanded'),
-    biography: one('biography'),
+    // Reference marks ([2], [citation needed]) left in by some sources.
+    biography: one('biography').replace(/\[\s*(?:\d+|[a-z]|citation needed|note \d+|clarification needed)\s*\]/gi, ''),
     musicbrainz: one('musicBrainzArtistID'),
+    wikipedia: one('wikipedia'),
   };
 }
 

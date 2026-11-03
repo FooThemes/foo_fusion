@@ -673,8 +673,42 @@
   margin: 0 0 0.7em;
 }
 
-.ah-more {
+.ah-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
   margin-top: 6px;
+}
+
+.ah-foot .ah-more:not([hidden]) + .ah-links {
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+}
+
+.ah-links {
+  display: flex;
+  gap: 16px;
+}
+
+.ah-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  color: var(--text2);
+  font-size: 12.5px;
+}
+
+.ah-link .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.ah-link:hover {
+  color: var(--accent);
+}
+
+.ah-more {
   padding: 0;
   color: var(--accent);
   font-size: 13px;

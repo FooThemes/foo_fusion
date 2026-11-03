@@ -4,6 +4,8 @@
 // neither has anything for the artist.
 
 import { el, clear } from '../core/util.js';
+import { icon } from '../core/icons.js';
+import { tryCall } from '../core/bridge.js';
 import { artistFiles, artistDetails, pictureUrl } from '../data/artistinfo.js';
 
 const GAP = 24; // between the header and the first row of albums
@@ -21,11 +23,12 @@ export class ArtistHero {
     this.meta = el('div.ah-meta');
     this.bio = el('div.ah-bio');
     this.more = el('button.ah-more', { onclick: () => this.#toggle() });
+    this.links = el('div.ah-links');
     this.node = el(
       'div.artist-hero',
       { hidden: true },
       el('div.ah-back', null, this.fanart),
-      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.logo, this.title, this.meta, this.bio, this.more)),
+      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.logo, this.title, this.meta, this.bio, el('div.ah-foot', null, this.more, this.links))),
     );
   }
 
@@ -52,6 +55,11 @@ export class ArtistHero {
     clear(this.bio);
     for (const para of (info?.biography || '').split(/\n+/).filter(Boolean)) this.bio.append(el('p', { text: para }));
     this.bio.hidden = !info?.biography;
+    // Where the biography came from, and the artist on MusicBrainz.
+    clear(this.links);
+    const link = (label, url) => el('button.ah-link', { title: url, onclick: () => tryCall('shell.openExternal', { url }) }, label, icon('link'));
+    if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
+    if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/artist/${info.musicbrainz}`));
     this.node.classList.toggle('has-fanart', !!files.fanart);
     this.node.classList.toggle('no-picture', !files.picture);
     this.node.hidden = false;

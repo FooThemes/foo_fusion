@@ -257,6 +257,34 @@ def split_list(s):
     return [p.strip() for p in re.split(r'[/,;]', s or '') if p.strip()]
 
 
+def year(value):
+    """A real year from a date or year field, else '' (TheAudioDB uses "0"
+    for unknown)."""
+    m = re.match(r'\s*(\d{4})', str(value or ''))
+    return m.group(1) if m and int(m.group(1)) > 0 else ''
+
+
+# MusicBrainz's special-purpose artists: placeholders, not people or bands.
+# Their Wikidata links point at the concept ("[dialogue]" -> Dialogue).
+SPECIAL_MBIDS = {
+    '89ad4ac3-39f7-470e-963a-56509c546377',  # Various Artists
+    '125ec42a-7229-4250-afc5-e057484327fe',  # [unknown]
+    'f731ccc4-e22a-43af-a747-64213329e088',  # [anonymous]
+    '314e1c25-dde7-4e4d-b2f4-0a7b9f7c56dc',  # [dialogue]
+    '33cf029c-63b0-41a0-9855-be2a3665fb3b',  # [data]
+    'eec63d3c-3b81-4ad4-b1e4-7c147d4d2b61',  # [no artist]
+    '9be7f096-97ec-4615-8957-8d40b5dcbc41',  # [traditional]
+    'a0ef7e1d-44ff-4039-9435-7d5fefdeecc9',  # [theatre]
+    '80a8851f-444c-4539-892b-ad2a49292aa9',  # [language instruction]
+    '66ea0139-149f-4a0c-8fbf-5ea9ec4a6e49',  # [Disney]
+    '90068774-4cc8-4155-9e2b-2a1c4e9c4c8b',  # [church chimes]
+}
+
+
+def is_placeholder(name, mbid):
+    return (mbid or '').lower() in SPECIAL_MBIDS or bool(re.fullmatch(r'\[.+\]', name.strip())) or name.strip().casefold() == 'various artists'
+
+
 def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
     adb = adb or {}
     tags = []
@@ -276,10 +304,11 @@ def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
         add('mood', m)
     life = mb.get('life-span') or {}
     person = mb.get('type') == 'Person' or (not mb.get('type') and adb.get('intMembers') == '1')
-    formed = adb.get('intFormedYear') or (life.get('begin') or '')[:4]
-    born = adb.get('intBornYear') or ((life.get('begin') or '')[:4] if person else '')
-    died = adb.get('intDiedYear') or ((life.get('end') or '')[:4] if person else '')
-    disbanded = adb.get('strDisbanded') or ((life.get('end') or '')[:4] if not person else '')
+    begin, end = year(life.get('begin')), year(life.get('end'))
+    formed = year(adb.get('intFormedYear')) or begin
+    born = year(adb.get('intBornYear')) or (begin if person else '')
+    died = year(adb.get('intDiedYear')) or (end if person else '')
+    disbanded = year(adb.get('strDisbanded')) or (end if not person else '')
     add('formed', '' if person else formed)
     add('born', born)
     add('died', died)
@@ -335,6 +364,10 @@ def main():
             name = a['name']
             if args.limit and done >= args.limit:
                 break
+            if is_placeholder(name, a.get('mbid')):
+                stats['skipped'] += 1
+                note(f'{name}: MusicBrainz placeholder, not an artist; skipped')
+                continue
             folder = target_folder(cfg, name)
             have = {b: existing(folder, b) for b in ('artist', 'fanart', 'logo')}
             nfo_path = os.path.join(folder, 'artist.nfo')

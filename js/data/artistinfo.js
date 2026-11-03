@@ -127,17 +127,19 @@ function parseNfo(xml) {
   const root = doc.querySelector('artist');
   if (!root || doc.querySelector('parsererror')) return null;
   const one = (tag) => root.querySelector(`:scope > ${tag}`)?.textContent.trim() || '';
+  // Dates: "0" (TheAudioDB's "unknown") or other non-dates count as empty.
+  const date = (tag) => (/^[1-9]\d{2,3}\b/.test(one(tag)) ? one(tag) : '');
   const all = (tag) => [...root.querySelectorAll(`:scope > ${tag}`)].map((n) => n.textContent.trim()).filter(Boolean);
   return {
     name: one('name'),
     genres: all('genre'),
     styles: all('style'),
     moods: all('mood'),
-    yearsActive: all('yearsactive').join(', '),
-    formed: one('formed'),
-    born: one('born'),
-    died: one('died'),
-    disbanded: one('disbanded'),
+    yearsActive: all('yearsactive').filter((y) => !/^0+$/.test(y)).join(', '),
+    formed: date('formed'),
+    born: date('born'),
+    died: date('died'),
+    disbanded: date('disbanded'),
     // Reference marks ([2], [citation needed]) left in by some sources.
     biography: one('biography').replace(/\[\s*(?:\d+|[a-z]|citation needed|note \d+|clarification needed)\s*\]/gi, ''),
     musicbrainz: one('musicBrainzArtistID'),

@@ -59,7 +59,10 @@ export class ArtistHero {
     this.name = name;
     this.found = false;
     if (!name) return this.#hide();
-    const [files, info] = await Promise.all([artistFiles(name, handle), artistDetails(name, handle)]);
+    const [files, nfo] = await Promise.all([artistFiles(name, handle), artistDetails(name, handle)]);
+    // MusicBrainz placeholders ("[unknown]", "[dialogue]", Various Artists)
+    // aren't artists: no biography (any found is about the word), pictures only.
+    const info = /^\[.+\]$|^various artists$/i.test(name.trim()) ? null : nfo;
     if (this.key !== key) return;
     if (!files || (!files.picture && !files.fanart && !info)) return this.#hide();
     this.found = true;

@@ -191,6 +191,14 @@ async function save() {
   await tryCall('file.write', { path: `${base}\\index.json`, content: JSON.stringify(index), atomic: true });
 }
 
+/** Refresh one folder's (or artist's) cover: forget its pick and copies. */
+export function forgetDir(dir) {
+  const pick = knownCover(dir);
+  if (pick) for (const s of SIZES) delete index.files[keyFor(pick, s)];
+  if (dir in index.dirs) delete index.dirs[dir];
+  scheduleSave();
+}
+
 /** "Refresh artwork": start a fresh cache and delete the old copies. */
 export async function clearArtCache() {
   if (!base) return;

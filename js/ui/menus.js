@@ -52,13 +52,56 @@ export async function showAppMenu(app) {
   ]);
 }
 
-/** foobar2000's own context menu for playlist rows. */
-export async function trackContextMenu(rows) {
+/**
+ * foobar2000's own context menu for playlist rows, with Fusion's `extra`
+ * items (e.g. "Refresh artwork") at the top.
+ */
+export async function trackContextMenu(rows, extra = []) {
   if (!rows.length) return;
   const sel = view.selection;
   const same = rows.length === sel.size && rows.every((r) => sel.has(r));
   if (!same) await view.select(rows, { focus: rows[0] });
-  await tryCall('menu.showNativePopup', { mode: 'selection' });
+  await contextMenu({ mode: 'selection' }, extra);
+}
+
+/**
+ * foobar2000's context menu for `target` ({ mode: 'selection' | 'nowPlaying' }
+ * or { mode: 'handles', handles }). The native menu can't take extra items,
+ * so with `extra` the same commands are shown in Fusion's menu instead and
+ * run through foobar2000.
+ */
+export async function contextMenu(target, extra = []) {
+  if (!extra.length) return tryCall('menu.showNativePopup', target);
+  const res = await tryCall('menu.getContextMenu', { ...target, withAvailability: false });
+  const conv = (nodes) =>
+    (nodes || [])
+      .filter((n) => !n.hidden)
+      .map((n) => {
+        if (n.type === 'separator') return '-';
+        const label = clean(n.displayLabel || n.label);
+        if (n.type === 'submenu') return { label, submenu: conv(n.children) };
+        return {
+          label,
+          enabled: n.enabled !== false && n.commandId != null,
+          checked: !!(n.checked || n.radioChecked),
+          run: () =>
+            tryCall('menu.runContextCommandById', {
+              id: n.commandId,
+              mode: res.mode,
+              ...(target.handles ? { handles: target.handles } : {}),
+              expectTarget: res.targetKey,
+            }),
+        };
+      });
+  const fb = conv(res?.items);
+  return showMenu(fb.length ? [...extra, '-', ...fb] : extra);
+}
+
+/** Track handles for playlist rows (at most `max`, spread over the list). */
+export async function handlesOf(rows, max = 3000) {
+  const pickRows = rows.length > max ? rows.filter((_, i) => i % Math.ceil(rows.length / max) === 0) : rows;
+  const tracks = await view.tracks(pickRows);
+  return tracks.map((t) => t?.handle).filter(Boolean);
 }
 
 export function addToItems(rows) {

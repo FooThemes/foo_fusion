@@ -13,8 +13,8 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes, preloadArt } from '../data/artwork.js';
-import { showMenu, addToItems, trackContextMenu } from './menus.js';
+import { bindArt, albumArtTypes, preloadArt, refreshArt } from '../data/artwork.js';
+import { showMenu, addToItems, trackContextMenu, handlesOf } from './menus.js';
 import { RowSelector } from './rowselect.js';
 import { heartButton, refreshHearts } from './heart.js';
 import { draggableRows, selectionOr } from './dnd.js';
@@ -52,8 +52,10 @@ export class TrackPanel {
     // Right-click the cover: foobar2000's menu for the album (or the disc shown).
     this.coverBox.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      if (this.group) trackContextMenu(this.visibleRows());
+      if (this.group) trackContextMenu(this.visibleRows(), this.#refreshItems(this.rows));
     });
+    // Covers loaded again ("Refresh artwork"): colours from the new cover.
+    window.addEventListener('fusion:artrefresh', () => this.group && this.#renderCover());
     this.coverLabel = el('div.tp-cover-label', { hidden: true });
     this.title = el('h2.tp-title.ellipsis');
     this.meta = el('div.tp-meta.ellipsis');
@@ -229,6 +231,10 @@ export class TrackPanel {
     st.setProperty('--accent-text', pal.accentText);
   }
 
+  #refreshItems(rows) {
+    return [{ label: 'Refresh artwork', run: async () => refreshArt(await handlesOf(rows)) }];
+  }
+
   #renderCover() {
     const disc = this.disc !== 'all' && this.discs.find((d) => d.number === this.disc);
     const handle = disc?.first?.handle || this.group?.head?.handle;
@@ -311,7 +317,7 @@ export class TrackPanel {
           oncontextmenu: (e) => {
             e.preventDefault();
             const d = key === 'all' ? null : this.discs.find((x) => x.number === key);
-            trackContextMenu(d ? d.rows : this.rows);
+            trackContextMenu(d ? d.rows : this.rows, this.#refreshItems(this.rows));
           },
         },
         thumb ? el('span.art.ph-album.tp-disc-art', null, thumb) : icon('disc'),

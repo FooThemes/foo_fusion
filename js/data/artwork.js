@@ -6,10 +6,12 @@
 // entries each), and URLs are cached for the session.
 
 import { tryCall } from '../core/bridge.js';
+import * as store from '../core/store.js';
+import { forgetColours } from './albumcolours.js';
 import { logInfo } from '../core/log.js';
 import { artPatterns, pickByPatterns } from './artpatterns.js';
-import { artistFiles, pictureUrl } from './artistinfo.js';
-import { cachedUrl, isCachedAlpha, forget, storeCover, knownCover, rememberCover, clearArtCache } from './artcache.js';
+import { artistFiles, pictureUrl, forgetArtistInfo } from './artistinfo.js';
+import { cachedUrl, isCachedAlpha, forget, storeCover, knownCover, rememberCover, clearArtCache, forgetDir } from './artcache.js';
 
 const cache = new Map(); // key -> Promise<string|null>
 const resolved = new Map(); // key -> string|null, once known (for instant reuse)
@@ -37,6 +39,11 @@ function markLoaded(url, decoded = null) {
   }
 }
 let pending = []; // { key, path, type, size, resolve }
+
+// The browser keeps fb2k:// pictures for a day, so after "Refresh artwork"
+// their URLs carry a new version number to fetch them again.
+let artVersion = Number(store.get('artVersion')) || 0;
+const bust = (url) => (url && artVersion && url.startsWith('fb2k:') ? `${url}&rv=${artVersion}` : url);
 let scheduled = false;
 
 // Bucket sizes so a resize doesn't create a new URL for every pixel.
@@ -183,7 +190,7 @@ export function originalUrl(path, type = 'front') {
   let p = cache.get(key);
   if (!p) {
     p = tryCall('artwork.getFb2kUrlByPath', { path, type, maxSize: 0 }).then((r) => {
-      const url = r?.available ? r.dataUrl : null;
+      const url = r?.available ? bust(r.dataUrl) : null;
       if (url) rawUrls.add(url);
       resolved.set(key, url);
       return url;
@@ -203,7 +210,7 @@ async function flush() {
       items: chunk.map((j) => ({ path: j.path, type: j.type, maxSize: j.size })),
     });
     const rows = res?.artworks || [];
-    chunk.forEach((j, n) => j.resolve(rows[n]?.available ? rows[n].dataUrl : null));
+    chunk.forEach((j, n) => j.resolve(rows[n]?.available ? bust(rows[n].dataUrl) : null));
   }
 }
 
@@ -312,9 +319,82 @@ export async function nowPlayingUrl(cssSize, type = 'front', handle = null) {
   // PNG/GIF folder covers unscaled, as for the grid.
   const keep = handle && type === 'front' && (keepOriginal(handle) ?? (await probeDir(dirOf(handle), handle)) === 'keep');
   const res = await tryCall('artwork.getFb2kUrl', { type, maxSize: keep ? 0 : sizeBucket(cssSize) });
-  const url = res?.available ? res.dataUrl : null;
+  const url = res?.available ? bust(res.dataUrl) : null;
   if (url && keep) rawUrls.add(url);
   return url;
+}
+
+function newVersion() {
+  artVersion++;
+  store.set('artVersion', artVersion);
+}
+
+/** Point every <img> showing matching art at it again. */
+function rebind(match) {
+  for (const img of document.querySelectorAll('img[data-art-token]')) {
+    const parts = img.dataset.artToken.split('|');
+    const size = Number(parts.pop());
+    const types = parts.pop().split(',');
+    const path = parts.join('|');
+    if (match && !match(path, types)) continue;
+    delete img.dataset.artToken;
+    bindArt(img, path, size, types);
+  }
+  window.dispatchEvent(new CustomEvent('fusion:artrefresh'));
+}
+
+/**
+ * "Refresh artwork": look in these songs' album folders (and the box-set
+ * folder above disc folders) again and load their pictures afresh. With no
+ * songs, everything, including artist pictures and information.
+ */
+export function refreshArt(handles = null) {
+  newVersion();
+  if (!handles) {
+    clearCache();
+    forgetColours();
+    forgetArtistInfo();
+    infoUrls.clear();
+    rebind(null);
+    window.dispatchEvent(new CustomEvent('fusion:artistrefresh', { detail: { name: null } }));
+    return;
+  }
+  const dirs = new Set();
+  for (const h of handles) {
+    const { dir, parent } = splitPath(h);
+    if (dir) dirs.add(dir);
+    if (parent) dirs.add(parent);
+    dirPick.delete('artist:' + h);
+    forgetDir('artist:' + h);
+  }
+  const inDirs = (path) => dirs.has(dirOf(path));
+  for (const m of [cache, resolved]) for (const k of [...m.keys()]) if (inDirs(k.split('|').slice(2).join('|'))) m.delete(k);
+  for (const m of [parentCache, parentResolved]) for (const k of [...m.keys()]) if (dirs.has(k.slice(0, k.lastIndexOf('|')))) m.delete(k);
+  for (const d of dirs) {
+    dirPick.delete(d);
+    dirKind.delete(d);
+    dirProbe.delete(d);
+    forgetDir(d);
+  }
+  forgetColours(handles);
+  rebind((path) => inDirs(path) || dirs.has(splitPath(path).parent));
+}
+
+/** Refresh an artist's picture, fanart, logo and information. */
+export function refreshArtist(name, handles = []) {
+  newVersion();
+  const k = 'info:' + name.toLowerCase();
+  dirPick.delete(k);
+  forgetDir(k);
+  infoUrls.clear();
+  forgetArtistInfo(name);
+  for (const h of handles) {
+    dirPick.delete('artist:' + h);
+    forgetDir('artist:' + h);
+  }
+  for (const m of [cache, resolved]) for (const key of [...m.keys()]) if (key.startsWith('artist|') && handles.includes(key.split('|').slice(2).join('|'))) m.delete(key);
+  rebind((path, types) => types.includes('info:' + name) || (types.includes('artist') && handles.includes(path)));
+  window.dispatchEvent(new CustomEvent('fusion:artistrefresh', { detail: { name } }));
 }
 
 export function clearCache() {

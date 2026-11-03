@@ -7,8 +7,9 @@ import { el, clear, formatTime } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall, call } from '../core/bridge.js';
 import { player, ORDER_LABELS } from '../data/player.js';
-import { nowPlayingUrl, isRawUrl } from '../data/artwork.js';
+import { nowPlayingUrl, isRawUrl, refreshArt } from '../data/artwork.js';
 import { playlists } from '../data/playlists.js';
+import { contextMenu } from './menus.js';
 
 const UP_NEXT = 25;
 const PREVIOUS = 2; // songs played before the current one, shown dimmed
@@ -19,6 +20,16 @@ export class NowPlaying {
     this.bg = el('img.np-bg', { alt: '' });
     this.cover = el('img', { alt: '' });
     this.coverBox = el('div.art.ph-album.np-cover', null, this.cover);
+    this.coverBox.addEventListener('contextmenu', (e) => {
+      const handle = player.active && player.track?.handle;
+      if (!handle) return;
+      e.preventDefault();
+      contextMenu({ mode: 'nowPlaying' }, [{ label: 'Refresh artwork', run: () => refreshArt([handle]) }]);
+    });
+    window.addEventListener('fusion:artrefresh', () => {
+      this.artUrl = undefined;
+      this.render();
+    });
     this.title = el('h2.np-title');
     this.artist = el('div.np-artist');
     this.album = el('div.np-album');
@@ -164,8 +175,9 @@ export class NowPlaying {
         // foobar2000's own track menu (Properties, tagging, and so on).
         oncontextmenu: (e) => {
           e.preventDefault();
-          if (o.current) tryCall('menu.showNativePopup', { mode: 'nowPlaying' });
-          else tryCall('menu.showNativePopup', { mode: 'handles', handles: [t.handle] });
+          const extra = [{ label: 'Refresh artwork', run: () => refreshArt([t.handle]) }];
+          if (o.current) contextMenu({ mode: 'nowPlaying' }, extra);
+          else contextMenu({ mode: 'handles', handles: [t.handle] }, extra);
         },
       },
       el('span.np-n', null, o.current ? icon(player.state === 'paused' ? 'pause' : 'nowPlaying') : o.previous ? '' : String(o.number)),

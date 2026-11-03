@@ -5,11 +5,10 @@ import { el, formatTime, clamp } from '../core/util.js';
 import { icon, setIcon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { player, ORDER_LABELS } from '../data/player.js';
-import { nowPlayingUrl, isRawUrl } from '../data/artwork.js';
+import { nowPlayingUrl, isRawUrl, refreshArt } from '../data/artwork.js';
 import { view } from '../data/view.js';
 import { playlists } from '../data/playlists.js';
-import { showMenu, showAppMenu } from './menus.js';
-import { tryCall } from '../core/bridge.js';
+import { showMenu, showAppMenu, contextMenu } from './menus.js';
 import { heartButton, setHeart } from './heart.js';
 import { favourites } from '../data/favourites.js';
 import { mountWaveform } from './waveform.js';
@@ -89,7 +88,12 @@ export function mountPlayerBar(root, app) {
     if (!player.active) return;
     e.preventDefault();
     tip.hidden = true;
-    tryCall('menu.showNativePopup', { mode: 'nowPlaying' });
+    const handle = player.track?.handle;
+    contextMenu({ mode: 'nowPlaying' }, handle ? [{ label: 'Refresh artwork', run: () => refreshArt([handle]) }] : []);
+  });
+  window.addEventListener('fusion:artrefresh', () => {
+    artTrack = undefined;
+    renderTrack();
   });
 
   // Click the length to switch between total time and time remaining.

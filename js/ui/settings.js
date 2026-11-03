@@ -6,7 +6,7 @@ import * as store from '../core/store.js';
 import { ACCENTS } from '../core/store.js';
 import { tryCall, on } from '../core/bridge.js';
 import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.js';
-import { clearCache } from '../data/artwork.js';
+import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
 import { exportArtists } from '../data/artistexport.js';
 import { toast } from './toast.js';
@@ -74,9 +74,9 @@ export function mountSettings(root, app) {
       section('foobar2000', [
         link('settings', 'Preferences…', () => tryCall('misc.showPreferences')),
         link('library', 'Configure media library…', () => tryCall('config.showLibraryPreferences')),
-        link('refresh', 'Refresh artwork', () => {
-          clearCache();
-          app.reload();
+        link('refresh', 'Refresh artwork and artist information', () => {
+          refreshArt();
+          toast('Looking for artwork and artist information again');
         }),
         link('person', 'Export artist list…', async () => {
           try {

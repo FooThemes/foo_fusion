@@ -11,10 +11,10 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes, warmArt } from '../data/artwork.js';
+import { bindArt, albumArtTypes, warmArt, refreshArt, refreshArtist } from '../data/artwork.js';
 import { ArtistHero } from './artisthero.js';
 import { musicArtistFolder } from '../data/artistinfo.js';
-import { trackContextMenu } from './menus.js';
+import { trackContextMenu, handlesOf } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 import { draggableRows } from './dnd.js';
 
@@ -340,7 +340,17 @@ export class Grid {
     const i = this.#indexOf(e);
     if (i < 0) return;
     e.preventDefault();
-    trackContextMenu(view.groupRows(view.groups[i]));
+    const g = view.groups[i];
+    const rows = view.groupRows(g);
+    trackContextMenu(rows, this.#refreshItems(g, rows));
+  }
+
+  /** "Refresh artwork" for an album or genre; artist information for an artist. */
+  #refreshItems(g, rows) {
+    if (this.kind === 'artists') {
+      return [{ label: 'Refresh artist information', run: async () => refreshArtist(g.key, [g.head?.handle, ...(await handlesOf(rows, 50))].filter(Boolean)) }];
+    }
+    return [{ label: 'Refresh artwork', run: async () => refreshArt(await handlesOf(rows)) }];
   }
 
   #key(e) {

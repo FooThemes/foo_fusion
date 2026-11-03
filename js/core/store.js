@@ -47,6 +47,7 @@ export const ACCENTS = [
 ];
 
 const DEFAULTS = {
+  artVersion: 0, // bumped by "Refresh artwork" (see artwork.js)
   version: 2,
   dark: false,
   accent: '#107C10',

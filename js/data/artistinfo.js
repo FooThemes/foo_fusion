@@ -102,10 +102,19 @@ export async function artistDetails(name, handle = null) {
   return details.get(key);
 }
 
-export function forgetArtistInfo() {
-  found.clear();
-  listing.clear();
-  details.clear();
+/** Read the artist's (or every artist's) information again. */
+export function forgetArtistInfo(name = null) {
+  if (!name) {
+    found.clear();
+    listing.clear();
+    details.clear();
+    return;
+  }
+  const n = norm(name);
+  const mine = (dir) => dir.toLowerCase().endsWith('\\' + n);
+  for (const key of [...found.keys()]) if (key.slice(0, key.lastIndexOf('|')).toLowerCase() === name.toLowerCase()) found.delete(key);
+  for (const key of [...listing.keys()]) if (mine(key)) listing.delete(key);
+  for (const key of [...details.keys()]) if (mine(key)) details.delete(key);
 }
 
 function parseNfo(xml) {

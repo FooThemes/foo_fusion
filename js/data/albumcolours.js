@@ -14,6 +14,13 @@ const SIZE = 40; // sample grid; plenty for picking colours
  * `variant` tells covers of the same track apart: the box-set cover above the
  * disc folders ("all discs") and the disc's own cover are different pictures.
  */
+/** Forget colours for these songs' covers (all, with no handles). */
+export function forgetColours(handles = null) {
+  if (!handles) return cache.clear();
+  const set = new Set(handles);
+  for (const key of [...cache.keys()]) if (set.has(key.slice(key.indexOf('|') + 1))) cache.delete(key);
+}
+
 export function albumColours(handle, img, variant = '') {
   if (!handle) return Promise.resolve(null);
   const key = variant + '|' + handle;

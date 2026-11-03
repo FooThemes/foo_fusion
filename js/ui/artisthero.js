@@ -7,6 +7,8 @@ import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall } from '../core/bridge.js';
 import { artistFiles, artistDetails, pictureUrl } from '../data/artistinfo.js';
+import { refreshArtist } from '../data/artwork.js';
+import { showMenu } from './menus.js';
 
 const GAP = 24; // between the header and the first row of albums
 
@@ -30,12 +32,26 @@ export class ArtistHero {
       el('div.ah-back', null, this.fanart),
       el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.logo, this.title, this.meta, this.bio, el('div.ah-foot', null, this.more, this.links))),
     );
+    this.node.addEventListener('contextmenu', (e) => {
+      if (!this.name) return;
+      e.preventDefault();
+      showMenu([{ label: 'Refresh artist information', run: () => refreshArtist(this.name, this.handle ? [this.handle] : []) }]);
+    });
+    // Read the artist's files again (right-click > Refresh, or Settings).
+    window.addEventListener('fusion:artistrefresh', (e) => {
+      const name = e.detail?.name;
+      if (!this.name || (name && name.toLowerCase() !== this.name.toLowerCase())) return;
+      this.key = null;
+      this.found = false;
+      this.show(this.name, this.handle);
+    });
   }
 
   /** handle: one of the artist's tracks (for their own music folder). */
   async show(name, handle = null) {
     const key = `${name}|${handle || ''}`;
     if (key === this.key) return;
+    this.handle = handle;
     // Same artist, already found: a later handle changes nothing.
     if (name === this.name && this.found) return;
     this.key = key;

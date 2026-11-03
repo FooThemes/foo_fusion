@@ -4,3 +4,5 @@ node_modules/
 tools/*.ini
 tools/*.state.json
 tools/*.log
+
+tools/picard/dist/

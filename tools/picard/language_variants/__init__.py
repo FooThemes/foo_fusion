@@ -32,13 +32,16 @@ then rebuilds the main tags from them in a format you choose per tag, such as
 "English (原題)" for albums and "原題 (English)" for tracks.<br><br>
 English artist names also come from artist aliases. Optionally, missing
 English versions can be machine translated with DeepL or Google Cloud
-Translation (your own API key; off by default).<br><br>
+Translation (your own API key; off by default), and missing romanised
+versions filled in automatically (Japanese, Chinese, Korean, Cyrillic, Greek;
+MusicBrainz versions always come first).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.3'
+PLUGIN_VERSION = '1.4'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
-PLUGIN_LICENSE = 'GPL-2.0-or-later'
-PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-2.0.html'
+# GPL-3 because the bundled pykakasi (Japanese romanisation) is GPL-3.
+PLUGIN_LICENSE = 'GPL-3.0-or-later'
+PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-3.0.html'
 
 import html
 import json
@@ -66,6 +69,8 @@ from picard.ui.options import OptionsPage, register_options_page
 from picard.util import thread
 from picard.webservice.api_helpers import MBAPIHelper
 
+from . import romanise as auto_rom
+
 try:
     from picard.const import USER_DIR
 except ImportError:  # very old Picard
@@ -81,6 +86,7 @@ FIELDS = (
     ('discsubtitle', 'Disc subtitle'),
 )
 ALBUM_FIELDS = ('album', 'albumartist')
+ROMANISED_BY = 'romanised_by'
 
 # Per tag: which version leads, which goes in the brackets (each a fallback
 # list: the first one that exists and differs from the lead is used), and
@@ -367,6 +373,10 @@ class AlbumState:
         self.album = album
         rep = release.get('text-representation') or {}
         self.lang, self.script = rep.get('language'), rep.get('script')
+        # Kana anywhere on the release: its kanji are Japanese, not Chinese.
+        texts = [release.get('title') or ''] + [t.get('title') or '' for m in release.get('media') or [] for t in m.get('tracks') or []]
+        if self.script is None and any(auto_rom.KANA.search(t) for t in texts):
+            self.script = 'Jpan'
         self.release = release
         self.pending = 0
         self.ready = False
@@ -665,6 +675,8 @@ class LanguageVariants:
         metadata, disc, track, origs = target
         sfx = {k: setting('suffix_' + k) or ('_' + k) for k in KINDS}
         mt_fields = set(parse_list(setting('mt_fields')))
+        auto = {k for k, _ in auto_rom.SCRIPTS if setting('rom_' + k)}
+        romanised_by = set()
         for field, _label in FIELDS:
             if track is None and field not in ALBUM_FIELDS:
                 continue  # the album's own metadata has no track tags
@@ -679,6 +691,12 @@ class LanguageVariants:
             # Artists: an English alias of a non-Latin name is its romanisation too.
             if not rom and field in ('artist', 'albumartist') and found.get('alias') and has_non_latin(orig):
                 rom = found['alias']
+            # Nothing from MusicBrainz: romanise it here, if that's on.
+            if not rom and auto and auto_rom.needs_romanisation(orig):
+                auto_rom.load_vendor(USER_DIR, PLUGIN_VERSION)
+                rom, by = auto_rom.romanise(orig, auto, st.lang, st.script)
+                if by:
+                    romanised_by.add(by)
             # An "English" title that's really the romanisation with a typo
             # ("KokoroToluNa..." for "KokoroToIuNa...") isn't English.
             if en and rom and not found.get('en') and loose(en) == loose(rom):
@@ -701,6 +719,12 @@ class LanguageVariants:
             if values['en'] or values['rom']:
                 main, second, fmt = layout(field)
                 metadata[field] = combine(values, main, second, fmt)
+        # Which _ROM values were made here rather than taken from MusicBrainz,
+        # so they can be found and checked ("romanised_by HAS pykakasi").
+        if romanised_by:
+            metadata[ROMANISED_BY] = sorted(romanised_by)
+        else:
+            metadata.delete(ROMANISED_BY)
 
 
 def parse_list(text):
@@ -736,6 +760,7 @@ class LanguageVariantsOptionsPage(OptionsPage):
         config.TextOption('setting', opt('mt_fields'), ', '.join(DEFAULT_MT_FIELDS)),
         config.BoolOption('setting', opt('other_releases'), True),
     ]
+    options += [config.BoolOption('setting', opt('rom_' + k), True) for k, _ in auto_rom.SCRIPTS]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -786,6 +811,21 @@ class LanguageVariantsOptionsPage(OptionsPage):
             'Also take titles from other releases of the album (e.g. an English edition)')
         root.addWidget(self.other_releases)
 
+        # Automatic romanisation
+        rom = QtWidgets.QGroupBox('Romanise automatically (when MusicBrainz has no romanised version)')
+        grid = QtWidgets.QGridLayout(rom)
+        self.rom_boxes = {}
+        for i, (key, label) in enumerate(auto_rom.SCRIPTS):
+            cb = QtWidgets.QCheckBox(label)
+            self.rom_boxes[key] = cb
+            grid.addWidget(cb, i // 2, i % 2)
+        note = QtWidgets.QLabel(
+            'Kanji and Chinese readings are dictionary guesses (踊 can come out "You" rather than "Odori"); '
+            'words are capitalised. Tracks with any of these get a ROMANISED_BY tag so you can find and check them.')
+        note.setWordWrap(True)
+        grid.addWidget(note, 3, 0, 1, 2)
+        root.addWidget(rom)
+
         # Machine translation
         mt = QtWidgets.QGroupBox('Machine translation (when MusicBrainz has no English version)')
         form = QtWidgets.QFormLayout(mt)
@@ -809,8 +849,7 @@ class LanguageVariantsOptionsPage(OptionsPage):
         form.addRow('Translate:', boxes)
         note = QtWidgets.QLabel(
             'DeepL API Free: 500,000 characters a month. Google needs a Cloud project with billing. '
-            '(Kagi has no API.) Results are cached, so each title is only translated once. '
-            'Romanisations only come from MusicBrainz.')
+            '(Kagi has no API.) Results are cached, so each title is only translated once.')
         note.setWordWrap(True)
         form.addRow(note)
         root.addWidget(mt)
@@ -818,6 +857,8 @@ class LanguageVariantsOptionsPage(OptionsPage):
 
     def load(self):
         self.other_releases.setChecked(bool(setting('other_releases')))
+        for key, cb in self.rom_boxes.items():
+            cb.setChecked(bool(setting('rom_' + key)))
         for k in KINDS:
             self.suffix[k].setText(setting('suffix_' + k))
         for field, edits in self.rows.items():
@@ -834,6 +875,8 @@ class LanguageVariantsOptionsPage(OptionsPage):
 
     def save(self):
         config.setting[opt('other_releases')] = self.other_releases.isChecked()
+        for key, cb in self.rom_boxes.items():
+            config.setting[opt('rom_' + key)] = cb.isChecked()
         for k in KINDS:
             text = re.sub(r'\s+', '', self.suffix[k].text()) or '_' + k
             config.setting[opt('suffix_' + k)] = text
@@ -862,6 +905,7 @@ def register_tag_names():
         for k in KINDS:
             name = (field + (config.setting[opt('suffix_' + k)] or '_' + k)).lower()
             TAG_NAMES[name] = '%s (%s)' % (base, labels[k])
+    TAG_NAMES[ROMANISED_BY] = 'Romanised By'
 
 
 plugin = LanguageVariants()

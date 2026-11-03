@@ -4,6 +4,7 @@
 //   artist.nfo                       XML: biography, genres, styles, years…
 //   artist.* / folder.* / thumb.*    the artist's picture
 //   fanart.*                         a wide background picture
+//   logo.*                           the artist's logo (shown in place of the name)
 // Fusion reads it for artist tiles and the artist page. Like Kodi, an artist
 // missing from that folder is looked for in their own music folder (the one
 // above their albums) next; after that, foobar2000's artist art and then
@@ -14,6 +15,7 @@ import * as store from '../core/store.js';
 
 const PICTURE = ['artist', 'folder', 'thumb', 'poster', 'photo'];
 const FANART = ['fanart', 'backdrop', 'background'];
+const LOGO = ['logo', 'clearlogo'];
 const found = new Map(); // artist name (lower case) -> Promise<info|null>
 
 /** The artist's folder: Windows-unsafe characters become "_", as Kodi's export does. */
@@ -53,7 +55,7 @@ function readFolder(dir) {
         const images = res?.images || [];
         const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
         const pick = (names) => names.map((n) => images.find((im) => base(im.name) === n)).find(Boolean) || null;
-        return { dir, picture: pick(PICTURE), fanart: pick(FANART), hasNfo: !!nfo?.exists };
+        return { dir, picture: pick(PICTURE), fanart: pick(FANART), logo: pick(LOGO), hasNfo: !!nfo?.exists };
       }),
     );
   }

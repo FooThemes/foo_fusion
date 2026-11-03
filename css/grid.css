@@ -683,3 +683,31 @@
 .ah-more:hover {
   text-decoration: underline;
 }
+
+.ah-logo {
+  display: none;
+  max-width: min(420px, 100%);
+  max-height: 110px;
+  margin: 0 0 10px;
+  object-fit: contain;
+  object-position: left center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.artist-hero.has-logo .ah-logo {
+  display: block;
+}
+
+.ah-logo.loaded {
+  opacity: 1;
+}
+
+/* With a logo, the name stays only for screen readers. */
+.artist-hero.has-logo .ah-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}

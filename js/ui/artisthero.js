@@ -17,6 +17,7 @@ export class ArtistHero {
     this.picture = el('img', { alt: '' });
     this.pictureBox = el('div.ah-picture', null, this.picture);
     this.title = el('h2.ah-name');
+    this.logo = el('img.ah-logo', { alt: '' });
     this.meta = el('div.ah-meta');
     this.bio = el('div.ah-bio');
     this.more = el('button.ah-more', { onclick: () => this.#toggle() });
@@ -24,7 +25,7 @@ export class ArtistHero {
       'div.artist-hero',
       { hidden: true },
       el('div.ah-back', null, this.fanart),
-      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.title, this.meta, this.bio, this.more)),
+      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.logo, this.title, this.meta, this.bio, this.more)),
     );
   }
 
@@ -54,6 +55,10 @@ export class ArtistHero {
     this.node.classList.toggle('has-fanart', !!files.fanart);
     this.node.classList.toggle('no-picture', !files.picture);
     this.node.hidden = false;
+    // A logo, when there is one, stands in for the name (kept for screen readers).
+    this.node.classList.toggle('has-logo', !!files.logo);
+    this.logo.alt = this.title.textContent;
+    this.#setImage(this.logo, files.logo, 800);
     this.#setImage(this.picture, files.picture, 400);
     this.#setImage(this.fanart, files.fanart, 1600);
     this.#measure();
@@ -66,7 +71,10 @@ export class ArtistHero {
     const name = this.name;
     const url = await pictureUrl(file, px);
     if (!url || this.name !== name) return;
-    img.onload = () => img.classList.add('loaded');
+    img.onload = () => {
+      img.classList.add('loaded');
+      if (img === this.logo) this.#measure(); // the logo can change the header's height
+    };
     img.src = url;
   }
 

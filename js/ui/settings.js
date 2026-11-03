@@ -8,6 +8,8 @@ import { tryCall, on } from '../core/bridge.js';
 import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.js';
 import { clearCache } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
+import { exportArtists } from '../data/artistexport.js';
+import { toast } from './toast.js';
 import { VERSION } from '../version.js';
 
 export function mountSettings(root, app) {
@@ -75,6 +77,14 @@ export function mountSettings(root, app) {
         link('refresh', 'Refresh artwork', () => {
           clearCache();
           app.reload();
+        }),
+        link('person', 'Export artist list…', async () => {
+          try {
+            const r = await exportArtists();
+            toast(`Exported ${r.count} artists (${r.withId} with MusicBrainz IDs) to ${r.path}`, 8000);
+          } catch (err) {
+            toast(`Export failed: ${err.message}`);
+          }
         }),
         link('reset', 'Reset Fusion settings', async () => {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();

@@ -1,3 +1,6 @@
 node_modules/
 *.zip
 .DS_Store
+tools/*.ini
+tools/*.state.json
+tools/*.log

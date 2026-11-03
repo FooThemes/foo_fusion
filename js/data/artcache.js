@@ -77,16 +77,32 @@ function keyFor(pick, px) {
 }
 
 /** URL of the cached copy of this cover at this size, or null. */
+const SIZES = [96, 160, 240, 320, 480, 640, 960, 1400]; // artwork.js buckets
+
+/** The copy made for this size, or else the nearest bigger one (scaled down
+ *  by the browser), so a cover seen at one size isn't fetched again for another. */
+function bestKey(pick, px) {
+  const exact = keyFor(pick, px);
+  if (index.files[exact]) return exact;
+  for (const s of SIZES) {
+    if (s <= px) continue;
+    const k = keyFor(pick, s);
+    if (index.files[k]) return k;
+  }
+  return null;
+}
+
 export function cachedUrl(pick, px, count = true) {
   if (!base || !pick) return null;
-  const key = keyFor(pick, px);
-  if (!index.files[key]) return null;
+  const key = bestKey(pick, px);
+  if (!key) return null;
   if (count) stats.hits++;
   return `/${FOLDER}/${index.gen}/${key}.webp`;
 }
 
 export function isCachedAlpha(pick, px) {
-  return !!pick && index.files[keyFor(pick, px)] === 'a';
+  const key = pick && bestKey(pick, px);
+  return !!key && index.files[key] === 'a';
 }
 
 /** A cached copy turned out to be missing: forget it. */

@@ -116,7 +116,20 @@ function coverFile(type, handle) {
     if (!parent || !DISC_DIR.test(folder)) return null;
     return dirPick.has(parent) ? dirPick.get(parent) : knownCover(parent);
   }
+  if (type === 'artist') {
+    // foobar2000 finds artist pictures itself; the cache keys them by track.
+    const k = 'artist:' + handle;
+    return dirPick.has(k) ? dirPick.get(k) : knownCover(k);
+  }
   return undefined;
+}
+
+/** Note whether foobar2000 had an artist picture for this track. */
+function noteArtist(handle, found) {
+  const k = 'artist:' + handle;
+  const pick = found ? { name: 'artist.jpg', path: k + '\\artist.jpg', size: 0 } : null;
+  dirPick.set(k, pick);
+  rememberCover(k, pick);
 }
 
 function probeDir(dir, sample) {
@@ -348,7 +361,7 @@ export function warmArt(handles, cssSize, types) {
       const pick = coverFile(t, h);
       if (pick === undefined) break;
       if (pick === null) {
-        if (t === 'parent') continue;
+        if (t === 'parent' || t === 'artist') continue;
         break;
       }
       const url = cachedUrl(pick, px, false);
@@ -413,7 +426,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
       const pick = coverFile(t, path);
       if (pick === undefined) break;
       if (pick === null) {
-        if (t === 'parent') continue; // no box-set cover: the next type
+        if (t === 'parent' || t === 'artist') continue; // none of this kind: the next type
         break;
       }
       const disk = cachedUrl(pick, sizeBucket(cssSize));
@@ -478,6 +491,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
         );
       });
     }
+    if (type === 'artist') noteArtist(path, !!url);
     if (img.dataset.artToken !== token) return;
     if (!url) return attempt(i + 1);
     img.classList.toggle('alpha', rawUrls.has(url));
@@ -494,7 +508,10 @@ export function bindArt(img, path, cssSize, types = ['front']) {
       if (coverFile(type, path) === undefined && type === 'front') probeDir(dirOf(path), path).then(save);
       else save();
     };
-    img.onerror = () => img.dataset.artToken === token && attempt(i + 1);
+    img.onerror = () => {
+      if (type === 'artist') noteArtist(path, false); // URL built, but no picture
+      if (img.dataset.artToken === token) attempt(i + 1);
+    };
     img.src = url;
   };
   attempt(0);

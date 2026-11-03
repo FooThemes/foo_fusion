@@ -20,6 +20,7 @@ import { mountPlaylistManager } from './ui/plmanager.js';
 import { installLog, logInfo } from './core/log.js';
 import { VERSION } from './version.js';
 import { installDiagnostics } from './core/diag.js';
+import { initArtCache } from './data/artcache.js';
 
 async function boot() {
   if (!window.fb2k) {
@@ -34,6 +35,7 @@ async function boot() {
   tryCall('window.setFrameless', { frameless: false });
   const t0 = performance.now();
   await store.load();
+  await initArtCache(); // small saved copies of covers, from earlier sessions
   applyTheme();
   store.subscribe((k) => (k === 'dark' || k === 'accent') && applyTheme());
 

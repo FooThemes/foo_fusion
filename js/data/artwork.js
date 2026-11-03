@@ -8,6 +8,7 @@
 import { tryCall } from '../core/bridge.js';
 import { logInfo } from '../core/log.js';
 import { artPatterns, pickByPatterns } from './artpatterns.js';
+import { cachedUrl, isCachedAlpha, forget, storeCover, knownCover, rememberCover, clearArtCache } from './artcache.js';
 
 const cache = new Map(); // key -> Promise<string|null>
 const resolved = new Map(); // key -> string|null, once known (for instant reuse)
@@ -95,7 +96,27 @@ function dirOf(handle) {
 
 /** Should this track's front cover be loaded unscaled? (undefined = not known yet) */
 export function keepOriginal(handle) {
-  return dirKind.get(dirOf(handle)) === 'keep' ? true : dirKind.has(dirOf(handle)) ? false : undefined;
+  const dir = dirOf(handle);
+  if (dirKind.has(dir)) return dirKind.get(dir) === 'keep';
+  const known = knownCover(dir); // remembered from an earlier session
+  if (known === undefined) return undefined;
+  return !!known && /\.(png|gif)$/i.test(known.name);
+}
+
+const dirPick = new Map(); // folder -> its cover file { name, path, size } | null (this session)
+
+/** The cover file for a track's 'front' or 'parent' art: object, null (none) or undefined (unknown). */
+function coverFile(type, handle) {
+  if (type === 'front') {
+    const dir = dirOf(handle);
+    return dirPick.has(dir) ? dirPick.get(dir) : knownCover(dir);
+  }
+  if (type === 'parent') {
+    const { parent, folder } = splitPath(handle);
+    if (!parent || !DISC_DIR.test(folder)) return null;
+    return dirPick.has(parent) ? dirPick.get(parent) : knownCover(parent);
+  }
+  return undefined;
 }
 
 function probeDir(dir, sample) {
@@ -113,6 +134,8 @@ function probeDir(dir, sample) {
           const kind = pick && /\.(png|gif)$/i.test(pick.name) ? 'keep' : 'scale';
           if (probeLogs-- > 0 && images.some((im) => /\.(png|gif)$/i.test(im.name))) logInfo(`cover check ${dir.split('\\').pop()}: [${images.map((im) => im.name).join(', ')}] -> ${pick?.name || 'none'} (${kind})`);
           dirKind.set(dir, kind);
+          dirPick.set(dir, pick ? { name: pick.name, path: pick.path, size: pick.size } : null);
+          rememberCover(dir, pick);
           resolve(kind);
         });
         pumpProbes();
@@ -225,10 +248,17 @@ async function loadParentCover(dir, px) {
     (await pickByPatterns((await artPatterns()).front.filter((p) => !/[%$]/.test(p)), images, null)) ||
     COVER_NAMES.map((c) => images.find((im) => base(im.name) === c)).find(Boolean) ||
     (images.length === 1 ? images[0] : null);
+  dirPick.set(dir, pick ? { name: pick.name, path: pick.path, size: pick.size } : null);
+  rememberCover(dir, pick);
   if (!pick) return null;
   const file = await tryCall('file.read', { path: pick.path, encoding: 'binary' });
   if (!file?.content) return null;
-  const bin = atob(file.content);
+  let bin;
+  try {
+    bin = atob(file.content);
+  } catch {
+    return null;
+  }
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   // PNG/GIF: keep the original (transparency, animation).
@@ -261,6 +291,8 @@ export async function nowPlayingUrl(cssSize, type = 'front', handle = null) {
 }
 
 export function clearCache() {
+  clearArtCache();
+  dirPick.clear();
   cache.clear();
   parentCache.clear();
   parentResolved.clear();
@@ -327,6 +359,39 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     }
     if (t !== 'parent') break; // a normal type that isn't decoded yet
   }
+  // A small copy saved on disk by an earlier session.
+  if (!ready) {
+    for (const t of types) {
+      const pick = coverFile(t, path);
+      if (pick === undefined) break;
+      if (pick === null) {
+        if (t === 'parent') continue; // no box-set cover: the next type
+        break;
+      }
+      const disk = cachedUrl(pick, sizeBucket(cssSize));
+      if (!disk) break;
+      const instant = loadedUrls.has(disk);
+      img.onload = () => {
+        markLoaded(disk);
+        if (img.dataset.artToken === token) img.classList.add('loaded');
+      };
+      img.onerror = () => {
+        // The copy is gone (cache cleared by hand?): forget it, load normally.
+        forget(pick, sizeBucket(cssSize));
+        if (img.dataset.artToken !== token) return;
+        delete img.dataset.artToken;
+        bindArt(img, path, cssSize, types);
+      };
+      img.classList.toggle('alpha', isCachedAlpha(pick, sizeBucket(cssSize)));
+      img.classList.toggle('instant', instant);
+      img.classList.toggle('loaded', instant);
+      img.decoding = instant ? 'sync' : 'async';
+      img.src = disk;
+      // Check the folder again in the background (a cover may have changed).
+      if (t === 'front' && !dirPick.has(dirOf(path))) probeDir(dirOf(path), path);
+      return;
+    }
+  }
   if (ready) {
     img.onload = img.onerror = null;
     img.decoding = 'sync';
@@ -353,7 +418,14 @@ export function bindArt(img, path, cssSize, types = ['front']) {
         const pre = new Image();
         pre.src = raw;
         pre.decode().then(
-          () => img.dataset.artToken === token && ((img.src = raw), img.classList.add('alpha'), markLoaded(raw)),
+          () => {
+            if (img.dataset.artToken !== token) return;
+            img.src = raw;
+            img.classList.add('alpha');
+            markLoaded(raw);
+            const pick = coverFile('front', path);
+            if (pick) storeCover(pick, sizeBucket(cssSize), raw, true);
+          },
           () => {},
         );
       });
@@ -364,6 +436,15 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     img.onload = () => {
       markLoaded(url);
       if (img.dataset.artToken === token) img.classList.add('loaded');
+      // Keep a small copy on disk for next time (once the cover file is known).
+      const save = () => {
+        const pick = coverFile(type, path);
+        // A PNG shown from foobar2000's JPEG copy has lost its transparency;
+        // the full PNG (swapped in below) is the one to keep.
+        if (pick && !(/\.png$/i.test(pick.name) && !rawUrls.has(url))) storeCover(pick, sizeBucket(cssSize), url, rawUrls.has(url));
+      };
+      if (coverFile(type, path) === undefined && type === 'front') probeDir(dirOf(path), path).then(save);
+      else save();
     };
     img.onerror = () => img.dataset.artToken === token && attempt(i + 1);
     img.src = url;

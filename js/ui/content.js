@@ -33,6 +33,23 @@ export function mountContent(root) {
   let pendingRestore = null; // key whose scroll position to restore once loaded
   let blankShown = false; // the current key is only showing the blank loading page
 
+  // Ctrl + mouse wheel resizes the album/artist art, as in the original skin
+  // (instead of zooming the whole page).
+  scroller.addEventListener(
+    'wheel',
+    (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      if (currentKind !== 'grid') return;
+      const key = view.mode === 'artists' && !view.drill ? 'artistTileSize' : 'tileSize';
+      const [min, max] = key === 'artistTileSize' ? [100, 240] : [110, 260];
+      const cur = store.get(key);
+      const next = Math.max(min, Math.min(max, cur + (e.deltaY < 0 ? 10 : -10)));
+      if (next !== cur) store.set(key, next); // the grid re-lays itself out on this
+    },
+    { passive: false },
+  );
+
   // A click on empty space (not on a song, tile or control) clears the selection.
   scroller.addEventListener('click', (e) => {
     if (!view.selection.size || e.ctrlKey || e.shiftKey) return;

@@ -35,7 +35,7 @@ English versions can be machine translated with DeepL or Google Cloud
 Translation (your own API key; off by default).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.2.1'
+PLUGIN_VERSION = '1.3'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-2.0.html'
@@ -846,6 +846,22 @@ class LanguageVariantsOptionsPage(OptionsPage):
         config.setting[opt('mt_key')] = self.key.text().strip()
         config.setting[opt('mt_english')] = self.english.currentData() or 'EN-GB'
         config.setting[opt('mt_fields')] = ', '.join(f for f, cb in self.mt_boxes.items() if cb.isChecked())
+        register_tag_names()  # the suffixes may have changed
+
+
+def register_tag_names():
+    """Readable names in Picard's tag list: "title_en" shows as "Title
+    (English)", like Picard's own "originaldate" -> "Original Release Date"."""
+    try:
+        from picard.util.tags import TAG_NAMES
+    except ImportError:
+        return
+    labels = {'orig': 'Original', 'en': 'English', 'rom': 'Romanised'}
+    for field, label in FIELDS:
+        base = TAG_NAMES.get(field, label)
+        for k in KINDS:
+            name = (field + (config.setting[opt('suffix_' + k)] or '_' + k)).lower()
+            TAG_NAMES[name] = '%s (%s)' % (base, labels[k])
 
 
 plugin = LanguageVariants()
@@ -854,3 +870,4 @@ register_album_metadata_processor(plugin.album_processor, priority=PluginPriorit
 register_track_metadata_processor(plugin.track_processor, priority=PluginPriority.LOW)
 register_album_post_removal_processor(plugin.remove_album)
 register_options_page(LanguageVariantsOptionsPage)
+register_tag_names()

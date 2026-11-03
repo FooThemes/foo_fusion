@@ -35,7 +35,7 @@ English versions can be machine translated with DeepL or Google Cloud
 Translation (your own API key; off by default).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.0.1'
+PLUGIN_VERSION = '1.1'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-2.0.html'
@@ -149,18 +149,62 @@ def credit_string(credits, name_of=None):
     return ''.join(out).strip()
 
 
+def best_alias(aliases, types):
+    """The best English-locale alias of the given types (primary first)."""
+    best = None
+    for a in aliases or []:
+        loc = (a.get('locale') or '').lower()
+        if not (loc == 'en' or loc.startswith('en_')) or a.get('type') not in (None,) + types or not a.get('name'):
+            continue
+        rank = (bool(a.get('primary')), loc == 'en', a.get('type') == types[0])
+        if best is None or rank > best[0]:
+            best = (rank, a['name'])
+    return best[1] if best else None
+
+
 def english_alias(credit):
     """The artist's primary English alias, if MusicBrainz has one."""
-    aliases = (credit.get('artist') or {}).get('aliases') or []
-    best = None
-    for a in aliases:
-        loc = (a.get('locale') or '').lower()
-        if not (loc == 'en' or loc.startswith('en_')) or a.get('type') not in (None, 'Artist name', 'Legal name'):
-            continue
-        rank = (bool(a.get('primary')), loc == 'en', a.get('type') == 'Artist name')
-        if best is None or rank > best[0]:
-            best = (rank, a.get('name'))
-    return best[1] if best else None
+    return best_alias((credit.get('artist') or {}).get('aliases'), ('Artist name', 'Legal name'))
+
+
+JAPANESE = re.compile('[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]')
+# One Hepburn word: syllables, syllabic n, and doubled consonants (sokuon).
+ROMAJI_WORD = re.compile(
+    r'^(?:(?:ky|gy|sh|ch|ny|hy|by|py|my|ry|j|ts|f|[kgsztdnhbpmyrw])?[aiueo\u0101\u012b\u016b\u0113\u014d\u00e2\u00ee\u00fb\u00ea\u00f4]'
+    r'|n(?![aiueoy])|([kstpgdbcj])(?=\1|ch))+$')
+
+
+ENGLISH_LOOKALIKES = set('''
+a i me we he she you our are see bye one done gone none some come home name game same take make made
+wake sake time side ride hide wide life wife wine fine mine nine line nose rose hope rope note more
+tone zone bone dome home june sure pure due use may say way day hey bay pay any many money honey
+yes so go no do to be by my
+'''.split())
+
+
+def is_romaji(text):
+    """True when most words of `text` read as Hepburn romaji ("Yoru no
+    Pierrot", "Hanabi", "KokoroToIuNaNoFukakai") rather than English
+    ("Readymade", "Domestic de Violence")."""
+    words = [w for w in re.split(r'[^a-z\u0100-\u017f\u00e0-\u00ff]+', (text or '').lower()) if w]
+    # Short words ("no", "to", "i") read as both; judge by the longer ones,
+    # leaving out common English words that happen to parse as romaji.
+    long_words = [w for w in words if len(w) >= 3 and w not in ENGLISH_LOOKALIKES]
+    if long_words:
+        hits = sum(1 for w in long_words if ROMAJI_WORD.match(w))
+        return hits * 2 >= len(long_words)
+    if not words:
+        return False
+    hits = sum(1 for w in words if w not in ENGLISH_LOOKALIKES and ROMAJI_WORD.match(w))
+    return hits * 2 > len(words)
+
+
+def alias_kind(alias, orig):
+    """MusicBrainz files romanisations under the English locale too, so
+    for a Japanese original, a romaji-looking alias counts as romanised."""
+    if JAPANESE.search(orig or '') and is_romaji(alias):
+        return 'alias_rom'
+    return 'alias_en'
 
 
 def pseudo_kind(release):
@@ -354,6 +398,21 @@ class LanguageVariants:
                     key = (str(medium.get('position')), str(track.get('position')))
                     st.track_values.setdefault(key, {}).setdefault('artist', {})['alias'] = en
 
+        # Recording and release (group) aliases: used when no pseudo-release
+        # has that version.
+        alias = best_alias(release.get('aliases'), ('Release name',)) \
+            or best_alias((release.get('release-group') or {}).get('aliases'), ('Release group name',))
+        if alias:
+            st.album_values.setdefault('album', {})[alias_kind(alias, release.get('title'))] = alias
+        for medium in release.get('media') or []:
+            for track in medium.get('tracks') or []:
+                rec = track.get('recording') or {}
+                alias = best_alias(rec.get('aliases'), ('Recording name',))
+                if alias:
+                    key = (str(medium.get('position')), str(track.get('position')))
+                    orig = track.get('title') or rec.get('title')
+                    st.track_values.setdefault(key, {}).setdefault('title', {})[alias_kind(alias, orig)] = alias
+
         self._add_request(st)  # held until the pseudo-releases are in
         try:
             if 'relations' in release:
@@ -457,7 +516,7 @@ class LanguageVariants:
         wanted = []
 
         def want(field, orig, values):
-            if field in fields and orig and not (values or {}).get('en') and not (values or {}).get('alias') \
+            if field in fields and orig and not (values or {}).get('en') and not (values or {}).get('alias') and not (values or {}).get('alias_en') \
                     and needs_translation(orig, st.lang, st.script):
                 wanted.append(orig)
 
@@ -512,10 +571,10 @@ class LanguageVariants:
             if not orig:
                 continue
             found = self._values_for(st, field, disc, track)
-            en = found.get('en') or found.get('alias')
+            en = found.get('en') or found.get('alias') or found.get('alias_en')
             if not en and field in mt_fields:
                 en = st.mt.get(orig)
-            rom = found.get('rom')
+            rom = found.get('rom') or found.get('alias_rom')
             # Artists: an English alias of a non-Latin name is its romanisation too.
             if not rom and field in ('artist', 'albumartist') and found.get('alias') and has_non_latin(orig):
                 rom = found['alias']

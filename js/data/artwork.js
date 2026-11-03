@@ -8,6 +8,7 @@
 import { tryCall } from '../core/bridge.js';
 import { logInfo } from '../core/log.js';
 import { artPatterns, pickByPatterns } from './artpatterns.js';
+import { artistFolder, artistFiles, pictureUrl } from './artistinfo.js';
 import { cachedUrl, isCachedAlpha, forget, storeCover, knownCover, rememberCover, clearArtCache } from './artcache.js';
 
 const cache = new Map(); // key -> Promise<string|null>
@@ -115,6 +116,12 @@ function coverFile(type, handle) {
     const { parent, folder } = splitPath(handle);
     if (!parent || !DISC_DIR.test(folder)) return null;
     return dirPick.has(parent) ? dirPick.get(parent) : knownCover(parent);
+  }
+  if (type.startsWith('info:')) {
+    // A picture in the artist information folder (see artistinfo.js).
+    const dir = artistFolder(type.slice(5));
+    if (!dir) return null;
+    return dirPick.has(dir) ? dirPick.get(dir) : knownCover(dir);
   }
   if (type === 'artist') {
     // foobar2000 finds artist pictures itself; the cache keys them by track.
@@ -227,6 +234,13 @@ export function albumArtTypes(separateDiscs) {
   return separateDiscs ? ['front', 'parent'] : ['parent', 'front'];
 }
 
+const infoUrls = new Map(); // picture path + size -> Promise<blob URL>
+function infoUrl(pick, px) {
+  const key = `${pick.path}|${px}`;
+  if (!infoUrls.has(key)) infoUrls.set(key, pictureUrl(pick, px).then((u) => (u && /\.(png|gif|webp)$/i.test(pick.name) && rawUrls.add(u), u)));
+  return infoUrls.get(key);
+}
+
 /** URL of a cover in the folder above a disc folder, or null. */
 export function parentCoverUrl(handle, cssSize) {
   if (!handle) return Promise.resolve(null);
@@ -328,7 +342,16 @@ function readyRaw(path, type) {
 export async function preloadArt(path, cssSize, types = ['front']) {
   for (const type of types) {
     const keep = type === 'front' && keepOriginal(path);
-    const url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
+    let url;
+    if (type.startsWith('info:')) {
+      const files = await artistFiles(type.slice(5));
+      const pick = files?.picture || null;
+      if (files) {
+        dirPick.set(files.dir, pick && { name: pick.name, path: pick.path, size: pick.size });
+        rememberCover(files.dir, pick);
+      }
+      url = pick ? await infoUrl(pick, sizeBucket(cssSize)) : null;
+    } else url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
     if (!url) continue;
     if (loadedUrls.has(url)) return;
     const im = new Image();
@@ -361,7 +384,7 @@ export function warmArt(handles, cssSize, types) {
       const pick = coverFile(t, h);
       if (pick === undefined) break;
       if (pick === null) {
-        if (t === 'parent' || t === 'artist') continue;
+        if (t === 'parent' || t === 'artist' || t.startsWith('info:')) continue;
         break;
       }
       const url = cachedUrl(pick, px, false);
@@ -426,7 +449,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
       const pick = coverFile(t, path);
       if (pick === undefined) break;
       if (pick === null) {
-        if (t === 'parent' || t === 'artist') continue; // none of this kind: the next type
+        if (t === 'parent' || t === 'artist' || t.startsWith('info:')) continue; // none of this kind: the next type
         break;
       }
       const disk = cachedUrl(pick, sizeBucket(cssSize));
@@ -469,7 +492,16 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     if (i >= types.length || img.dataset.artToken !== token) return;
     const type = types[i];
     const keep = type === 'front' && keepOriginal(path);
-    const url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
+    let url;
+    if (type.startsWith('info:')) {
+      const files = await artistFiles(type.slice(5));
+      const pick = files?.picture || null;
+      if (files) {
+        dirPick.set(files.dir, pick && { name: pick.name, path: pick.path, size: pick.size });
+        rememberCover(files.dir, pick);
+      }
+      url = pick ? await infoUrl(pick, sizeBucket(cssSize)) : null;
+    } else url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
     // Folder not checked yet: find out, and switch to the original if it's a PNG/GIF.
     if (type === 'front' && keep === undefined && url) {
       probeDir(dirOf(path), path).then(async (kind) => {

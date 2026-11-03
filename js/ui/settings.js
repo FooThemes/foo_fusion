@@ -7,6 +7,7 @@ import { ACCENTS } from '../core/store.js';
 import { tryCall, on } from '../core/bridge.js';
 import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.js';
 import { clearCache } from '../data/artwork.js';
+import { forgetArtistInfo } from '../data/artistinfo.js';
 import { VERSION } from '../version.js';
 
 export function mountSettings(root, app) {
@@ -47,6 +48,7 @@ export function mountSettings(root, app) {
         range('Album size', 'tileSize', 110, 260, 10),
         range('Artist size', 'artistTileSize', 100, 240, 10),
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
+        folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Used for artist pictures and the artist page.'),
         toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
         wordsField(),
       ]),
@@ -95,6 +97,16 @@ export function mountSettings(root, app) {
   function toggleInverse(label, key) {
     const input = el('input', { type: 'checkbox', checked: !store.get(key), onchange: () => store.set(key, !input.checked) });
     return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
+  }
+
+  function folderField(label, key, hint) {
+    const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder: 'e.g. E:\\Music\\_Artists', spellcheck: false, 'aria-label': label });
+    input.addEventListener('change', () => {
+      store.set(key, input.value.trim());
+      forgetArtistInfo();
+      app.reload?.();
+    });
+    return el('label.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), input);
   }
 
   // Edition-tag words as removable chips, with a box to add more.

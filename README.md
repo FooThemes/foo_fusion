@@ -33,6 +33,11 @@ new.
   and Genres splits GENRE on `;`. Box-set covers are found in the folder above
   `CD1`, `Disc 2`… folders.
 - Optional **waveform seek bar** (Settings → Layout).
+- **Artist information folder** (Settings → Library): Kodi-style folders
+  (`<folder>\<Artist>\artist.nfo`, `artist.jpg`, `fanart.jpg`) give artist
+  tiles their picture and artist pages a header with biography and fanart.
+- Covers are cached on disk as small WebP copies (`art-cache` in the theme
+  folder), so they load instantly after the first time.
 - Accent colour from the presets or any custom colour.
 - Drag albums or songs onto a playlist to add them.
 - Track info panel, a pop-up bar for selected songs, light and dark themes, and

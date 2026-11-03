@@ -12,6 +12,7 @@ import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt, albumArtTypes, warmArt } from '../data/artwork.js';
+import { ArtistHero } from './artisthero.js';
 import { trackContextMenu } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 import { draggableRows } from './dnd.js';
@@ -36,6 +37,9 @@ export class Grid {
     this.tileW = 160;
     this.tileH = 210;
     this.kind = 'albums';
+    this.top = 16; // where the first row starts (below the artist header, if any)
+    this.hero = new ArtistHero(this);
+    this.layer.append(this.hero.node);
 
     this.onScroll = rafThrottle(() => this.render());
     scroller.addEventListener('scroll', this.onScroll, { passive: true });
@@ -79,6 +83,7 @@ export class Grid {
     }
     this.kind = kind;
     this.tiles.clear();
+    this.hero.show(view.drill?.kind === 'artists' ? view.drill.key : null);
     if (this.expanded >= view.groups.length) this.expanded = -1;
     if (!keepScroll) {
       this.expanded = -1;
@@ -98,7 +103,7 @@ export class Grid {
     let anchor = -1;
     let anchorOffset = 0;
     if (hadLayout) {
-      anchor = this.expanded >= 0 ? this.expanded : Math.max(0, Math.floor((this.scroller.scrollTop - 16) / this.tileH)) * this.cols;
+      anchor = this.expanded >= 0 ? this.expanded : Math.max(0, Math.floor((this.scroller.scrollTop - this.top) / this.tileH)) * this.cols;
       anchorOffset = this.rowTop(Math.floor(anchor / this.cols)) - this.scroller.scrollTop;
     }
     this.lastWidth = w;
@@ -134,12 +139,12 @@ export class Grid {
 
   #updateHeight() {
     const extra = this.expanded >= 0 ? this.panelSpace : 0;
-    this.sizer.style.height = this.rowCount * this.tileH + extra + 60 + 'px';
+    this.sizer.style.height = this.top - 16 + this.rowCount * this.tileH + extra + 60 + 'px';
   }
 
   rowTop(row) {
     const er = this.expandedRow;
-    return 16 + row * this.tileH + (er >= 0 && row > er ? this.panelSpace : 0);
+    return this.top + row * this.tileH + (er >= 0 && row > er ? this.panelSpace : 0);
   }
 
   render() {
@@ -156,8 +161,8 @@ export class Grid {
     const er = this.expandedRow;
     const ph = er >= 0 ? this.panelSpace : 0;
     const toRow = (y) => {
-      if (er >= 0 && y > 16 + (er + 1) * this.tileH) y = Math.max(16 + (er + 1) * this.tileH, y - ph);
-      return Math.floor((y - 16) / this.tileH);
+      if (er >= 0 && y > this.top + (er + 1) * this.tileH) y = Math.max(this.top + (er + 1) * this.tileH, y - ph);
+      return Math.floor((y - this.top) / this.tileH);
     };
     const r0 = Math.max(0, toRow(top) - OVERSCAN);
     const r1 = Math.min(this.rowCount - 1, toRow(bottom) + OVERSCAN);
@@ -189,13 +194,19 @@ export class Grid {
     }
   }
 
+  /** Art to try for a tile, in order. */
+  #types(g) {
+    if (this.kind === 'artists') return store.get('artistInfoFolder') ? [`info:${g.key}`, 'artist', 'front'] : ['artist', 'front'];
+    if (this.kind === 'albums') return albumArtTypes(store.get('separateDiscs'));
+    return ['front'];
+  }
+
   /** Get every cover of this list ready in the background (disk cache). */
   #warm() {
     clearTimeout(this.warmTimer);
     this.warmTimer = setTimeout(() => {
       if (!this.artSize) return;
-      const types = this.kind === 'artists' ? ['artist', 'front'] : this.kind === 'albums' ? albumArtTypes(store.get('separateDiscs')) : ['front'];
-      warmArt(view.groups.map((g) => g.head?.handle), this.artSize, types);
+      for (const g of view.groups) if (g.head?.handle) warmArt([g.head.handle], this.artSize, this.#types(g));
     }, 300);
   }
 
@@ -285,7 +296,7 @@ export class Grid {
       node.title = `${g.key}\n${plural(g.albumCount || g.sub?.length || 1, 'album')}`;
     }
     art.dataset.label = this.kind === 'genres' ? g.key : '';
-    if (head?.handle) bindArt(img, head.handle, this.artSize, this.kind === 'artists' ? ['artist', 'front'] : this.kind === 'albums' ? albumArtTypes(store.get('separateDiscs')) : ['front']);
+    if (head?.handle) bindArt(img, head.handle, this.artSize, this.#types(g));
     else if (!sameAlbum) {
       delete img.dataset.artToken;
       img.removeAttribute('src');

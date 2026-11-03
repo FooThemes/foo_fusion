@@ -561,3 +561,125 @@
     animation: none;
   }
 }
+
+/* Artist page header (artist information folder) */
+.artist-hero {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 36px var(--margin) 28px;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.ah-back {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ah-fanart {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 25%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.ah-fanart.loaded {
+  opacity: 0.45;
+}
+
+:root[data-theme='dark'] .ah-fanart.loaded {
+  opacity: 0.35;
+}
+
+/* Fade the fanart into the page at the bottom and behind the text. */
+.ah-back::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 20%, transparent), var(--bg) 96%),
+    linear-gradient(to right, color-mix(in srgb, var(--bg) 55%, transparent), transparent 70%);
+}
+
+.ah-inner {
+  position: relative;
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.ah-picture {
+  flex: none;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--placeholder);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+.artist-hero.no-picture .ah-picture {
+  display: none;
+}
+
+.ah-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ah-picture img.loaded {
+  opacity: 1;
+}
+
+.ah-text {
+  min-width: 0;
+  max-width: 900px;
+  padding-top: 12px;
+}
+
+.ah-name {
+  margin: 0 0 6px;
+  font-size: 30px;
+  font-weight: 600;
+}
+
+.ah-meta {
+  color: var(--text2);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.ah-bio {
+  font-size: 13.5px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.artist-hero.expanded .ah-bio {
+  display: block;
+}
+
+.ah-bio p {
+  margin: 0 0 0.7em;
+}
+
+.ah-more {
+  margin-top: 6px;
+  padding: 0;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.ah-more:hover {
+  text-decoration: underline;
+}

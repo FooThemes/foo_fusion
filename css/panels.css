@@ -968,3 +968,14 @@ body.pdragging * {
   cursor: grabbing !important;
   user-select: none !important;
 }
+
+.set-folder {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+
+.set-path {
+  text-transform: none;
+  font-family: var(--font);
+}

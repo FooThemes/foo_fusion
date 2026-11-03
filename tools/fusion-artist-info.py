@@ -13,10 +13,11 @@ list), writes into the artist's folder:
 The folder is <music root>\\<Artist> when that already exists, otherwise
 <music root>\\_Artists\\<Artist> (change "artists_folder" in the settings file).
 
-Sources: MusicBrainz (identifies the artist; free), TheAudioDB (biography,
-genre/style/mood, years, pictures; free key "123", 30 requests a minute),
-fanart.tv (better pictures and logos; your own free API key), Wikipedia
-(biography when TheAudioDB has none).
+Sources: MusicBrainz (identifies the artist; free), Wikipedia (biography,
+via the artist's MusicBrainz/Wikidata link), TheAudioDB (genre/style/mood,
+years, pictures, and the biography when Wikipedia has none; free key "123",
+30 requests a minute), fanart.tv (better pictures and logos; your own free
+API key).
 
 Nothing you already have is replaced: existing pictures are left alone, and
 an existing artist.nfo is only rewritten if this script made it (and only with
@@ -65,8 +66,10 @@ audiodb_key = 123
 ; MusicBrainz asks every program to identify itself with a way to reach its
 ; user, e.g. an email address or a web page. Put yours here.
 contact =
-; Biography language for TheAudioDB (EN, DE, FR, ES, IT, JP, ...).
+; Biography language (EN, DE, FR, ES, IT, JA, ...).
 language = EN
+; Where biographies come from, first that has one wins.
+biography = wikipedia, audiodb
 """
 
 
@@ -79,7 +82,7 @@ def load_settings():
     cp = configparser.ConfigParser()
     cp.read(SETTINGS, encoding='utf-8')
     s = cp['fusion-artist-info']
-    return {k: s.get(k, '').strip() for k in ['music_root', 'artists_folder', 'artist_list', 'fanart_api_key', 'audiodb_key', 'contact', 'language']}
+    return {k: s.get(k, '').strip() for k in ['music_root', 'artists_folder', 'artist_list', 'fanart_api_key', 'audiodb_key', 'contact', 'language', 'biography']}
 
 
 # --- web ----------------------------------------------------------------
@@ -157,20 +160,28 @@ def fanart(web, key, mbid):
     return web.get(f'https://webservice.fanart.tv/v3/music/{mbid}?api_key={key}') or {}
 
 
-def wikipedia_intro(web, mb):
-    """English Wikipedia intro via the artist's Wikidata link on MusicBrainz.
+def wikipedia_intro(web, mb, lang='en'):
+    """The Wikipedia article's introduction, found the way MusicBrainz's own
+    "Wikipedia" box finds it: through the artist's Wikidata link (or a direct
+    Wikipedia link) on MusicBrainz, so it's the right artist, not a namesake.
     Redirects aren't followed: an artist whose page redirects elsewhere (to a
     band or soundtrack article) gets no biography rather than the wrong one."""
-    wd = next((r['url']['resource'] for r in mb.get('relations', []) if r.get('type') == 'wikidata'), None)
-    if not wd:
-        return ''
-    qid = wd.rstrip('/').split('/')[-1]
-    ent = web.get(f'https://www.wikidata.org/wiki/Special:EntityData/{qid}.json') or {}
-    title = ent.get('entities', {}).get(qid, {}).get('sitelinks', {}).get('enwiki', {}).get('title')
+    rels = mb.get('relations', [])
+    title = None
+    wd = next((r['url']['resource'] for r in rels if r.get('type') == 'wikidata'), None)
+    if wd:
+        qid = wd.rstrip('/').split('/')[-1]
+        ent = web.get(f'https://www.wikidata.org/wiki/Special:EntityData/{qid}.json') or {}
+        links = ent.get('entities', {}).get(qid, {}).get('sitelinks', {})
+        title = links.get(f'{lang}wiki', {}).get('title')
+    if not title:
+        wp = next((r['url']['resource'] for r in rels if r.get('type') == 'wikipedia' and f'//{lang}.wikipedia.org/' in r['url']['resource']), None)
+        if wp:
+            title = urllib.parse.unquote(wp.rsplit('/wiki/', 1)[-1]).replace('_', ' ')
     if not title:
         return ''
     q = urllib.parse.urlencode({'action': 'query', 'prop': 'extracts', 'exintro': 1, 'explaintext': 1, 'format': 'json', 'titles': title})
-    pages = (web.get(f'https://en.wikipedia.org/w/api.php?{q}') or {}).get('query', {}).get('pages', {})
+    pages = (web.get(f'https://{lang}.wikipedia.org/w/api.php?{q}') or {}).get('query', {}).get('pages', {})
     return next((p.get('extract', '') for p in pages.values()), '').strip()
 
 
@@ -268,6 +279,7 @@ def main():
 
     web = Web(cfg['contact'])
     lang = (cfg['language'] or 'EN').upper()
+    order = [x.strip().lower() for x in (cfg.get('biography') or 'wikipedia, audiodb').split(',') if x.strip()]
     done = 0
     stats = {'new': 0, 'skipped': 0, 'not found': 0, 'failed': 0}
     log = open(os.path.join(HERE, 'fusion-artist-info.log'), 'a', encoding='utf-8')
@@ -329,8 +341,16 @@ def main():
                             f.write(data)
                         wrote.append(base + ext)
                 if want_nfo:
-                    adb_bio = (adb or {}).get(f'strBiography{lang}') or ((adb or {}).get('strBiography') if lang == 'EN' else '') or ''
-                    bio = adb_bio.strip() or (wikipedia_intro(web, mb) if mb else '')
+                    # Wikipedia first (current, and what MusicBrainz shows),
+                    # then TheAudioDB's text (often an older Wikipedia copy).
+                    bio = ''
+                    for source in order:
+                        if source == 'wikipedia' and mb:
+                            bio = wikipedia_intro(web, mb, lang.lower())
+                        elif source == 'audiodb' and adb:
+                            bio = (adb.get(f'strBiography{lang}') or (adb.get('strBiography') if lang == 'EN' else '') or '').strip()
+                        if bio:
+                            break
                     if not args.dry_run:
                         with open(nfo_path, 'w', encoding='utf-8', newline='\n') as f:
                             f.write(build_nfo(name, mbid, adb, mb, bio))

@@ -78,7 +78,7 @@ class View extends Emitter {
       this.load();
     });
     store.subscribe((key) => {
-      if (key === 'separateDiscs') this.load();
+      if (key === 'separateDiscs' || (key === 'hidePlaceholderArtists' && this.mode === 'artists')) this.load();
     });
   }
 
@@ -315,7 +315,7 @@ class View extends Emitter {
       const subs = runs.filter((r) => splitValues(r.key).some((v) => v.toLowerCase() === want)).flatMap((r) => r.sub || []);
       groups = mergeRuns(subs);
     } else {
-      groups = groupByValues(runs, kind === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST);
+      groups = groupByValues(runs, kind === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST, kind === 'artists' && store.get('hidePlaceholderArtists') ? isPlaceholderArtist : null);
     }
     if (matched) groups = intersect(groups, matched);
     // Artist/genre tiles are alphabetical, so "descending" flips them directly.
@@ -605,11 +605,19 @@ function mergeRuns(runs) {
 }
 
 /** Artists/genres: a group per value, holding every run that lists it. */
-function groupByValues(runs, unknown) {
+/**
+ * MusicBrainz's placeholder credits ("[unknown]", "[dialogue]",
+ * "[traditional]"...): real tags, but not artists anyone browses to.
+ */
+export const isPlaceholderArtist = (name) => /^\[.+\]$/.test(name.trim());
+
+function groupByValues(runs, unknown, hide = null) {
   const map = new Map();
   for (const r of runs) {
-    const values = splitValues(r.key);
+    let values = splitValues(r.key);
     if (!values.length) values.push(unknown);
+    // Hidden values get no tile; a song credited only to them gets none either.
+    else if (hide) values = values.filter((v) => !hide(v));
     const albums = (r.sub || []).map((s) => s.key.toLowerCase());
     for (const v of values) {
       const k = v.toLowerCase();

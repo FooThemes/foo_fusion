@@ -121,6 +121,9 @@ function coverSvg(seed, label) {
 export async function installMock() {
   const params = await fetch(new URL('./api-params.json', import.meta.url)).then((r) => r.json());
   const lib = buildLibrary();
+  // MusicBrainz placeholder credits (hidden from Artists by default).
+  lib[3].artistsTag = ['[dialogue]'];
+  lib[5].artistsTag = [lib[5].artist, '[unknown]'];
   const listeners = new Map();
   const emit = (event, data) => setTimeout(() => (listeners.get(event) || []).forEach((fn) => fn(data)), 0);
   let config = {};

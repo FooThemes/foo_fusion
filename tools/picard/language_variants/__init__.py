@@ -37,7 +37,7 @@ versions filled in automatically (Japanese, Chinese, Korean, Cyrillic, Greek;
 MusicBrainz versions always come first).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.4.1'
+PLUGIN_VERSION = '1.4.2'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
 # GPL-3 because the bundled pykakasi (Japanese romanisation) is GPL-3.
 PLUGIN_LICENSE = 'GPL-3.0-or-later'

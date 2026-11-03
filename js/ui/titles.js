@@ -4,6 +4,7 @@
 // one of the listed words.
 
 import * as store from '../core/store.js';
+import { pickVersion } from '../data/versions.js';
 
 let cache = { src: null, re: null };
 
@@ -54,4 +55,26 @@ export function setTitle(node, text) {
   span.className = 'dim-tag';
   span.textContent = dim;
   node.replaceChildren(main, span);
+}
+
+/**
+ * Set a title or name that may have versions (data/versions.js): the lead
+ * version, then the other dimmed after it. Without versions, just `text`.
+ * Returns the tooltip text listing the versions ('' when none).
+ */
+export function setVersioned(node, text, versions, kind) {
+  const pick = pickVersion(versions, kind);
+  setTitle(node, pick ? pick.lead : text);
+  if (pick?.other) {
+    const alt = document.createElement('span');
+    alt.className = 'alt-version';
+    alt.textContent = pick.other;
+    node.append(' ', alt);
+  }
+  return pick?.tip || '';
+}
+
+/** The lead version as plain text (for lines built from several parts). */
+export function versionText(text, versions, kind) {
+  return pickVersion(versions, kind)?.lead || text;
 }

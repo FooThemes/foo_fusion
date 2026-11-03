@@ -979,3 +979,11 @@ body.pdragging * {
   text-transform: none;
   font-family: var(--font);
 }
+
+/* A short explanation at the top of a settings section. */
+.set-note {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--text2);
+  line-height: 1.4;
+}

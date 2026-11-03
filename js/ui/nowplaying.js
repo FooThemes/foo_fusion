@@ -1,7 +1,9 @@
 // "Now playing": large artwork and details for the playing track, plus the
 // playback queue (or, when the queue is empty, what plays next).
 
-import { setTitle } from './titles.js';
+import { setTitle, setVersioned, versionText } from './titles.js';
+import { trackVersions, VERSION_KEYS } from '../data/versions.js';
+import * as store from '../core/store.js';
 import { dragSource, dropTarget } from './dnd.js';
 import { el, clear, formatTime } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -26,6 +28,7 @@ export class NowPlaying {
       e.preventDefault();
       contextMenu({ mode: 'nowPlaying' }, [{ label: 'Refresh artwork', run: () => refreshArt([handle]) }]);
     });
+    store.subscribe((k) => VERSION_KEYS.includes(k) && this.render());
     window.addEventListener('fusion:artrefresh', () => {
       this.artUrl = undefined;
       this.render();
@@ -56,11 +59,13 @@ export class NowPlaying {
   async render() {
     const t = player.track;
     const active = player.active && t;
+    const v = active ? await trackVersions(t) : null;
+    if (player.track !== t) return;
     this.empty.hidden = !!active;
     this.wrap.classList.toggle('idle', !active);
-    setTitle(this.title, active ? t.title || t.path.split(/[\\/]/).pop() : '');
-    this.artist.textContent = active ? t.artist : '';
-    this.album.textContent = active ? [t.album, (t.date || '').slice(0, 4)].filter(Boolean).join(' · ') : '';
+    this.title.title = setVersioned(this.title, active ? t.title || t.path.split(/[\\/]/).pop() : '', v?.title, 'tracks');
+    this.artist.textContent = active ? versionText(t.artist, v?.artist, 'tracks') : '';
+    this.album.textContent = active ? [versionText(t.album, v?.album, 'albums'), (t.date || '').slice(0, 4)].filter(Boolean).join(' · ') : '';
     this.tech.textContent = active ? [t.codec, t.bitrate ? `${t.bitrate} kbps` : '', t.sampleRate ? `${(t.sampleRate / 1000).toFixed(1)} kHz` : '', t.duration ? formatTime(t.duration) : ''].filter(Boolean).join(' · ') : '';
     this.renderList();
     const url = active ? await nowPlayingUrl(480, 'front', t?.handle) : null;

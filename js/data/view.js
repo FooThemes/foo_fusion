@@ -14,6 +14,7 @@ import { SORTS } from '../core/store.js';
 import { TF, searchQuery } from './patterns.js';
 import { playlists, COLLECTION, FAVORITES, PLAYBACK } from './playlists.js';
 import { MOOD_TF, favourites } from './favourites.js';
+import { versionsTF, parseVersions } from './versions.js';
 import { player } from './player.js';
 
 const HEAD_CHUNK = 1000;
@@ -376,7 +377,7 @@ class View extends Emitter {
   /** Fetch display text + art path for each group's first row, in chunks. */
   async #loadHeads(gen) {
     const title = store.get('separateDiscs') ? TF.albumDiscTitle : TF.albumTitle;
-    const formats = { t: title, a: TF.albumArtist, y: TF.year, g: TF.genre, d: TF.date };
+    const formats = { t: title, a: TF.albumArtist, y: TF.year, g: TF.genre, d: TF.date, b: TF.albumRaw, av: versionsTF('album'), aav: versionsTF('albumartist') };
     for (let i = 0; i < this.groups.length; i += HEAD_CHUNK) {
       const chunk = this.groups.slice(i, i + HEAD_CHUNK);
       const res = await tryCall('playlist.getTracksAt', {
@@ -387,10 +388,20 @@ class View extends Emitter {
       });
       if (gen !== this.#generation || !res) return;
       res.tracks.forEach((t, n) => {
-        const head = { handle: t.handle, title: t.formats.t, artist: t.formats.a, year: t.formats.y, genre: t.formats.g, date: t.formats.d };
+        const f = t.formats;
+        const head = { handle: t.handle, title: f.t, artist: f.a, year: f.y, genre: f.g, date: f.d };
+        // Original / English / romanised versions, when tagged; `albumSuffix`
+        // is what the title adds after the album name (" (Disc 2)").
+        const album = parseVersions(f.av);
+        const albumArtist = parseVersions(f.aav);
+        if (album || albumArtist) {
+          head.versions = { album, albumArtist };
+          head.albumSuffix = f.b && f.t.startsWith(f.b) ? f.t.slice(f.b.length) : '';
+        }
+        head.vkey = (f.av || '') + (f.aav || '');
         // Same album, same details: keep the object, so nothing redraws.
         const old = chunk[n].head;
-        chunk[n].head = old && old.handle === head.handle && old.title === head.title && old.year === head.year && old.date === head.date && old.genre === head.genre && old.artist === head.artist ? old : head;
+        chunk[n].head = old && old.handle === head.handle && old.title === head.title && old.year === head.year && old.date === head.date && old.genre === head.genre && old.artist === head.artist && old.vkey === head.vkey ? old : head;
         headCache.set(this.#headsNs + chunk[n].key, chunk[n].head);
       });
       this.emit('heads', { from: i, to: i + chunk.length });
@@ -425,7 +436,7 @@ class View extends Emitter {
           playlist: this.playlist.index,
           rows: missing.slice(i, i + 500),
           fields: TRACK_FIELDS,
-          formats: { n: TF.trackNumber, ds: TF.discSubtitle, m: MOOD_TF },
+          formats: { n: TF.trackNumber, ds: TF.discSubtitle, m: MOOD_TF, vt: versionsTF('title'), va: versionsTF('artist'), vl: versionsTF('album') },
         });
         if (gen !== this.#generation) return rows.map(() => null);
         res?.tracks.forEach((t) => this.#trackCache.set(t.index, t));

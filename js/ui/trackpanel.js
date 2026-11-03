@@ -5,7 +5,8 @@
 // section (header with DISCSUBTITLE, its own cover thumbnail), and picking a
 // disc shows just that one with its cover in the big art slot.
 
-import { setTitle } from './titles.js';
+import { setTitle, setVersioned, versionText } from './titles.js';
+import { pickVersion, parseVersions, KINDS } from '../data/versions.js';
 import { albumColours } from '../data/albumcolours.js';
 import { splitValues } from '../data/view.js';
 import { el, clear, formatTime, formatDuration, plural } from '../core/util.js';
@@ -187,19 +188,40 @@ export class TrackPanel {
     this.node.style.setProperty('--nx', nx + 'px');
   }
 
+  /** The album title: its lead version, then the others smaller after it. */
+  #renderTitle(head, album) {
+    const v = head?.versions?.album;
+    const pick = pickVersion(v, 'albums');
+    if (!pick) {
+      setTitle(this.title, head?.title || album || '');
+      this.title.title = '';
+      return;
+    }
+    setTitle(this.title, pick.lead + (head.albumSuffix || ''));
+    if (store.get('otherVersion') === 'beside') {
+      const others = [];
+      for (const k of KINDS) if (v[k] && ![pick.lead, ...others].some((o) => o.toLowerCase() === v[k].toLowerCase())) others.push(v[k]);
+      if (others.length) this.title.append(' ', el('span.alt-version', { text: others.join(' · ') }));
+    }
+    this.title.title = pick.tip;
+  }
+
   refreshHead(group) {
     if (!group || group !== this.group) return;
     const head = group.head;
     const [artist, album] = group.key.split('|');
-    setTitle(this.title, head?.title || album || '');
+    this.#renderTitle(head, album);
     const total = this.#totalLength(this.rows);
     const discs = this.multiDisc ? plural(this.discs.length, 'disc') : null;
     // Artist and genres link to their own pages; blank genres are left out.
-    const link = (kind, value) =>
-      el('button.tp-link', { text: value, title: kind === 'artists' ? `Show ${value}'s albums` : `Show ${value} albums`, onclick: () => view.showValue(kind, value, this.group) });
+    const link = (kind, value, label = value) =>
+      el('button.tp-link', { text: label, title: kind === 'artists' ? `Show ${label}'s albums` : `Show ${label} albums`, onclick: () => view.showValue(kind, value, this.group) });
     const parts = [];
     const who = head?.artist || artist;
-    if (who) parts.push(link('artists', who));
+    // With versions, the link shows the lead one and opens the original
+    // (the name the Artists tab lists, from the untouched ARTISTS tag).
+    const whoV = head?.versions?.albumArtist;
+    if (who) parts.push(link('artists', whoV?.orig || who, versionText(who, whoV, 'tracks')));
     if (head?.date || head?.year) parts.push(head.date || head.year);
     for (const g of splitValues(head?.genre || '')) parts.push(link('genres', g));
     for (const t of [discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null]) if (t) parts.push(t);
@@ -260,7 +282,8 @@ export class TrackPanel {
     if (this.widthsKey === key) return this.widths;
     const ctx = (measureCtx ||= new OffscreenCanvas(1, 1).getContext('2d'));
     ctx.font = `14px ${getComputedStyle(document.body).fontFamily}`;
-    const albumArtist = this.group?.head?.artist || '';
+    const head = this.group?.head;
+    const albumArtist = versionText(head?.artist || '', head?.versions?.albumArtist, 'tracks');
     const want = new Set(this.visibleRows());
     this.widths = this.tracks
       .filter((t) => t && want.has(t.index))
@@ -452,10 +475,10 @@ function trackRow(r, t, albumArtist) {
     el('span.tp-len', { text: t ? formatTime(t.duration) : '' }),
   );
   if (t) {
-    setTitle(text, t.title || t.handle.split('\\').pop());
-    const note = artistNote(t.artist, albumArtist);
+    const tip = setVersioned(text, t.title || t.handle.split('\\').pop(), parseVersions(t.formats?.vt), 'tracks');
+    const note = artistNote(versionText(t.artist, parseVersions(t.formats?.va), 'tracks'), albumArtist);
     if (note) text.append(el('span.tp-artist', { text: ` · ${note}` }));
-    name.title = name.textContent;
+    name.title = tip || name.textContent;
   }
   return node;
 }

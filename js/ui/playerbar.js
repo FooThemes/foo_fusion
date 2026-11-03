@@ -1,6 +1,7 @@
 // Bottom bar: now-playing art and text, seek bar, transport, volume, menu.
 
-import { setTitle } from './titles.js';
+import { setVersioned, versionText } from './titles.js';
+import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import { el, formatTime, clamp } from '../core/util.js';
 import { icon, setIcon } from '../core/icons.js';
 import * as store from '../core/store.js';
@@ -91,6 +92,7 @@ export function mountPlayerBar(root, app) {
     const handle = player.track?.handle;
     contextMenu({ mode: 'nowPlaying' }, handle ? [{ label: 'Refresh artwork', run: () => refreshArt([handle]) }] : []);
   });
+  store.subscribe((k) => VERSION_KEYS.includes(k) && renderTrack());
   window.addEventListener('fusion:artrefresh', () => {
     artTrack = undefined;
     renderTrack();
@@ -108,10 +110,13 @@ export function mountPlayerBar(root, app) {
   async function renderTrack() {
     const t = player.track;
     const on = player.active && t;
+    // Original / English / romanised versions, when the song has them.
+    const v = on ? await trackVersions(t) : null;
+    if (player.track !== t) return;
     root.classList.toggle('idle', !on);
-    setTitle(titleText, on ? t.title || t.path.split(/[\\/]/).pop() : '');
-    artistText.textContent = on ? t.artist : '';
-    tipText = on ? [t.title, t.artist, t.album].filter(Boolean).join('\n') : '';
+    const tip = setVersioned(titleText, on ? t.title || t.path.split(/[\\/]/).pop() : '', v?.title, 'tracks');
+    artistText.textContent = on ? versionText(t.artist, v?.artist, 'tracks') : '';
+    tipText = on ? [t.title, t.artist, t.album].filter(Boolean).join('\n') + (tip ? `\n\n${tip}` : '') : '';
     requestAnimationFrame(() => [title, artist].forEach(marquee));
     heart.dataset.handle = on ? t.handle : '';
     heart.hidden = !on;

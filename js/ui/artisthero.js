@@ -7,6 +7,8 @@ import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall } from '../core/bridge.js';
 import { artistFiles, artistDetails, pictureUrl } from '../data/artistinfo.js';
+import { pickVersion, VERSION_KEYS } from '../data/versions.js';
+import * as store from '../core/store.js';
 import { refreshArtist } from '../data/artwork.js';
 import { showMenu } from './menus.js';
 
@@ -36,6 +38,12 @@ export class ArtistHero {
       if (!this.name) return;
       e.preventDefault();
       showMenu([{ label: 'Refresh artist information', run: () => refreshArtist(this.name, this.handle ? [this.handle] : []) }]);
+    });
+    store.subscribe((k) => {
+      if (!VERSION_KEYS.includes(k) || !this.name) return;
+      this.key = null;
+      this.found = false;
+      this.show(this.name, this.handle);
     });
     // Read the artist's files again (right-click > Refresh, or Settings).
     window.addEventListener('fusion:artistrefresh', (e) => {
@@ -67,7 +75,12 @@ export class ArtistHero {
     if (!files || (!files.picture && !files.fanart && !info)) return this.#hide();
     this.found = true;
 
-    this.title.textContent = info?.name || name;
+    // English / romanised names (name_en, name_rom), like titles: the lead
+    // version, then the others smaller.
+    const pick = pickVersion(info && (info.nameEn || info.nameRom) ? { orig: name, en: info.nameEn, rom: info.nameRom } : null, 'tracks');
+    this.title.textContent = pick ? pick.lead : info?.name || name;
+    if (pick?.other) this.title.append(' ', el('span.alt-version', { text: pick.other }));
+    this.title.title = pick?.tip || '';
     const life = info?.formed || info?.born ? [info.formed || info.born, info.disbanded || info.died].filter(Boolean).join(' – ') : '';
     const tags = [...(info?.genres || []), ...(info?.styles || [])].filter((t, i, a) => a.indexOf(t) === i).slice(0, 5);
     this.meta.textContent = [tags.join(', '), info?.yearsActive, life].filter(Boolean).join(' · ');
@@ -84,7 +97,7 @@ export class ArtistHero {
     this.node.hidden = false;
     // A logo, when there is one, stands in for the name (kept for screen readers).
     this.node.classList.toggle('has-logo', !!files.logo);
-    this.logo.alt = this.title.textContent;
+    this.logo.alt = pick ? pick.lead : this.title.textContent;
     this.#setImage(this.logo, files.logo, 800);
     this.#setImage(this.picture, files.picture, 400);
     this.#setImage(this.fanart, files.fanart, 1600);

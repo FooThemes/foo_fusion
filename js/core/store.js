@@ -72,6 +72,10 @@ const DEFAULTS = {
   waveformSeekbar: false,
   artistInfoFolder: '', // Kodi-style artist folders (artist.nfo, artist.jpg, fanart.jpg), e.g. E:\\Music\\_Artists
   showRemaining: false, // player bar shows -time remaining instead of the length
+  // Original / English / romanised versions (see data/versions.js).
+  leadAlbums: 'en', // which version album titles lead with
+  leadTracks: 'orig', // song titles and artist names
+  otherVersion: 'beside', // the other version: 'beside' (dimmed), 'tooltip' or 'hidden'
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…
   dimEditionTags: true, // grey out '(Single)', '(Deluxe Edition)'… at the end of titles
   dimWords: 'Single, EP, Deluxe, Edition, Remaster, Remastered, Live, Bonus, Expanded, Anniversary, Reissue, Demo, Acoustic, Instrumental, Mono, Version, Remix, Radio Edit',

@@ -67,6 +67,41 @@ function buildLibrary() {
       }
     }
   });
+  // Japanese albums tagged by the Language Variants Picard plugin: combined
+  // TITLE / ALBUM / ARTIST plus the _ORIG / _EN / _ROM versions.
+  const jp = [
+    ['Ado', null, '狂言', 'Kyougen', null, '2022', [
+      ['レディメイド', 'Readymade', 'Readymade'], ['踊', null, 'Odo'], ['ドメスティックでバイオレンス', null, 'Domestic de Violence'], ['FREEDOM'],
+      ['花火', 'Fireworks', 'Hanabi'], ['会いたくて', null, 'Aitakute'], ['ギラギラ', null, 'Gira Gira'], ['うっせぇわ', null, 'Usseewa'],
+    ]],
+    ['宇多田ヒカル', ['Hikaru Utada', 'Hikaru Utada'], 'BADモード', null, 'BAD Mode', '2022', [
+      ['BADモード', null, 'BAD Mode'], ['君に夢中', 'Crazy for You', 'Kimi ni Muchuu'], ['One Last Kiss'], ['気分じゃないの (Not in the Mood)', null, 'Kibun Janai no (Not In The Mood)'],
+    ]],
+  ];
+  for (const [aa, aav, al, alEn, alRom, year, songs] of jp) {
+    const albumV = { orig: al, en: alEn || '', rom: alRom || '' };
+    const combine = (v, enFirst) => {
+      const other = enFirst ? v.orig : v.en || v.rom;
+      const main = enFirst ? v.en || v.rom || v.orig : v.orig;
+      return other && other !== main ? `${main} (${other})` : main;
+    };
+    songs.forEach(([o, en, rom], i) => {
+      const path = `C:\\Music\\${aa}\\${al}\\${String(i + 1).padStart(2, '0')} ${o}.flac`;
+      const tv = en || rom ? { orig: o, en: en || '', rom: rom || '' } : null;
+      const av = aav ? { orig: aa, en: aav[0], rom: aav[1] } : null;
+      tracks.push({
+        path, handle: path, absolutePath: path, subsong: 0,
+        title: tv ? combine(tv, false) : o,
+        artist: av ? combine(av, false) : aa,
+        album: combine(albumV, true),
+        albumArtist: av ? combine(av, false) : aa,
+        versions: { title: tv, artist: av, album: albumV, albumartist: av },
+        genre: 'J-Pop', date: year, trackNumber: i + 1, discNumber: 1, totalDiscs: 1, discSubtitle: '',
+        duration: 200 + i * 7, codec: 'FLAC', bitrate: 900, sampleRate: 44100, channels: 2, fileSize: 30000000,
+        rating: 0, mood: '', added: added++, hasArt: true, artSeed: 0,
+      });
+    });
+  }
   return tracks;
 }
 
@@ -81,7 +116,7 @@ function tfEval(pattern, t) {
     [MOOD_TF]: () => t.mood || '',
     [TF.artistKey]: () => aa,
     [TF.genreKey]: () => t.genre || 'Unknown Genre',
-    [TF.artistsMulti]: () => (t.artistsTag ? t.artistsTag.join('|||') : t.albumArtist || t.artist || 'Unknown Artist'),
+    [TF.artistsMulti]: () => (t.artistsTag ? t.artistsTag.join('|||') : t.versions?.albumartist?.orig || t.albumArtist || t.artist || 'Unknown Artist'),
     [TF.genresMulti]: () => t.genre || 'Unknown Genre',
     [TF.albumTitle]: () => al,
     [TF.albumDiscTitle]: () => (t.totalDiscs > 1 ? `${al} (Disc ${t.discNumber})` : al),
@@ -92,6 +127,13 @@ function tfEval(pattern, t) {
     [TF.trackNumber]: () => String(t.trackNumber).padStart(2, '0'),
   };
   if (map[pattern]) return map[pattern]();
+  // Language versions: "[%title_orig%]|||[%title_en%]|||[%title_rom%]".
+  const ver = pattern.match(/^\[%(\w+)_orig%\]\|\|\|/);
+  if (ver) {
+    const v = t.versions?.[ver[1]];
+    return v ? `${v.orig}|||${v.en}|||${v.rom}` : '||||||';
+  }
+  if (pattern === TF.albumRaw) return t.album || '';
   // Sort patterns: approximate with the leading field.
   const lead = pattern.split('|')[0];
   if (lead.includes('%album artist%')) return `${aa}|${t.date}|${al}|${String(t.discNumber).padStart(3, '0')}|${String(t.trackNumber).padStart(3, '0')}`;
@@ -265,7 +307,8 @@ export async function installMock() {
       const uniq = [...new Set(words)];
       const items = [];
       pl.items.forEach((t, n) => {
-        const hay = `${t.title} ${t.artist} ${t.album} ${t.albumArtist} ${t.genre}`.toLowerCase();
+        const vs = Object.values(t.versions || {}).filter(Boolean).flatMap((v) => [v.en, v.rom]);
+        const hay = `${t.title} ${t.artist} ${t.album} ${t.albumArtist} ${t.genre} ${vs.join(' ')}`.toLowerCase();
         if (uniq.every((w) => hay.includes(w))) items.push(n);
       });
       return { playlist: i, total: pl.items.length, items, count: items.length };
@@ -441,6 +484,10 @@ export async function installMock() {
       emit('metadb:changed', { count: p.items.length, handles: p.items.map((i) => i.path) });
       return { successCount: p.items.length, failCount: 0, errors: [] };
     },
+    'titleformat.evalFields': (p) => {
+      const t = lib.find((x) => x.handle === p.path);
+      return { path: p.path, infoAvailable: true, ...Object.fromEntries(Object.entries(p.fields).map(([k, pat]) => [k, t ? tfEval(pat, t) : ''])) };
+    },
     'titleformat.evalBatch': (p) => {
       const byPath = new Map(lib.map((t) => [t.handle, t]));
       return { results: p.paths.map((path) => ({ path, success: true, result: byPath.get(path) ? tfEval(p.pattern, byPath.get(path)) : '' })) };
@@ -458,7 +505,7 @@ export async function installMock() {
       p.path.endsWith('logo.png') && window.__mockLogo
         ? { content: window.__mockLogo }
         : p.path.endsWith('artist.nfo')
-        ? { content: `<?xml version="1.0"?><artist><musicBrainzArtistID>cc2c9c3c-b7bc-4b8b-84d8-4fbd8779e493</musicBrainzArtistID><wikipedia>https://en.wikipedia.org/wiki/Adele</wikipedia><name>${p.path.split('\\').slice(-2, -1)[0]}</name><genre>Soul</genre><style>Rock/Pop</style><yearsactive>2000s - 2010s</yearsactive><formed>2006</formed><biography>First paragraph of a long biography. `.concat('Lorem ipsum dolor sit amet. '.repeat(30), `\nSecond paragraph here.</biography></artist>`) }
+        ? { content: `<?xml version="1.0"?><artist><musicBrainzArtistID>cc2c9c3c-b7bc-4b8b-84d8-4fbd8779e493</musicBrainzArtistID><wikipedia>https://en.wikipedia.org/wiki/Adele</wikipedia><name>${p.path.split('\\').slice(-2, -1)[0]}</name>${p.path.includes('宇多田ヒカル') ? '<sortname>Utada, Hikaru</sortname><name_en>Hikaru Utada</name_en><name_rom>Utada Hikaru</name_rom>' : ''}<genre>Soul</genre><style>Rock/Pop</style><yearsactive>2000s - 2010s</yearsactive><formed>2006</formed><biography>First paragraph of a long biography. `.concat('Lorem ipsum dolor sit amet. '.repeat(30), `\nSecond paragraph here.</biography></artist>`) }
         : p.path.endsWith('artist.png')
           ? { content: 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAaElEQVR4Xu3RAQkAIQAEQTXXJzGnAeVTLMJMgjt2nm+Pl62Xx/8cqClQU6CmQE2BmgI1BWoK1BSoKVBToKZATYGaAjUFagrUFKgpUFOgpkBNgZoCNQVqCtQUqClQU6CmQE2BmgI1BWoXdNwByjj3hm8AAAAASUVORK5CYII=' }
           : p.path.endsWith('fanart.png')

@@ -1,7 +1,8 @@
 // "Songs" view: every track of the playlist in a virtualised list with columns.
 // Rows are fetched from foobar2000 a page at a time as they scroll into view.
 
-import { setTitle } from './titles.js';
+import { setVersioned, versionText } from './titles.js';
+import { parseVersions } from '../data/versions.js';
 import { el, rafThrottle, formatTime, debounce } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { view } from '../data/view.js';
@@ -120,9 +121,10 @@ export class SongList {
     node.dataset.row = row;
     const t = view.cachedTrack(row);
     const c = node.children;
-    setTitle(c[1], t ? t.title || t.handle.split('\\').pop() : '');
-    c[2].textContent = t?.artist || '';
-    c[3].textContent = t?.album || '';
+    const f = t?.formats || {};
+    const tip = setVersioned(c[1], t ? t.title || t.handle.split('\\').pop() : '', parseVersions(f.vt), 'tracks');
+    c[2].textContent = t ? versionText(t.artist || '', parseVersions(f.va), 'tracks') : '';
+    c[3].textContent = t ? versionText(t.album || '', parseVersions(f.vl), 'albums') : '';
     c[4].textContent = t ? (t.date || '').slice(0, 4) : '';
     c[5].textContent = t?.genre || '';
     if (t) {
@@ -132,7 +134,7 @@ export class SongList {
       else c[6].replaceChildren(heartButton(t.handle, loved));
     } else c[6].replaceChildren();
     c[7].textContent = t ? formatTime(t.duration) : '';
-    node.title = t ? `${t.title} - ${t.artist}` : '';
+    node.title = t ? `${t.title} - ${t.artist}` + (tip ? `\n\n${tip}` : '') : '';
     this.#state(node, row);
   }
 

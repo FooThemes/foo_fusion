@@ -291,6 +291,12 @@
   grid-column: 1;
 }
 
+/* The album's other versions after its title: smaller, not bold. */
+.tp-title .alt-version {
+  font-size: 14px;
+  margin-left: 4px;
+}
+
 .tp-meta {
   grid-column: 1;
   color: var(--list-text2);
@@ -738,6 +744,11 @@
 }
 
 /* With a logo, the name stays only for screen readers. */
+.ah-name .alt-version {
+  font-size: 0.6em;
+  margin-left: 6px;
+}
+
 .artist-hero.has-logo .ah-name {
   position: absolute;
   width: 1px;

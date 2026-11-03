@@ -137,7 +137,7 @@ def find_mbid(web, name):
 
 
 def musicbrainz(web, mbid):
-    return web.get(f'https://musicbrainz.org/ws/2/artist/{mbid}?inc=url-rels+genres&fmt=json') or {}
+    return web.get(f'https://musicbrainz.org/ws/2/artist/{mbid}?inc=url-rels+genres+aliases&fmt=json') or {}
 
 
 def audiodb(web, key, mbid, name):
@@ -285,6 +285,30 @@ def is_placeholder(name, mbid):
     return (mbid or '').lower() in SPECIAL_MBIDS or bool(re.fullmatch(r'\[.+\]', name.strip())) or name.strip().casefold() == 'various artists'
 
 
+def non_latin(text):
+    import unicodedata
+    return any(c.isalpha() and 'LATIN' not in unicodedata.name(c, 'LATIN') for c in text or '')
+
+
+def name_versions(orig, mb):
+    """English and romanised versions of a non-Latin artist name, from
+    MusicBrainz: the primary English alias, and the sort name ("Utada,
+    Hikaru" -> "Utada Hikaru", MusicBrainz's romanisation in native order)."""
+    if not non_latin(orig):
+        return '', ''
+    best = None
+    for a in mb.get('aliases') or []:
+        loc = (a.get('locale') or '').lower()
+        if (loc == 'en' or loc.startswith('en_')) and a.get('type') in (None, 'Artist name', 'Legal name') and a.get('name'):
+            rank = (bool(a.get('primary')), loc == 'en', a.get('type') == 'Artist name')
+            if best is None or rank > best[0]:
+                best = (rank, a['name'])
+    en = best[1] if best and best[1] != orig else ''
+    sort = mb.get('sort-name') or ''
+    rom = '' if non_latin(sort) else re.sub(r'\s*,\s*', ' ', sort).strip()
+    return en, rom if rom != orig else ''
+
+
 def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
     adb = adb or {}
     tags = []
@@ -294,7 +318,16 @@ def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
             tags.append(f'    <{tag}>{escape(str(value))}</{tag}>')
 
     add('musicBrainzArtistID', mbid)
-    add('name', adb.get('strArtist') or mb.get('name') or name)
+    # The name as MusicBrainz credits it (matches the tags), not TheAudioDB's
+    # often-English one.
+    orig = mb.get('name') or adb.get('strArtist') or name
+    add('name', orig)
+    add('sortname', mb.get('sort-name'))
+    # English and romanised names (not Kodi fields; Fusion shows them like
+    # the _EN / _ROM tags).
+    en, rom = name_versions(orig, mb)
+    add('name_en', en)
+    add('name_rom', rom)
     genres = split_list(adb.get('strGenre')) or [g['name'] for g in sorted(mb.get('genres', []), key=lambda g: -g.get('count', 0))[:3]]
     for g in genres:
         add('genre', g)

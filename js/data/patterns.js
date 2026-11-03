@@ -13,13 +13,17 @@ export const TF = {
   // and also split on ';' by Fusion). ARTISTS lists every performer, so
   // featured artists get their own tile; it falls back to ARTIST.
   // ARTISTS (featured artists included), else ALBUM ARTIST, else ARTIST.
-  artistsMulti: "$if2($meta_sep(artists,'|||'),$if2($meta_sep(album artist,'|||'),$if2($meta_sep(artist,'|||'),'Unknown Artist')))",
+  // Language-tagged files (TITLE_ORIG etc.) have "宇多田ヒカル (Hikaru Utada)"
+  // in ALBUM ARTIST / ARTIST; their _ORIG tags hold the plain name.
+  artistsMulti:
+    "$if2($meta_sep(artists,'|||'),$if2($meta_sep(albumartist_orig,'|||'),$if2($meta_sep(album artist,'|||'),$if2($meta_sep(artist_orig,'|||'),$if2($meta_sep(artist,'|||'),'Unknown Artist')))))",
   genresMulti: "$if2($meta_sep(genre,'|||'),'Unknown Genre')",
 
   // Text shown on tiles (read from the first row of each group).
   albumTitle: "$if(%album%,%album%,$if(%album artist%,'Single(s)','Unknown Album'))",
   albumDiscTitle: "$if(%album%,%album%$if($or($greater(%totaldiscs%,1),$greater(%discnumber%,1)),' (Disc '%discnumber%[': '%discsubtitle%]')',),$if(%album artist%,'Single(s)','Unknown Album'))",
   albumArtist: "$if2(%album artist%,'Unknown Artist')",
+  albumRaw: '[%album%]',
   year: '$year(%date%)',
   // Raw values for the expanded album's line: every genre (blank if none) and the full date.
   genre: "[$meta_sep(genre,'|||')]",
@@ -31,6 +35,12 @@ export const TF = {
   discSubtitle: '[%discsubtitle%]',
 };
 
+// Searched fields: the usual ones plus the English and romanised versions
+// (so "fireworks", "hanabi" and "花火" all find 花火).
+const SEARCH_FIELDS = ['%title%', '%artist%', '%album%', '%album artist%', '%genre%'].concat(
+  ['title', 'artist', 'album', 'albumartist'].flatMap((f) => [`%${f}_en%`, `%${f}_rom%`]),
+);
+
 /** Build a foobar2000 query that matches every word in `text` somewhere. */
 export function searchQuery(text) {
   const words = text
@@ -41,6 +51,6 @@ export function searchQuery(text) {
     .filter(Boolean);
   if (!words.length) return '';
   return words
-    .map((w) => `(%title% HAS "${w}" OR %artist% HAS "${w}" OR %album% HAS "${w}" OR %album artist% HAS "${w}" OR %genre% HAS "${w}")`)
+    .map((w) => `(${SEARCH_FIELDS.map((f) => `${f} HAS "${w}"`).join(' OR ')})`)
     .join(' AND ');
 }

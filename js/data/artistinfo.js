@@ -132,6 +132,9 @@ function parseNfo(xml) {
   const all = (tag) => [...root.querySelectorAll(`:scope > ${tag}`)].map((n) => n.textContent.trim()).filter(Boolean);
   return {
     name: one('name'),
+    // English and romanised names (Fusion's own fields; see versions.js).
+    nameEn: one('name_en'),
+    nameRom: one('name_rom'),
     genres: all('genre'),
     styles: all('style'),
     moods: all('mood'),
@@ -206,4 +209,11 @@ export async function pictureUrl(file, px, { trim = false } = {}) {
   } catch {
     return URL.createObjectURL(blob);
   }
+}
+
+/** An artist's name versions from their artist.nfo, or null. */
+export async function artistNameVersions(name, handle = null) {
+  const info = await artistDetails(name, handle);
+  if (!info || (!info.nameEn && !info.nameRom)) return null;
+  return { orig: name, en: info.nameEn, rom: info.nameRom };
 }

@@ -5,7 +5,9 @@
 // are recycled while scrolling, so a library with thousands of albums costs
 // the same as one with fifty.
 
-import { setTitle } from './titles.js';
+import { setTitle, versionText } from './titles.js';
+import { pickVersion } from '../data/versions.js';
+import { artistNameVersions } from '../data/artistinfo.js';
 import { el, rafThrottle, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
@@ -288,16 +290,29 @@ export class Grid {
     art.className = 'art';
     if (this.kind === 'albums') {
       const [artist, album] = splitAlbumKey(g.key);
-      setTitle(t1, head?.title || album);
+      // Original / English / romanised: the lead version as the title, the
+      // other at the start of the second line ("狂言 · Ado").
+      const pick = pickVersion(head?.versions?.album, 'albums');
+      const who = versionText(head?.artist || artist, head?.versions?.albumArtist, 'tracks');
+      setTitle(t1, pick ? pick.lead + (head.albumSuffix || '') : head?.title || album);
       const year = store.get('showAlbumYear') && head?.year ? ` · ${head.year}` : '';
-      t2.textContent = (head?.artist || artist) + year + (store.get('showTrackCounts') ? ` · ${plural(g.count, 'song')}` : '');
+      t2.textContent = (pick?.other ? `${pick.other} · ` : '') + who + year + (store.get('showTrackCounts') ? ` · ${plural(g.count, 'song')}` : '');
       art.classList.add('ph-album');
-      node.title = `${t1.textContent}\n${head?.artist || artist}`;
+      node.title = `${t1.textContent}\n${who}` + (pick?.tip ? `\n\n${pick.tip}` : '');
     } else if (this.kind === 'artists') {
+      const albums = plural(g.albumCount || g.sub?.length || 1, 'album');
       t1.textContent = g.key;
-      t2.textContent = plural(g.albumCount || g.sub?.length || 1, 'album');
+      t2.textContent = albums;
       art.classList.add('round', 'ph-artist');
       node.title = g.key;
+      // English / romanised names from the artist's artist.nfo, when it has them.
+      artistNameVersions(g.key, head?.handle).then((v) => {
+        const pick = pickVersion(v, 'tracks');
+        if (!pick || node.dataset.key !== g.key) return;
+        t1.textContent = pick.lead;
+        t2.textContent = (pick.other ? `${pick.other} · ` : '') + albums;
+        node.title = pick.tip || g.key;
+      });
     } else {
       t1.textContent = '';
       t2.textContent = '';

@@ -413,6 +413,12 @@ button.heart.hate {
   }
 }
 
+/* The other version of a title or name ("花火 Fireworks"): see data/versions.js. */
+.alt-version {
+  opacity: 0.55;
+  font-weight: 400;
+}
+
 /* Edition tags at the end of titles: "(Single)", "(Deluxe Edition)"… */
 .dim-tag {
   opacity: 0.5;

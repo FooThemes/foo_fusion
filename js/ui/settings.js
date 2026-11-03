@@ -12,6 +12,12 @@ import { exportArtists } from '../data/artistexport.js';
 import { toast } from './toast.js';
 import { VERSION } from '../version.js';
 
+const VERSION_CHOICES = [
+  ['orig', 'Original'],
+  ['en', 'English', 'Else romanised, else original'],
+  ['rom', 'Romanised', 'Else English, else original'],
+];
+
 export function mountSettings(root, app) {
   const body = el('div.set-body');
   const panel = el('div.settings', { role: 'dialog', 'aria-label': 'Settings' }, el('div.set-head', null, el('h2', { text: 'Settings' }), el('button.btn-icon', { title: 'Close', onclick: () => app.toggleSettings(false) }, icon('close'))), body);
@@ -54,6 +60,18 @@ export function mountSettings(root, app) {
         folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Artists not there are looked for in their own music folder, above their albums.'),
         toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
         wordsField(),
+      ]),
+      section('Languages', [
+        el('p.set-note', {
+          text: 'For songs tagged with original, English and romanised versions (TITLE_ORIG, TITLE_EN, TITLE_ROM and the same for artist and album, as the Language Variants Picard plugin writes). Other songs show as tagged.',
+        }),
+        choice('Album titles', 'leadAlbums', VERSION_CHOICES),
+        choice('Song titles and artists', 'leadTracks', VERSION_CHOICES),
+        choice('The other version', 'otherVersion', [
+          ['beside', 'Dimmed beside', 'e.g. “花火 Fireworks”; on album tiles, at the start of the second line'],
+          ['tooltip', 'In the tooltip', 'Shown when you point at the title'],
+          ['hidden', 'Hidden'],
+        ]),
       ]),
       section('Expanded album', [
         choice('Background', 'listBackground', [

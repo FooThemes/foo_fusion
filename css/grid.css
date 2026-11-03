@@ -154,7 +154,6 @@
   top: 0;
   left: 0;
   right: 0;
-  background: var(--list-bg);
   color: var(--list-text);
   border-bottom: 1px solid var(--line);
   animation: tp-in 0.22s ease;
@@ -167,14 +166,21 @@
   }
 }
 
+/* The panel's background, including the pointer up to the open album's tile:
+   the layer reaches 12px above the panel and is clipped to the panel plus a
+   triangle at --nx, so the pointer is the panel itself (blurred cover and
+   all), as in the original skin. */
 .tp-bg-wrap {
   position: absolute;
-  inset: 0;
+  inset: -12px 0 0;
   overflow: hidden;
+  background: var(--list-bg);
+  clip-path: polygon(0 12px, calc(var(--nx, -40px) - 11px) 12px, var(--nx, -40px) 1px, calc(var(--nx, -40px) + 11px) 12px, 100% 12px, 100% 100%, 0 100%);
+  transition: background-color 0.25s;
 }
 
-.trackpanel[data-bg='plain'] .tp-bg-wrap,
-.trackpanel[data-bg='art'] .tp-bg-wrap {
+.trackpanel[data-bg='plain'] .tp-bg,
+.trackpanel[data-bg='art'] .tp-bg {
   display: none;
 }
 
@@ -204,15 +210,28 @@
   background: color-mix(in srgb, var(--list-bg) 55%, transparent);
 }
 
-/* Small pointer from the list up to the open album's tile */
+/* The pointer's outline: the panel's top border runs up and over it. */
 .tp-notch {
   position: absolute;
   top: -9px;
-  width: 24px;
-  height: 10px;
-  background: var(--accent);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  z-index: 2;
+  width: 16px;
+  height: 16px;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  transform: rotate(45deg);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tp-topline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(to right, var(--line) calc(var(--nx, -40px) - 11px), transparent calc(var(--nx, -40px) - 11px), transparent calc(var(--nx, -40px) + 11px), var(--line) calc(var(--nx, -40px) + 11px));
 }
 
 .tp-inner {

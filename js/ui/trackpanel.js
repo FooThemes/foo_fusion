@@ -56,10 +56,12 @@ export class TrackPanel {
     this.discBar = el('div.tp-discs', { role: 'tablist', 'aria-label': 'Discs', hidden: true });
     this.list = el('div.tp-list', { role: 'listbox', 'aria-multiselectable': 'true' });
     this.notch = el('div.tp-notch');
+    this.topline = el('div.tp-topline');
     this.node = el(
       'div.trackpanel',
       { hidden: true },
       el('div.tp-bg-wrap', null, this.bg),
+      this.topline,
       this.notch,
       el(
         'div.tp-inner',
@@ -173,7 +175,9 @@ export class TrackPanel {
     const top = g.rowTop(row) + g.tileH;
     this.node.style.transform = `translateY(${top}px)`;
     const col = this.index % g.cols;
-    this.notch.style.left = 40 + col * g.tileW + g.tileW / 2 - 12 + 'px';
+    const nx = 40 + col * g.tileW + g.tileW / 2;
+    this.notch.style.left = nx - 8 + 'px';
+    this.node.style.setProperty('--nx', nx + 'px');
   }
 
   refreshHead(group) {

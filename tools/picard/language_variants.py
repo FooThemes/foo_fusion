@@ -35,7 +35,7 @@ English versions can be machine translated with DeepL or Google Cloud
 Translation (your own API key; off by default).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.2'
+PLUGIN_VERSION = '1.2.1'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-2.0.html'
@@ -445,6 +445,8 @@ class LanguageVariants:
                 MBAPIHelper(album.tagger.webservice).get_release_by_id(
                     release['id'], partial(self._relations_loaded, st), inc=['release-rels'])
             rg = (release.get('release-group') or {}).get('id')
+            log.info('%s %s: "%s" (other releases: %s)', PLUGIN_NAME, PLUGIN_VERSION, release.get('title'),
+                     'on' if setting('other_releases') else 'off')
             if setting('other_releases') and rg and self._is_foreign(st):
                 self._browse_siblings(st, rg, 0)
         finally:
@@ -527,7 +529,7 @@ class LanguageVariants:
                         if kind:
                             st.sib_tracks.setdefault(rec, {'en': Counter(), 'rom': Counter()})[kind][track['title']] += 1
                             seen += 1
-            log.debug('%s: %d titles from other releases (offset %d)', PLUGIN_NAME, seen, offset)
+            log.info('%s: %d titles from %d other releases of "%s"', PLUGIN_NAME, seen, len(document.get('releases') or []), st.release.get('title'))
             total = int(document.get('release-count') or 0)
             if offset + 100 < min(total, 300):  # enough for any real album
                 self._browse_siblings(st, rg, offset + 100)

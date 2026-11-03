@@ -77,7 +77,7 @@ export class ArtistHero {
     img.removeAttribute('src');
     if (!file) return;
     const name = this.name;
-    const url = await pictureUrl(file, px);
+    const url = await pictureUrl(file, px, { trim: img === this.logo });
     if (!url || this.name !== name) return;
     img.onload = () => {
       img.classList.add('loaded');

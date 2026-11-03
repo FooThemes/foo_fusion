@@ -136,8 +136,30 @@ function parseNfo(xml) {
   };
 }
 
-/** Load a picture file into a (downscaled) blob URL for display. */
-export async function pictureUrl(file, px) {
+// Bounds of the visible (non-transparent) pixels; faint glows count as blank.
+function opaqueBounds(ctx, w, h) {
+  const data = ctx.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      if (data[row + x * 4 + 3] > 24) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/**
+ * Load a picture file into a (downscaled) blob URL for display. `trim`
+ * crops transparent margins (logos often come with lots of them, which
+ * throws them out of line with the text below).
+ */
+export async function pictureUrl(file, px, { trim = false } = {}) {
   const res = await tryCall('file.read', { path: file.path, encoding: 'binary' });
   if (!res?.content) return null;
   let bin;
@@ -150,13 +172,25 @@ export async function pictureUrl(file, px) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const type = /\.png$/i.test(file.name) ? 'image/png' : /\.gif$/i.test(file.name) ? 'image/gif' : /\.webp$/i.test(file.name) ? 'image/webp' : 'image/jpeg';
   const blob = new Blob([bytes], { type });
-  if (!px) return URL.createObjectURL(blob);
+  if (!px && !trim) return URL.createObjectURL(blob);
   try {
     const bmp = await createImageBitmap(blob);
-    const scale = Math.min(1, px / Math.max(bmp.width, bmp.height));
-    const c = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * scale)), Math.max(1, Math.round(bmp.height * scale)));
-    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const scale = px ? Math.min(1, px / Math.max(bmp.width, bmp.height)) : 1;
+    let c = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * scale)), Math.max(1, Math.round(bmp.height * scale)));
+    const ctx = c.getContext('2d', { willReadFrequently: trim });
+    ctx.drawImage(bmp, 0, 0, c.width, c.height);
     bmp.close();
+    if (trim && type !== 'image/jpeg') {
+      const b = opaqueBounds(ctx, c.width, c.height);
+      if (b && (b.w < c.width || b.h < c.height)) {
+        const pad = 2; // keep the edge of a glow or shadow
+        const x = Math.max(0, b.x - pad), y = Math.max(0, b.y - pad);
+        const w = Math.min(c.width - x, b.w + pad * 2), h = Math.min(c.height - y, b.h + pad * 2);
+        const cut = new OffscreenCanvas(w, h);
+        cut.getContext('2d').drawImage(c, x, y, w, h, 0, 0, w, h);
+        c = cut;
+      }
+    }
     return URL.createObjectURL(await c.convertToBlob({ type: type === 'image/jpeg' ? 'image/jpeg' : 'image/webp', quality: 0.88 }));
   } catch {
     return URL.createObjectURL(blob);

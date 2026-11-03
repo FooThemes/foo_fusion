@@ -1,9 +1,9 @@
 // Header for an artist's page (Artists > an artist): picture, name, genres and
-// years, biography, over the artist's fanart, all from the artist information
-// folder (Settings > Library). Hidden when the artist has no folder there.
+// years, biography, over the artist's fanart, from the artist information
+// folder (Settings > Library) or the artist's own music folder. Hidden when
+// neither has anything for the artist.
 
 import { el, clear } from '../core/util.js';
-import * as store from '../core/store.js';
 import { artistFiles, artistDetails, pictureUrl } from '../data/artistinfo.js';
 
 const GAP = 24; // between the header and the first row of albums
@@ -28,14 +28,21 @@ export class ArtistHero {
     );
   }
 
-  async show(name) {
-    if (name === this.name) return;
+  /** handle: one of the artist's tracks (for their own music folder). */
+  async show(name, handle = null) {
+    const key = `${name}|${handle || ''}`;
+    if (key === this.key) return;
+    // Same artist, already found: a later handle changes nothing.
+    if (name === this.name && this.found) return;
+    this.key = key;
+    if (name !== this.name) this.expanded = false;
     this.name = name;
-    this.expanded = false;
-    if (!name || !store.get('artistInfoFolder')) return this.#hide();
-    const [files, info] = await Promise.all([artistFiles(name), artistDetails(name)]);
-    if (this.name !== name) return;
+    this.found = false;
+    if (!name) return this.#hide();
+    const [files, info] = await Promise.all([artistFiles(name, handle), artistDetails(name, handle)]);
+    if (this.key !== key) return;
     if (!files || (!files.picture && !files.fanart && !info)) return this.#hide();
+    this.found = true;
 
     this.title.textContent = info?.name || name;
     const life = info?.formed || info?.born ? [info.formed || info.born, info.disbanded || info.died].filter(Boolean).join(' – ') : '';

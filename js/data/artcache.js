@@ -59,7 +59,12 @@ export const cacheReady = () => base != null;
 /** Cover file remembered for a folder: { name, size } | null (none) | undefined (unknown). */
 export function knownCover(dir) {
   const d = index.dirs[dir];
-  return d === undefined ? undefined : d ? { name: d[0], size: d[1], path: `${dir}\\${d[0]}` } : null;
+  if (d === undefined) return undefined;
+  if (!d) return null;
+  // Entries for artist pictures store the full path (they can be in either of
+  // two folders); folder entries store just the file name.
+  if (/^[a-z]:\\|^\\\\/i.test(d[0])) return { name: d[0].slice(d[0].lastIndexOf('\\') + 1), size: d[1], path: d[0] };
+  return { name: d[0], size: d[1], path: `${dir}\\${d[0]}` };
 }
 
 export function rememberCover(dir, pick) {

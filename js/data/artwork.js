@@ -8,7 +8,7 @@
 import { tryCall } from '../core/bridge.js';
 import { logInfo } from '../core/log.js';
 import { artPatterns, pickByPatterns } from './artpatterns.js';
-import { artistFolder, artistFiles, pictureUrl } from './artistinfo.js';
+import { artistFiles, pictureUrl } from './artistinfo.js';
 import { cachedUrl, isCachedAlpha, forget, storeCover, knownCover, rememberCover, clearArtCache } from './artcache.js';
 
 const cache = new Map(); // key -> Promise<string|null>
@@ -118,10 +118,10 @@ function coverFile(type, handle) {
     return dirPick.has(parent) ? dirPick.get(parent) : knownCover(parent);
   }
   if (type.startsWith('info:')) {
-    // A picture in the artist information folder (see artistinfo.js).
-    const dir = artistFolder(type.slice(5));
-    if (!dir) return null;
-    return dirPick.has(dir) ? dirPick.get(dir) : knownCover(dir);
+    // An artist picture from the artist information folder, or the artist's
+    // own music folder (see artistinfo.js).
+    const k = 'info:' + type.slice(5).toLowerCase();
+    return dirPick.has(k) ? dirPick.get(k) : knownCover(k);
   }
   if (type === 'artist') {
     // foobar2000 finds artist pictures itself; the cache keys them by track.
@@ -344,12 +344,11 @@ export async function preloadArt(path, cssSize, types = ['front']) {
     const keep = type === 'front' && keepOriginal(path);
     let url;
     if (type.startsWith('info:')) {
-      const files = await artistFiles(type.slice(5));
+      const files = await artistFiles(type.slice(5), path);
       const pick = files?.picture || null;
-      if (files) {
-        dirPick.set(files.dir, pick && { name: pick.name, path: pick.path, size: pick.size });
-        rememberCover(files.dir, pick);
-      }
+      const k = 'info:' + type.slice(5).toLowerCase();
+      dirPick.set(k, pick && { name: pick.name, path: pick.path, size: pick.size });
+      rememberCover(k, pick && { name: pick.path, size: pick.size });
       url = pick ? await infoUrl(pick, sizeBucket(cssSize)) : null;
     } else url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
     if (!url) continue;
@@ -494,12 +493,11 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     const keep = type === 'front' && keepOriginal(path);
     let url;
     if (type.startsWith('info:')) {
-      const files = await artistFiles(type.slice(5));
+      const files = await artistFiles(type.slice(5), path);
       const pick = files?.picture || null;
-      if (files) {
-        dirPick.set(files.dir, pick && { name: pick.name, path: pick.path, size: pick.size });
-        rememberCover(files.dir, pick);
-      }
+      const k = 'info:' + type.slice(5).toLowerCase();
+      dirPick.set(k, pick && { name: pick.name, path: pick.path, size: pick.size });
+      rememberCover(k, pick && { name: pick.path, size: pick.size });
       url = pick ? await infoUrl(pick, sizeBucket(cssSize)) : null;
     } else url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
     // Folder not checked yet: find out, and switch to the original if it's a PNG/GIF.

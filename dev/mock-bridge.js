@@ -445,10 +445,10 @@ export async function installMock() {
     'misc.getFoobarPath': () => ({ path: 'C:\\Program Files\\foobar2000', value: 'C:\\Program Files\\foobar2000' }),
     'misc.showPreferences': () => (console.info('[mock] preferences'), {}),
     'artwork.getFolderImages': (p) =>
-      p.directory.includes('_Artists')
+      p.directory.includes('_Artists') || /^C:\\Music\\[^\\]+$/.test(p.directory)
         ? { images: [{ name: 'artist.png', path: p.directory + '\\artist.png', size: 5000 }, { name: 'fanart.png', path: p.directory + '\\fanart.png', size: 9000 }] }
         : ({ images: [{ name: 'cover.jpg', path: p.directory + '\\cover.jpg', size: 1000 + (p.directory.length * 37) % 900 }] }),
-    'file.exists': (p) => ({ exists: p.path.includes('_Artists') && p.path.endsWith('artist.nfo'), isFile: true, isDirectory: false }),
+    'file.exists': (p) => ({ exists: (p.path.includes('_Artists') || /^C:\\Music\\[^\\]+\\artist\.nfo$/.test(p.path)) && p.path.endsWith('artist.nfo'), isFile: true, isDirectory: false }),
     'webview.getSource': () => ({ source: 'activeTemplate', directory: 'C:\\fb\\profile\\webview-ui\\fusion', templateName: 'fusion' }),
     'file.write': (p) => ((window.__mockWrites ||= []).push({ path: p.path, bytes: (p.content || '').length }), { bytesWritten: (p.content || '').length }),
     'file.read': (p) =>

@@ -13,6 +13,7 @@ import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt, albumArtTypes, warmArt } from '../data/artwork.js';
 import { ArtistHero } from './artisthero.js';
+import { musicArtistFolder } from '../data/artistinfo.js';
 import { trackContextMenu } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 import { draggableRows } from './dnd.js';
@@ -83,7 +84,7 @@ export class Grid {
     }
     this.kind = kind;
     this.tiles.clear();
-    this.hero.show(view.drill?.kind === 'artists' ? view.drill.key : null);
+    this.hero.show(view.drill?.kind === 'artists' ? view.drill.key : null, this.#artistTrack());
     if (this.expanded >= view.groups.length) this.expanded = -1;
     if (!keepScroll) {
       this.expanded = -1;
@@ -194,9 +195,17 @@ export class Grid {
     }
   }
 
+  /** On an artist's page: a track from an album in the artist's own folder
+   *  (not a guest spot on someone else's album), for Kodi's folder fallback. */
+  #artistTrack() {
+    const name = view.drill?.key;
+    const handles = view.groups.map((g) => g.head?.handle).filter(Boolean);
+    return handles.find((h) => musicArtistFolder(name, h)) || handles[0] || null;
+  }
+
   /** Art to try for a tile, in order. */
   #types(g) {
-    if (this.kind === 'artists') return store.get('artistInfoFolder') ? [`info:${g.key}`, 'artist', 'front'] : ['artist', 'front'];
+    if (this.kind === 'artists') return [`info:${g.key}`, 'artist', 'front'];
     if (this.kind === 'albums') return albumArtTypes(store.get('separateDiscs'));
     return ['front'];
   }
@@ -213,6 +222,7 @@ export class Grid {
   /** Text/art arrived for groups [from, to). */
   refreshHeads() {
     this.#warm();
+    if (view.drill?.kind === 'artists') this.hero.show(view.drill.key, this.#artistTrack());
     for (const [i, node] of this.tiles) this.#fill(node, i);
     if (this.expanded >= 0) this.panel.refreshHead(view.groups[this.expanded]);
   }

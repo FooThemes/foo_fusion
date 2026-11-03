@@ -48,7 +48,7 @@ export function mountSettings(root, app) {
         range('Album size', 'tileSize', 110, 260, 10),
         range('Artist size', 'artistTileSize', 100, 240, 10),
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
-        folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Used for artist pictures and the artist page.'),
+        folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Artists not there are looked for in their own music folder, above their albums.'),
         toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
         wordsField(),
       ]),

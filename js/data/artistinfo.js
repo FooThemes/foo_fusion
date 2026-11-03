@@ -4,8 +4,10 @@
 //   artist.nfo                       XML: biography, genres, styles, years…
 //   artist.* / folder.* / thumb.*    the artist's picture
 //   fanart.*                         a wide background picture
-// Fusion reads it for artist tiles and the artist page. Artists without a
-// folder fall back to foobar2000's own artist art and then album covers.
+// Fusion reads it for artist tiles and the artist page. Like Kodi, an artist
+// missing from that folder is looked for in their own music folder (the one
+// above their albums) next; after that, foobar2000's artist art and then
+// album covers.
 
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
@@ -22,24 +24,61 @@ export function artistFolder(name) {
   return safe ? `${root}\\${safe}` : null;
 }
 
+const DISC_DIR = /^(cd|dis[ck]|dvd|vol(ume)?\.?)\s*[-_.#]?\s*\d+|^\d{1,2}$/i;
+const norm = (s) => s.toLowerCase().replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/, '');
+
 /**
- * { dir, picture, fanart } (picture/fanart: { name, path, size } or null),
- * or null when the artist has no folder. Pictures only; the .nfo is read
- * separately (artistDetails) since only the artist page needs it.
+ * Kodi's fallback: the folder above the artist's album folder (above the disc
+ * folders, for box sets), used only when it's named after the artist, so a
+ * compilation's "Various Artists" or the music root is never taken for one.
  */
-export function artistFiles(name) {
-  const dir = artistFolder(name);
-  if (!dir) return Promise.resolve(null);
+export function musicArtistFolder(name, handle) {
+  if (!name || !handle) return null;
+  let dir = handle.replace(/\|subsong:\d+$/, '');
+  dir = dir.slice(0, dir.lastIndexOf('\\')); // album (or disc) folder
+  if (DISC_DIR.test(dir.slice(dir.lastIndexOf('\\') + 1))) dir = dir.slice(0, dir.lastIndexOf('\\'));
+  const parent = dir.slice(0, dir.lastIndexOf('\\'));
+  const folderName = parent.slice(parent.lastIndexOf('\\') + 1);
+  return parent && norm(folderName) === norm(name) ? parent : null;
+}
+
+const listing = new Map(); // folder (lower case) -> Promise<{ dir, picture, fanart, hasNfo }>
+
+function readFolder(dir) {
   const key = dir.toLowerCase();
-  if (!found.has(key)) {
-    found.set(
+  if (!listing.has(key)) {
+    listing.set(
       key,
-      tryCall('artwork.getFolderImages', { directory: dir }).then((res) => {
+      Promise.all([tryCall('artwork.getFolderImages', { directory: dir }), tryCall('file.exists', { path: `${dir}\\artist.nfo` })]).then(([res, nfo]) => {
         const images = res?.images || [];
         const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
         const pick = (names) => names.map((n) => images.find((im) => base(im.name) === n)).find(Boolean) || null;
-        return { dir, picture: pick(PICTURE), fanart: pick(FANART) };
+        return { dir, picture: pick(PICTURE), fanart: pick(FANART), hasNfo: !!nfo?.exists };
       }),
+    );
+  }
+  return listing.get(key);
+}
+
+/**
+ * Where this artist's information lives, as Kodi looks: the artist
+ * information folder first, then the artist's own folder above their albums
+ * (needs a track `handle` of theirs). Resolves to { dir, picture, fanart,
+ * hasNfo } or null when neither has anything.
+ */
+export function artistFiles(name, handle = null) {
+  const key = `${name}|${handle ? musicArtistFolder(name, handle) || '' : ''}`;
+  if (!found.has(key)) {
+    found.set(
+      key,
+      (async () => {
+        const dirs = [artistFolder(name), musicArtistFolder(name, handle)].filter(Boolean);
+        for (const dir of dirs) {
+          const f = await readFolder(dir);
+          if (f.picture || f.fanart || f.hasNfo) return f;
+        }
+        return null;
+      })(),
     );
   }
   return found.get(key);
@@ -47,18 +86,15 @@ export function artistFiles(name) {
 
 const details = new Map();
 
-/** Parsed artist.nfo, or null. */
-export function artistDetails(name) {
-  const dir = artistFolder(name);
-  if (!dir) return Promise.resolve(null);
-  const key = dir.toLowerCase();
+/** Parsed artist.nfo from wherever artistFiles found the artist, or null. */
+export async function artistDetails(name, handle = null) {
+  const files = await artistFiles(name, handle);
+  if (!files?.hasNfo) return null;
+  const key = files.dir.toLowerCase();
   if (!details.has(key)) {
     details.set(
       key,
-      // Check first: most artists won't have one, and a failed read is logged.
-      tryCall('file.exists', { path: `${dir}\\artist.nfo` })
-        .then((r) => (r?.exists ? tryCall('file.read', { path: `${dir}\\artist.nfo` }) : null))
-        .then((res) => (res?.content ? parseNfo(res.content) : null)),
+      tryCall('file.read', { path: `${files.dir}\\artist.nfo` }).then((res) => (res?.content ? parseNfo(res.content) : null)),
     );
   }
   return details.get(key);
@@ -66,6 +102,7 @@ export function artistDetails(name) {
 
 export function forgetArtistInfo() {
   found.clear();
+  listing.clear();
   details.clear();
 }
 

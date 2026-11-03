@@ -35,7 +35,7 @@ English versions can be machine translated with DeepL or Google Cloud
 Translation (your own API key; off by default).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.1'
+PLUGIN_VERSION = '1.2'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-2.0.html'
@@ -45,7 +45,9 @@ import json
 import os
 import re
 import threading
+import inspect
 import unicodedata
+from collections import Counter
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -207,6 +209,24 @@ def alias_kind(alias, orig):
     return 'alias_en'
 
 
+def loose(text):
+    """Compare-friendly: lower case, letters only, l/I confusion folded."""
+    return re.sub(r'[^a-z]', '', (text or '').lower().replace('l', 'i'))
+
+
+def sibling_kind(title, orig, rep):
+    """Is another release's title for the same recording an English or a
+    romanised version of `orig`? Judged per title: an "English" edition can
+    still have romaji titles ("Fireworks" next to "Aitakute")."""
+    if not title or not orig or same(title, orig) or has_non_latin(title) or not needs_translation(orig, 'jpn' if JAPANESE.search(orig) else None, None):
+        return None
+    if JAPANESE.search(orig):
+        return 'rom' if is_romaji(title) else 'en'
+    if (rep or {}).get('language') == 'eng':
+        return 'en'
+    return 'rom' if has_non_latin(orig) else None
+
+
 def pseudo_kind(release):
     """'en' for an English translation, 'rom' for a romanisation, else None."""
     dis = (release.get('disambiguation') or '').lower()
@@ -357,6 +377,8 @@ class AlbumState:
         self.mt = {}             # original text -> machine translation
         self.targets = []        # (metadata, disc, track, {field: original})
         self.used = {}           # kind -> pseudo-release id
+        self.sib_tracks = {}     # recording id -> {'en': Counter, 'rom': Counter}
+        self.sib_album = {'en': Counter(), 'rom': Counter()}
 
 
 class LanguageVariants:
@@ -422,6 +444,9 @@ class LanguageVariants:
                 self._add_request(st)
                 MBAPIHelper(album.tagger.webservice).get_release_by_id(
                     release['id'], partial(self._relations_loaded, st), inc=['release-rels'])
+            rg = (release.get('release-group') or {}).get('id')
+            if setting('other_releases') and rg and self._is_foreign(st):
+                self._browse_siblings(st, rg, 0)
         finally:
             self._done_request(st)
 
@@ -451,6 +476,79 @@ class LanguageVariants:
             self._follow_relations(st, document.get('relations') or [])
         finally:
             self._done_request(st)
+
+    def _is_foreign(self, st):
+        rel = st.release
+        texts = [rel.get('title')] + [t.get('title') for m in rel.get('media') or [] for t in m.get('tracks') or []]
+        return any(needs_translation(t, st.lang, st.script) for t in texts)
+
+    def _browse_siblings(self, st, rg, offset):
+        """Other releases of the same album (e.g. an English edition with
+        "Fireworks" for 花火), with their tracklists, 100 at a time."""
+        helper = MBAPIHelper(st.album.tagger.webservice)
+        args = {'release-group': rg, 'limit': '100', 'offset': str(offset)}
+        handler = partial(self._siblings_loaded, st, rg, offset)
+        self._add_request(st)
+        try:
+            # Picard 2.8+ takes queryargs=; older versions take keywords.
+            if 'queryargs' in inspect.signature(helper._browse).parameters:
+                helper._browse('release', handler, ['recordings'], queryargs=args)
+            else:
+                helper._browse('release', handler, ['recordings'], **args)
+        except Exception as e:  # pylint: disable=broad-except
+            log.warning('%s: could not look up other releases: %s', PLUGIN_NAME, e)
+            self._done_request(st)
+
+    def _siblings_loaded(self, st, rg, offset, document, _reply, error):
+        try:
+            if error or not document:
+                log.warning('%s: could not load other releases of %s', PLUGIN_NAME, st.release.get('title'))
+                return
+            origs = {}
+            for medium in st.release.get('media') or []:
+                for track in medium.get('tracks') or []:
+                    rec = (track.get('recording') or {}).get('id')
+                    if rec:
+                        origs[rec] = track.get('title') or ''
+            seen = 0
+            for rel in document.get('releases') or []:
+                if rel.get('id') == st.release.get('id'):
+                    continue
+                rep = rel.get('text-representation') or {}
+                kind = sibling_kind(rel.get('title'), st.release.get('title'), rep)
+                if kind:
+                    st.sib_album[kind][rel['title']] += 1
+                for medium in rel.get('media') or []:
+                    for track in medium.get('tracks') or []:
+                        rec = (track.get('recording') or {}).get('id')
+                        if rec not in origs:
+                            continue
+                        kind = sibling_kind(track.get('title'), origs[rec], rep)
+                        if kind:
+                            st.sib_tracks.setdefault(rec, {'en': Counter(), 'rom': Counter()})[kind][track['title']] += 1
+                            seen += 1
+            log.debug('%s: %d titles from other releases (offset %d)', PLUGIN_NAME, seen, offset)
+            total = int(document.get('release-count') or 0)
+            if offset + 100 < min(total, 300):  # enough for any real album
+                self._browse_siblings(st, rg, offset + 100)
+        finally:
+            self._done_request(st)
+
+    def _resolve_siblings(self, st):
+        """Most common English / romanised title among the other releases."""
+        for kind in ('en', 'rom'):
+            if st.sib_album[kind]:
+                st.album_values.setdefault('album', {})['sib_' + kind] = st.sib_album[kind].most_common(1)[0][0]
+        for medium in st.release.get('media') or []:
+            for track in medium.get('tracks') or []:
+                found = st.sib_tracks.get((track.get('recording') or {}).get('id'))
+                if not found:
+                    continue
+                key = (str(medium.get('position')), str(track.get('position')))
+                values = st.track_values.setdefault(key, {}).setdefault('title', {})
+                for kind in ('en', 'rom'):
+                    if found[kind]:
+                        values['sib_' + kind] = found[kind].most_common(1)[0][0]
 
     def _follow_relations(self, st, relations):
         helper = MBAPIHelper(st.album.tagger.webservice)
@@ -499,6 +597,7 @@ class LanguageVariants:
     def _finish(self, st):
         """All MusicBrainz data is in: machine translate what's missing, if
         that's on, then fill in the tags."""
+        self._resolve_siblings(st)
         provider, key = setting('mt_provider'), (setting('mt_key') or '').strip()
         if provider and key and not st.mt:
             texts = self._untranslated(st)
@@ -516,7 +615,7 @@ class LanguageVariants:
         wanted = []
 
         def want(field, orig, values):
-            if field in fields and orig and not (values or {}).get('en') and not (values or {}).get('alias') and not (values or {}).get('alias_en') \
+            if field in fields and orig and not (values or {}).get('en') and not (values or {}).get('alias') and not (values or {}).get('alias_en') and not (values or {}).get('sib_en') \
                     and needs_translation(orig, st.lang, st.script):
                 wanted.append(orig)
 
@@ -571,13 +670,17 @@ class LanguageVariants:
             if not orig:
                 continue
             found = self._values_for(st, field, disc, track)
-            en = found.get('en') or found.get('alias') or found.get('alias_en')
+            en = found.get('en') or found.get('alias') or found.get('sib_en') or found.get('alias_en')
             if not en and field in mt_fields:
                 en = st.mt.get(orig)
-            rom = found.get('rom') or found.get('alias_rom')
+            rom = found.get('rom') or found.get('sib_rom') or found.get('alias_rom')
             # Artists: an English alias of a non-Latin name is its romanisation too.
             if not rom and field in ('artist', 'albumartist') and found.get('alias') and has_non_latin(orig):
                 rom = found['alias']
+            # An "English" title that's really the romanisation with a typo
+            # ("KokoroToluNa..." for "KokoroToIuNa...") isn't English.
+            if en and rom and not found.get('en') and loose(en) == loose(rom):
+                en = None
             values = {'orig': orig, 'en': en, 'rom': rom}
             for k in ('en', 'rom'):
                 if values[k] and same(values[k], orig):
@@ -629,6 +732,7 @@ class LanguageVariantsOptionsPage(OptionsPage):
         config.TextOption('setting', opt('mt_key'), ''),
         config.TextOption('setting', opt('mt_english'), 'EN-GB'),
         config.TextOption('setting', opt('mt_fields'), ', '.join(DEFAULT_MT_FIELDS)),
+        config.BoolOption('setting', opt('other_releases'), True),
     ]
 
     def __init__(self, parent=None):
@@ -676,6 +780,10 @@ class LanguageVariantsOptionsPage(OptionsPage):
         grid.addWidget(help_text, len(FIELDS) + 1, 0, 1, 4)
         root.addWidget(combined)
 
+        self.other_releases = QtWidgets.QCheckBox(
+            'Also take titles from other releases of the album (e.g. an English edition)')
+        root.addWidget(self.other_releases)
+
         # Machine translation
         mt = QtWidgets.QGroupBox('Machine translation (when MusicBrainz has no English version)')
         form = QtWidgets.QFormLayout(mt)
@@ -707,6 +815,7 @@ class LanguageVariantsOptionsPage(OptionsPage):
         root.addStretch(1)
 
     def load(self):
+        self.other_releases.setChecked(bool(setting('other_releases')))
         for k in KINDS:
             self.suffix[k].setText(setting('suffix_' + k))
         for field, edits in self.rows.items():
@@ -722,6 +831,7 @@ class LanguageVariantsOptionsPage(OptionsPage):
             cb.setChecked(field in chosen)
 
     def save(self):
+        config.setting[opt('other_releases')] = self.other_releases.isChecked()
         for k in KINDS:
             text = re.sub(r'\s+', '', self.suffix[k].text()) or '_' + k
             config.setting[opt('suffix_' + k)] = text

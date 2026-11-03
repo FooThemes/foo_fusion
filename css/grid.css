@@ -28,10 +28,27 @@
   top: 0;
   left: 0;
   width: var(--tile-w);
-  padding: 0 8px;
+  padding: 0 8px 6px;
   outline: none;
   contain: layout style;
   will-change: transform;
+}
+
+/* Hover: a soft backing behind the cover and its text, reaching a little
+   above the cover so it frames it. */
+.tile::before {
+  content: '';
+  position: absolute;
+  inset: -8px 0 0;
+  background: var(--hover);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.tile:hover::before {
+  opacity: 1;
 }
 
 .grid-layer.animating .tile {

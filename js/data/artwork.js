@@ -17,7 +17,7 @@ const loadedUrls = new Set(); // URLs the browser has already decoded once
 // cache, so a tile that is handed an album seen before shows it the same
 // frame instead of fetching fb2k:// again (that refetch was the "flash").
 const keepAlive = new Map(); // url -> HTMLImageElement, oldest first
-const KEEP = 400;
+const KEEP = 800;
 function markLoaded(url, decoded = null) {
   loadedUrls.add(url);
   if (keepAlive.has(url)) {

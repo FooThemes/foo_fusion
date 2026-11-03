@@ -1,6 +1,7 @@
 /* Fusion - main area: header, tabs, messages */
 
 #main {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -118,9 +119,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* Keep the scrollbar's space, so pages don't reflow sideways when it
-     comes and goes. */
-  scrollbar-gutter: stable;
+  /* The native scrollbar is hidden; Fusion draws a slim one on top (below),
+     so content runs to the window's edge and never reflows for it. */
+  scrollbar-width: none;
   overflow-x: hidden;
   outline: none;
 }
@@ -214,4 +215,33 @@
   to {
     transform: translateX(340%);
   }
+}
+
+.content::-webkit-scrollbar {
+  display: none;
+}
+
+.oscroll {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 6;
+}
+
+.oscroll-thumb {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  width: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 32%, transparent);
+  transition: width 0.12s, background-color 0.12s;
+}
+
+.oscroll:hover .oscroll-thumb,
+.oscroll.dragging .oscroll-thumb {
+  width: 8px;
+  right: 2px;
+  background: color-mix(in srgb, var(--text) 50%, transparent);
 }

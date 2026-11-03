@@ -18,7 +18,13 @@ export function mountContent(root) {
   // A thin moving strip under the header while a load takes more than a
   // moment, so a slow regroup never looks like a freeze.
   const busy = el('div.busy-bar', { hidden: true });
-  root.append(scroller, message, loading, busy);
+  // Fusion draws its own slim scrollbar on top of the list, so the page (and
+  // the open album's panel) can run all the way to the window's edge under
+  // it, as in the original skin.
+  const thumb = el('div.oscroll-thumb');
+  const rail = el('div.oscroll', null, thumb);
+  root.append(scroller, message, loading, busy, rail);
+  mountOverlayScrollbar(scroller, rail, thumb);
   let busyTimer = 0;
   view.on('loading', (on) => {
     clearTimeout(busyTimer);
@@ -160,4 +166,64 @@ export function mountContent(root) {
       return true;
     },
   };
+}
+
+/** The overlay scrollbar: follows the scroller, and can be dragged or clicked. */
+function mountOverlayScrollbar(scroller, rail, thumb) {
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    rail.style.top = scroller.offsetTop + 'px';
+    const busy = rail.parentElement?.querySelector('.busy-bar');
+    if (busy) busy.style.top = scroller.offsetTop + 'px';
+    const view = scroller.clientHeight;
+    const total = scroller.scrollHeight;
+    const show = total > view + 1;
+    rail.hidden = !show;
+    if (!show) return;
+    const h = Math.max(36, (view / total) * view);
+    const y = (scroller.scrollTop / (total - view)) * (view - h);
+    thumb.style.height = h + 'px';
+    thumb.style.transform = `translateY(${y}px)`;
+  };
+  const schedule = () => frame || (frame = requestAnimationFrame(update));
+  scroller.addEventListener('scroll', schedule, { passive: true });
+  const ro = new ResizeObserver(schedule);
+  ro.observe(scroller);
+  // Content height changes (more rows, an album opened) aren't resizes of the
+  // scroller itself; watch what's inside it too.
+  new MutationObserver(() => {
+    for (const c of scroller.children) ro.observe(c);
+    schedule();
+  }).observe(scroller, { childList: true });
+  for (const c of scroller.children) ro.observe(c);
+
+  thumb.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    thumb.setPointerCapture(e.pointerId);
+    rail.classList.add('dragging');
+    const startY = e.clientY;
+    const startTop = scroller.scrollTop;
+    const move = (ev) => {
+      const view = scroller.clientHeight;
+      const total = scroller.scrollHeight;
+      const h = thumb.offsetHeight;
+      scroller.scrollTop = startTop + ((ev.clientY - startY) / Math.max(1, view - h)) * (total - view);
+    };
+    const up = () => {
+      rail.classList.remove('dragging');
+      thumb.removeEventListener('pointermove', move);
+      thumb.removeEventListener('pointerup', up);
+    };
+    thumb.addEventListener('pointermove', move);
+    thumb.addEventListener('pointerup', up);
+  });
+  // Click on the rail: a page up or down, like a normal scrollbar.
+  rail.addEventListener('pointerdown', (e) => {
+    if (e.target !== rail) return;
+    const r = thumb.getBoundingClientRect();
+    scroller.scrollBy({ top: (e.clientY < r.top ? -1 : 1) * scroller.clientHeight * 0.9, behavior: 'smooth' });
+  });
+  schedule();
 }

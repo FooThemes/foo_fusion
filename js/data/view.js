@@ -19,6 +19,8 @@ import { player } from './player.js';
 const HEAD_CHUNK = 1000;
 export const TRACK_FIELDS = ['handle', 'title', 'artist', 'album', 'albumArtist', 'date', 'genre', 'duration', 'trackNumber', 'discNumber'];
 
+const headCache = new Map(); // "kind|albumKey|group key" -> head, across playlists (session)
+
 class View extends Emitter {
   playlist = null; // PlaylistInfo of the active playlist
   mode = 'albums'; // albums | artists | genres | songs | nowplaying
@@ -71,8 +73,8 @@ class View extends Emitter {
       this.backTo = null;
       this.filter = '';
       this.emit('filter', '');
-      // Another playlist: don't leave the old one's tiles up while it loads.
-      if (pl?.guid !== this.playlist?.guid) this.#blank();
+      // Another playlist: the old one stays up until the new one is ready
+      // (a few dozen ms), which reads as an instant switch.
       this.load();
     });
     store.subscribe((key) => {
@@ -175,6 +177,7 @@ class View extends Emitter {
 
   /** Re-read the active playlist and regroup it. */
   #headsFor = '';
+  #headsNs = '';
   #sortCache = null; // { guid, count, pattern, rows }
 
   /**
@@ -324,6 +327,12 @@ class View extends Emitter {
       const old = new Map(this.groups.map((g) => [g.key, g.head]));
       for (const g of groups) if (!g.head && old.get(g.key)) g.head = old.get(g.key);
     }
+    // Albums and artists seen in any playlist this session: their title and
+    // art are known at once, so switching playlists draws covers straight
+    // away instead of waiting for the details to be fetched again.
+    const ns = `${kind === 'albums' || this.drill ? 'a' : kind}|${albumKey}|`;
+    for (const g of groups) if (!g.head) g.head = headCache.get(ns + g.key);
+    this.#headsNs = ns;
     this.#headsFor = `${pl.guid}|${kind}|${this.drill?.key || ''}|${albumKey}`;
     this.groups = groups;
     this.total = groups.reduce((n, g) => n + g.count, 0);
@@ -378,7 +387,11 @@ class View extends Emitter {
       });
       if (gen !== this.#generation || !res) return;
       res.tracks.forEach((t, n) => {
-        chunk[n].head = { handle: t.handle, title: t.formats.t, artist: t.formats.a, year: t.formats.y, genre: t.formats.g, date: t.formats.d };
+        const head = { handle: t.handle, title: t.formats.t, artist: t.formats.a, year: t.formats.y, genre: t.formats.g, date: t.formats.d };
+        // Same album, same details: keep the object, so nothing redraws.
+        const old = chunk[n].head;
+        chunk[n].head = old && old.handle === head.handle && old.title === head.title && old.year === head.year && old.date === head.date && old.genre === head.genre && old.artist === head.artist ? old : head;
+        headCache.set(this.#headsNs + chunk[n].key, chunk[n].head);
       });
       this.emit('heads', { from: i, to: i + chunk.length });
     }

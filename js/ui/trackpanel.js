@@ -49,6 +49,11 @@ export class TrackPanel {
     // pixels can be sampled for Album colours without reading the file again.
     this.cover.crossOrigin = 'anonymous';
     this.coverBox = el('div.art.ph-album.tp-cover', null, this.cover);
+    // Right-click the cover: foobar2000's menu for the album (or the disc shown).
+    this.coverBox.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (this.group) trackContextMenu(this.visibleRows());
+    });
     this.coverLabel = el('div.tp-cover-label', { hidden: true });
     this.title = el('h2.tp-title.ellipsis');
     this.meta = el('div.tp-meta.ellipsis');
@@ -296,7 +301,19 @@ export class TrackPanel {
       const thumb = handle ? el('img', { alt: '', decoding: 'async' }) : null;
       const node = el(
         'button.tp-disc' + (on ? '.on' : ''),
-        { role: 'tab', 'aria-selected': String(on), title, dataset: { disc: String(key) }, onclick: () => this.showDisc(key) },
+        {
+          role: 'tab',
+          'aria-selected': String(on),
+          title,
+          dataset: { disc: String(key) },
+          onclick: () => this.showDisc(key),
+          // Right-click: foobar2000's menu for that disc (or the whole album).
+          oncontextmenu: (e) => {
+            e.preventDefault();
+            const d = key === 'all' ? null : this.discs.find((x) => x.number === key);
+            trackContextMenu(d ? d.rows : this.rows);
+          },
+        },
         thumb ? el('span.art.ph-album.tp-disc-art', null, thumb) : icon('disc'),
         el('span.ellipsis', { text: label }),
       );

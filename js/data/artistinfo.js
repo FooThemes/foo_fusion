@@ -127,6 +127,10 @@ function parseNfo(xml) {
   const root = doc.querySelector('artist');
   if (!root || doc.querySelector('parsererror')) return null;
   const one = (tag) => root.querySelector(`:scope > ${tag}`)?.textContent.trim() || '';
+  const people = (tag) =>
+    [...root.querySelectorAll(`:scope > ${tag}`)]
+      .map((n) => ({ name: n.textContent.trim(), mbid: n.getAttribute('mbid') || '', ended: n.getAttribute('ended') === 'true' }))
+      .filter((p) => p.name);
   // Dates: "0" (TheAudioDB's "unknown") or other non-dates count as empty.
   const date = (tag) => (/^[1-9]\d{2,3}\b/.test(one(tag)) ? one(tag) : '');
   const all = (tag) => [...root.querySelectorAll(`:scope > ${tag}`)].map((n) => n.textContent.trim()).filter(Boolean);
@@ -147,6 +151,10 @@ function parseNfo(xml) {
     biography: one('biography').replace(/\[\s*(?:\d+|[a-z]|citation needed|note \d+|clarification needed)\s*\]/gi, ''),
     musicbrainz: one('musicBrainzArtistID'),
     wikipedia: one('wikipedia'),
+    website: one('website'),
+    // Bands the artist is in, and a band's members (Fusion's own fields).
+    memberOf: people('memberof'),
+    members: people('member'),
   };
 }
 

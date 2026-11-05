@@ -137,7 +137,7 @@ def find_mbid(web, name):
 
 
 def musicbrainz(web, mbid):
-    return web.get(f'https://musicbrainz.org/ws/2/artist/{mbid}?inc=url-rels+genres+aliases&fmt=json') or {}
+    return web.get(f'https://musicbrainz.org/ws/2/artist/{mbid}?inc=url-rels+artist-rels+genres+aliases&fmt=json') or {}
 
 
 def audiodb(web, key, mbid, name):
@@ -257,6 +257,20 @@ def split_list(s):
     return [p.strip() for p in re.split(r'[/,;]', s or '') if p.strip()]
 
 
+def full_date(value):
+    """A date as precise as it's known: "2002-10-24", "1996-11" or "1971";
+    '' for unknown ("0", "0000")."""
+    m = re.match(r'\s*(\d{4})(-\d{2})?(-\d{2})?', str(value or ''))
+    if not m or int(m.group(1)) == 0:
+        return ''
+    return ''.join(g for g in m.groups() if g)
+
+
+def best_date(mb_value, adb_value):
+    """MusicBrainz's date (often a full one), else TheAudioDB's year."""
+    return full_date(mb_value) or year(adb_value)
+
+
 def year(value):
     """A real year from a date or year field, else '' (TheAudioDB uses "0"
     for unknown)."""
@@ -337,18 +351,32 @@ def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
         add('mood', m)
     life = mb.get('life-span') or {}
     person = mb.get('type') == 'Person' or (not mb.get('type') and adb.get('intMembers') == '1')
-    begin, end = year(life.get('begin')), year(life.get('end'))
-    formed = year(adb.get('intFormedYear')) or begin
-    born = year(adb.get('intBornYear')) or (begin if person else '')
-    died = year(adb.get('intDiedYear')) or (end if person else '')
-    disbanded = year(adb.get('strDisbanded')) or (end if not person else '')
+    # Full dates where MusicBrainz has them ("2002-10-24"), else the year.
+    begin, end = life.get('begin'), life.get('end')
+    formed = best_date(begin, adb.get('intFormedYear'))
+    born = best_date(begin if person else '', adb.get('intBornYear'))
+    died = best_date(end if person else '', adb.get('intDiedYear'))
+    disbanded = best_date(end if not person else '', adb.get('strDisbanded'))
     add('formed', '' if person else formed)
     add('born', born)
     add('died', died)
     add('disbanded', disbanded)
     add('biography', bio)
-    # Not a Kodi field (Kodi ignores it); Fusion shows it as a link.
+    # Not Kodi fields (Kodi ignores them); Fusion shows them on the artist page.
     add('wikipedia', wiki_url)
+    rels = mb.get('relations') or []
+    add('website', next((r['url']['resource'] for r in rels if r.get('type') == 'official homepage' and r.get('url')), None))
+    # Bands this artist is (or was) in, and a band's members, with their
+    # MusicBrainz IDs: <memberof mbid="…">Nickelback</memberof>.
+    seen = set()
+    for r in rels:
+        other = r.get('artist') or {}
+        if r.get('type') != 'member of band' or not other.get('name') or other.get('id') in seen:
+            continue
+        seen.add(other.get('id'))
+        tag = 'memberof' if r.get('direction') == 'forward' else 'member'
+        attrs = f' mbid="{escape(other.get("id") or "")}"' + (' ended="true"' if r.get('ended') else '')
+        tags.append(f'    <{tag}{attrs}>{escape(other["name"])}</{tag}>')
     body = '\n'.join(tags)
     return f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n{MARK}\n<artist>\n{body}\n</artist>\n'
 

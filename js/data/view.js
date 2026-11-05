@@ -121,6 +121,27 @@ class View extends Emitter {
   }
 
   /** Jump to one artist's or genre's albums (from the expanded album's links). */
+  /**
+   * Every artist or genre in the Collection (lower case), for links that
+   * should only be clickable when there's something to show. Cached for a
+   * few minutes.
+   */
+  libraryValues(kind) {
+    const now = Date.now();
+    const c = libraryCache[kind];
+    if (c && now - c.at < 5 * 60 * 1000) return c.promise;
+    const pl = playlists.byName(COLLECTION);
+    const promise = !pl
+      ? Promise.resolve(new Set())
+      : tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns: [kind === 'genres' ? TF.genresMulti : TF.artistsMulti] }).then((res) => {
+          const set = new Set();
+          for (const r of res?.runs || []) for (const v of splitValues(r.key)) set.add(v.toLowerCase());
+          return set;
+        });
+    libraryCache[kind] = { at: now, promise };
+    return promise;
+  }
+
   showValue(kind, key, fromGroup) {
     this.backTo = { mode: this.mode, drill: this.drill, expandedKey: fromGroup?.key };
     store.set('view', kind);
@@ -583,6 +604,7 @@ function intersect(groups, matched) {
   return out;
 }
 
+const libraryCache = {}; // kind -> { at, promise: Set of lower-case values }
 const UNKNOWN_ARTIST = 'Unknown Artist';
 const UNKNOWN_GENRE = 'Unknown Genre';
 const SEP = '|||';

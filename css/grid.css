@@ -675,6 +675,37 @@
   display: block;
 }
 
+/* Click a cut-off (or opened) biography to open or fold it. */
+.ah-bio.clipped,
+.ah-bio.foldable {
+  cursor: pointer;
+}
+
+/* Genre and band links: plain text that underlines on hover. */
+.ah-value {
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.ah-value:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* "Member of Nickelback", "Members …" */
+.ah-assoc {
+  font-size: 13px;
+  margin: -4px 0 8px;
+}
+
+.ah-assoc-label {
+  color: var(--text2);
+}
+
 .ah-bio p {
   margin: 0 0 0.7em;
 }

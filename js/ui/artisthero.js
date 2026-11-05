@@ -11,6 +11,7 @@ import { pickVersion, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { refreshArtist } from '../data/artwork.js';
 import { showMenu } from './menus.js';
+import { view } from '../data/view.js';
 
 const GAP = 24; // between the header and the first row of albums
 
@@ -26,13 +27,19 @@ export class ArtistHero {
     this.logo = el('img.ah-logo', { alt: '' });
     this.meta = el('div.ah-meta');
     this.bio = el('div.ah-bio');
+    this.assoc = el('div.ah-assoc');
+    // Click anywhere on a cut-off biography to read it all (and again to fold it).
+    this.bio.addEventListener('click', (e) => {
+      if (e.target.closest('a, button') || getSelection()?.toString()) return;
+      if (this.expanded || this.bio.classList.contains('clipped')) this.#toggle();
+    });
     this.more = el('button.ah-more', { onclick: () => this.#toggle() });
     this.links = el('div.ah-links');
     this.node = el(
       'div.artist-hero',
       { hidden: true },
       el('div.ah-back', null, this.fanart),
-      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.logo, this.title, this.meta, this.bio, el('div.ah-foot', null, this.more, this.links))),
+      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.logo, this.title, this.meta, this.assoc, this.bio, el('div.ah-foot', null, this.more, this.links))),
     );
     this.node.addEventListener('contextmenu', (e) => {
       if (!this.name) return;
@@ -81,15 +88,15 @@ export class ArtistHero {
     this.title.textContent = pick ? pick.lead : info?.name || name;
     if (pick?.other) this.title.append(' ', el('span.alt-version', { text: pick.other }));
     this.title.title = pick?.tip || '';
-    const life = info?.formed || info?.born ? [info.formed || info.born, info.disbanded || info.died].filter(Boolean).join(' – ') : '';
-    const tags = [...(info?.genres || []), ...(info?.styles || [])].filter((t, i, a) => a.indexOf(t) === i).slice(0, 5);
-    this.meta.textContent = [tags.join(', '), info?.yearsActive, life].filter(Boolean).join(' · ');
+    this.#renderMeta(info, key);
+    this.#renderAssoc(info, key);
     clear(this.bio);
     for (const para of (info?.biography || '').split(/\n+/).filter(Boolean)) this.bio.append(el('p', { text: para }));
     this.bio.hidden = !info?.biography;
     // Where the biography came from, and the artist on MusicBrainz.
     clear(this.links);
     const link = (label, url) => el('button.ah-link', { title: url, onclick: () => tryCall('shell.openExternal', { url }) }, label, icon('link'));
+    if (/^https?:\/\//.test(info?.website || '')) this.links.append(link('Website', info.website));
     if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
     if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/artist/${info.musicbrainz}`));
     this.node.classList.toggle('has-fanart', !!files.fanart);
@@ -102,6 +109,55 @@ export class ArtistHero {
     this.#setImage(this.picture, files.picture, 400);
     this.#setImage(this.fanart, files.fanart, 1600);
     this.#measure();
+  }
+
+  /** Genres (linked to their pages when the library has them), years, dates. */
+  async #renderMeta(info, key) {
+    clear(this.meta);
+    const tags = [...(info?.genres || []), ...(info?.styles || [])].filter((t, i, a) => a.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i).slice(0, 5);
+    const person = !!(info?.born || info?.died);
+    const life = person
+      ? [info.born && `Born ${formatDate(info.born)}`, info.died && `died ${formatDate(info.died)}`]
+      : [info?.formed && `Formed ${formatDate(info.formed)}`, info?.disbanded && `disbanded ${formatDate(info.disbanded)}`];
+    const lifeText = life.filter(Boolean).join(', ');
+    const genres = tags.length ? await view.libraryValues('genres') : new Set();
+    if (this.key !== key) return;
+    const parts = [];
+    if (tags.length) {
+      const g = el('span');
+      tags.forEach((t, i) => g.append(...(i ? [', '] : []), genres.has(t.toLowerCase()) ? this.#valueLink('genres', t) : t));
+      parts.push(g);
+    }
+    if (info?.yearsActive) parts.push(info.yearsActive);
+    if (lifeText) parts.push(lifeText);
+    parts.forEach((p, i) => this.meta.append(...(i ? [' · '] : []), p));
+  }
+
+  /** "Member of Nickelback" for a solo artist; a band's members. */
+  async #renderAssoc(info, key) {
+    clear(this.assoc);
+    const groups = [
+      ['Member of', (info?.memberOf || []).filter((p) => !p.ended)],
+      ['Formerly in', (info?.memberOf || []).filter((p) => p.ended)],
+      ['Members', (info?.members || []).filter((p) => !p.ended)],
+      ['Former members', (info?.members || []).filter((p) => p.ended)],
+    ].filter(([, list]) => list.length);
+    this.assoc.hidden = !groups.length;
+    if (!groups.length) return;
+    const artists = await view.libraryValues('artists');
+    if (this.key !== key) return;
+    for (const [label, list] of groups) {
+      const line = el('div', null, el('span.ah-assoc-label', { text: label + ' ' }));
+      // Artists in the library first (they're links), then the rest.
+      const sorted = [...list].sort((a, b) => artists.has(b.name.toLowerCase()) - artists.has(a.name.toLowerCase()));
+      sorted.forEach((p, i) => line.append(...(i ? [', '] : []), artists.has(p.name.toLowerCase()) ? this.#valueLink('artists', p.name) : p.name));
+      this.assoc.append(line);
+    }
+    this.#measure();
+  }
+
+  #valueLink(kind, value) {
+    return el('button.ah-value', { text: value, title: kind === 'artists' ? `Show ${value}` : `Show ${value} albums`, onclick: () => view.showValue(kind, value) });
   }
 
   async #setImage(img, file, px) {
@@ -129,6 +185,8 @@ export class ArtistHero {
     this.node.classList.toggle('expanded', this.expanded);
     requestAnimationFrame(() => {
       const clipped = this.bio.scrollHeight > this.bio.clientHeight + 2;
+      this.bio.classList.toggle('clipped', clipped && !this.expanded);
+      this.bio.classList.toggle('foldable', this.expanded);
       this.more.hidden = !this.expanded && !clipped;
       this.more.textContent = this.expanded ? 'Less' : 'More';
       this.grid.top = this.node.offsetHeight + GAP;
@@ -143,4 +201,15 @@ export class ArtistHero {
       this.grid.layout();
     }
   }
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "1974-11-15" -> "15 November 1974"; "1996-11" -> "November 1996"; anything else as is. */
+function formatDate(text) {
+  const m = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/.exec(text || '');
+  if (!m) return text;
+  const [, y, mo, d] = m;
+  const month = mo ? MONTHS[Number(mo) - 1] : '';
+  return [d ? String(Number(d)) : '', month, y].filter(Boolean).join(' ');
 }

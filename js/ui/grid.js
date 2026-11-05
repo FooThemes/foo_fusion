@@ -207,7 +207,9 @@ export class Grid {
 
   /** Art to try for a tile, in order. */
   #types(g) {
-    if (this.kind === 'artists') return [`info:${g.key}`, 'artist', 'front'];
+    // Artists: their picture, foobar2000's artist art, then (unless that's
+    // turned off) one of their album covers.
+    if (this.kind === 'artists') return store.get('artistNoPicture') === 'placeholder' ? [`info:${g.key}`, 'artist'] : [`info:${g.key}`, 'artist', 'front'];
     if (this.kind === 'albums') return albumArtTypes(store.get('separateDiscs'));
     return ['front'];
   }

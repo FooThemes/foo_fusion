@@ -149,7 +149,7 @@ export function mountContent(root) {
   player.on('state', () => current?.refreshPlaying?.());
   store.subscribe((k) => {
     if (k === 'gifCovers') redrawArt();
-    if (['tileSize', 'artistTileSize', 'showAlbumYear', 'showTrackCounts', 'listArtLeft', 'listBackground', 'dimEditionTags', 'dimWords', ...VERSION_KEYS].includes(k) && current?.layout) {
+    if (['tileSize', 'artistTileSize', 'showAlbumYear', 'showTrackCounts', 'listArtLeft', 'listBackground', 'dimEditionTags', 'dimWords', 'artistNoPicture', ...VERSION_KEYS].includes(k) && current?.layout) {
       if (current.expanded >= 0) current.panel.open(view.groups[current.expanded], current.expanded);
       current.layout();
       current.refreshHeads();

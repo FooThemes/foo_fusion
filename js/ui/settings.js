@@ -102,7 +102,7 @@ export function mountSettings(root, app) {
         toggle('Track info panel', 'infoPanel'),
         toggle('Action bar for selected songs', 'selectionBar', 'Play, queue, like and add-to buttons along the bottom when songs are selected'),
         toggle('Waveform seek bar', 'waveformSeekbar', 'Draws the playing song’s waveform in place of the plain bar'),
-        toggle('Smooth scrolling', 'smoothScroll'),
+        toggle('Animate scrolling to an opened album', 'smoothScroll', 'Glides to an album when it opens below the fold, rather than jumping'),
       ]),
       section('Expanded album', [
         select('Background', 'listBackground', [
@@ -118,9 +118,9 @@ export function mountSettings(root, app) {
         toggle('Separate albums by disc', 'separateDiscs'),
         toggle('Show year under albums', 'showAlbumYear'),
         toggle('Show song counts under albums', 'showTrackCounts'),
-        range('Album size', 'tileSize', 110, 260, 10),
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
       ]),
+      section('Tile sizes', [range('Albums', 'tileSize', 110, 260, 10), range('Artists', 'artistTileSize', 100, 240, 10)]),
       section('Covers', [
         select('Animated GIF covers', 'gifCovers', [
           ['large', 'Large covers only', 'The open album and Now Playing animate; tiles show a still frame (much lighter with big GIFs)'],
@@ -135,7 +135,10 @@ export function mountSettings(root, app) {
     ],
     artists: () => [
       section('Artists', [
-        range('Artist size', 'artistTileSize', 100, 240, 10),
+        select('Artists without a picture', 'artistNoPicture', [
+          ['cover', 'Show an album cover', 'One of their album covers stands in'],
+          ['placeholder', 'Show a blank artist picture', 'The same plain picture for every artist without one'],
+        ]),
         toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
       ]),
       section('Artist information', [
@@ -170,10 +173,25 @@ export function mountSettings(root, app) {
         link('reset', 'Reset Fusion settings', async () => {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();
         }),
-        el('p.set-about', { text: `Fusion ${VERSION}` }),
+        about(),
       ]),
     ],
   };
+
+  // Fusion's version, and foobar2000's and its WebView2 component's.
+  let hostVersions = null;
+  function about() {
+    const line = el('p.set-about', { text: `Fusion ${VERSION}` });
+    const host = el('p.set-about');
+    const fill = (v) => {
+      if (!v) return;
+      const fb = [`foobar2000 ${v.version || ''}`.trim(), [v.is64bit ? '64-bit' : '32-bit', v.isPortable ? 'portable' : ''].filter(Boolean).join(', ')].join(' · ');
+      host.textContent = fb + (v.plugin?.version ? ` · ${v.plugin.name || 'foo_ui_webview2'} ${v.plugin.version}` : '');
+    };
+    if (hostVersions) fill(hostVersions);
+    else tryCall('config.getVersionInfo').then((v) => fill((hostVersions = v)));
+    return el('div', null, line, host);
+  }
 
   // One kind of text: which version shows, what follows it, and how that looks.
   function languageCard(kind, label, sample) {

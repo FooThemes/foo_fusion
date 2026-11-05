@@ -47,6 +47,9 @@
 .set-body {
   flex: 1;
   overflow-y: auto;
+  /* Room for the scrollbar is kept whether or not it shows, so nothing
+     changes width when a page gets long enough to scroll. */
+  scrollbar-gutter: stable;
   padding: 0 26px 30px;
 }
 

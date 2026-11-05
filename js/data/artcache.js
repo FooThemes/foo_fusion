@@ -124,7 +124,8 @@ let working = false;
 
 /** Make a cached copy of `url` (an image already on screen) for this cover. */
 export function storeCover(pick, px, url, alpha) {
-  if (!base || !pick || /\.gif$/i.test(pick.name)) return; // GIFs may be animated
+  // A GIF's own (animated) picture isn't copied; foobar2000's still copy is.
+  if (!base || !pick || (/\.gif$/i.test(pick.name) && alpha)) return;
   const key = keyFor(pick, px);
   if (index.files[key] || queued.has(key)) return;
   queued.add(key);

@@ -2,6 +2,7 @@
 // and shows the empty-state messages from the original skin.
 
 import { VERSION_KEYS } from '../data/versions.js';
+import { redrawArt } from '../data/artwork.js';
 import { el, clear } from '../core/util.js';
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
@@ -147,6 +148,7 @@ export function mountContent(root) {
   player.on('track', () => current?.refreshPlaying?.());
   player.on('state', () => current?.refreshPlaying?.());
   store.subscribe((k) => {
+    if (k === 'gifCovers') redrawArt();
     if (['tileSize', 'artistTileSize', 'showAlbumYear', 'showTrackCounts', 'listArtLeft', 'listBackground', 'dimEditionTags', 'dimWords', ...VERSION_KEYS].includes(k) && current?.layout) {
       if (current.expanded >= 0) current.panel.open(view.groups[current.expanded], current.expanded);
       current.layout();

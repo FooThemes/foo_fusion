@@ -84,6 +84,7 @@ const DEFAULTS = {
   thenTitles: 'auto',
   thenArtists: 'auto',
   versionTooltips: true, // list every version in tooltips
+  gifCovers: 'large', // animate GIF covers: 'large' (open album, Now Playing), 'everywhere' or 'never'
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…
   dimEditionTags: true, // grey out '(Single)', '(Deluxe Edition)'… at the end of titles
   dimWords: 'Single, EP, Deluxe, Edition, Remaster, Remastered, Live, Bonus, Expanded, Anniversary, Reissue, Demo, Acoustic, Instrumental, Mono, Version, Remix, Radio Edit',

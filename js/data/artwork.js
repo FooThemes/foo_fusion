@@ -113,6 +113,36 @@ export function keepOriginal(handle) {
 
 const dirPick = new Map(); // folder -> its cover file { name, path, size } | null (this session)
 
+// --- Animated GIF covers ------------------------------------------------------
+// GIF covers can be 10-90 MB, and every animated one on screen is decoded over
+// and over. They animate only where it's worth it (Settings > Library >
+// Animated GIF covers): by default the open album's cover, Now Playing and the
+// large sidebar art; smaller covers use foobar2000's small still copy, which
+// the disk cache keeps like any other cover.
+
+/** Should a GIF cover at this size animate? */
+export function animateGif(cssSize) {
+  const mode = store.get('gifCovers');
+  return mode === 'everywhere' || (mode !== 'never' && cssSize >= 240);
+}
+
+function isGifCover(path) {
+  const pick = coverFile('front', path);
+  return !!pick && /\.gif$/i.test(pick.name);
+}
+
+/** Load this track's front cover unscaled? PNGs (transparency) always; GIFs where they animate. */
+function unscaled(path, cssSize) {
+  const keep = keepOriginal(path);
+  if (!keep) return keep;
+  return isGifCover(path) && !animateGif(cssSize) ? false : keep;
+}
+
+/** The GIF setting changed: show every cover again. */
+export function redrawArt() {
+  rebind(null);
+}
+
 /** The cover file for a track's 'front' or 'parent' art: object, null (none) or undefined (unknown). */
 function coverFile(type, handle) {
   if (type === 'front') {
@@ -317,7 +347,7 @@ async function loadParentCover(dir, px) {
 /** Art for the playing track (cached per track by the caller). */
 export async function nowPlayingUrl(cssSize, type = 'front', handle = null) {
   // PNG/GIF folder covers unscaled, as for the grid.
-  const keep = handle && type === 'front' && (keepOriginal(handle) ?? (await probeDir(dirOf(handle), handle)) === 'keep');
+  const keep = handle && type === 'front' && (unscaled(handle, cssSize) ?? ((await probeDir(dirOf(handle), handle)) === 'keep' && !(isGifCover(handle) && !animateGif(cssSize))));
   const res = await tryCall('artwork.getFb2kUrl', { type, maxSize: keep ? 0 : sizeBucket(cssSize) });
   const url = res?.available ? bust(res.dataUrl) : null;
   if (url && keep) rawUrls.add(url);
@@ -421,7 +451,7 @@ function readyRaw(path, type) {
  */
 export async function preloadArt(path, cssSize, types = ['front']) {
   for (const type of types) {
-    const keep = type === 'front' && keepOriginal(path);
+    const keep = type === 'front' && unscaled(path, cssSize);
     let url;
     if (type.startsWith('info:')) {
       const files = await artistFiles(type.slice(5), path);
@@ -514,7 +544,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
   // once, with no fade, so tiles don't flash.
   let ready = null;
   for (const t of types) {
-    const r = t === 'parent' ? parentReady(path, cssSize) : t === 'front' && keepOriginal(path) ? readyRaw(path, t) : readyUrl(path, t, cssSize);
+    const r = t === 'parent' ? parentReady(path, cssSize) : t === 'front' && unscaled(path, cssSize) ? readyRaw(path, t) : readyUrl(path, t, cssSize);
     if (r === undefined) break; // still unknown: load normally
     if (r) {
       ready = r;
@@ -531,6 +561,8 @@ export function bindArt(img, path, cssSize, types = ['front']) {
         if (t === 'parent' || t === 'artist' || t.startsWith('info:')) continue; // none of this kind: the next type
         break;
       }
+      // An animated GIF here: the still copy on disk won't do.
+      if (t === 'front' && /\.gif$/i.test(pick.name) && animateGif(cssSize)) break;
       const disk = cachedUrl(pick, sizeBucket(cssSize));
       if (!disk) break;
       const instant = loadedUrls.has(disk);
@@ -570,7 +602,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
   const attempt = async (i) => {
     if (i >= types.length || img.dataset.artToken !== token) return;
     const type = types[i];
-    const keep = type === 'front' && keepOriginal(path);
+    const keep = type === 'front' && unscaled(path, cssSize);
     let url;
     if (type.startsWith('info:')) {
       const files = await artistFiles(type.slice(5), path);
@@ -584,6 +616,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     if (type === 'front' && keep === undefined && url) {
       probeDir(dirOf(path), path).then(async (kind) => {
         if (kind !== 'keep' || img.dataset.artToken !== token) return;
+        if (isGifCover(path) && !animateGif(cssSize)) return; // a still copy is enough here
         const raw = await originalUrl(path, type);
         if (!raw || img.dataset.artToken !== token) return;
         const pre = new Image();

@@ -121,6 +121,13 @@ export function mountSettings(root, app) {
         range('Album size', 'tileSize', 110, 260, 10),
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
       ]),
+      section('Covers', [
+        select('Animated GIF covers', 'gifCovers', [
+          ['large', 'Large covers only', 'The open album and Now Playing animate; tiles show a still frame (much lighter with big GIFs)'],
+          ['everywhere', 'Everywhere', 'Every GIF cover animates, tiles included'],
+          ['never', 'Never', 'Still frames everywhere'],
+        ]),
+      ]),
       section('Edition tags', [
         toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
         wordsField(),

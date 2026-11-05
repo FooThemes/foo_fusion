@@ -381,12 +381,61 @@ def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
     return f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n{MARK}\n<artist>\n{body}\n</artist>\n'
 
 
+# Fields that can appear more than once: added only when the file has none.
+REPEATED = {'genre', 'style', 'mood', 'memberof', 'member'}
+DATES = {'born', 'formed', 'died', 'disbanded'}
+
+
+def merge_into(path, fresh, dry_run):
+    """Fill in an artist.nfo this script didn't write: add the fields it
+    lacks, and make a date more precise when the new one agrees with it
+    ("1974" -> "1974-11-15"). Nothing already there is changed or removed.
+    Returns the names of the fields added or updated."""
+    import xml.etree.ElementTree as ET
+    try:
+        parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+        tree = ET.parse(path, parser)
+    except (ET.ParseError, OSError) as e:
+        raise RuntimeError(f"can't read its artist.nfo to update it ({e})")
+    root = tree.getroot()
+    if root.tag != 'artist':
+        return []
+    new = ET.fromstring(fresh.split('\n', 2)[2] if fresh.startswith('<?xml') else fresh)
+    have = {child.tag for child in root if isinstance(child.tag, str)}
+    changed = []
+    for el in new:
+        if not isinstance(el.tag, str):
+            continue
+        if el.tag not in have:
+            root.append(el)
+            if el.tag not in changed:
+                changed.append(el.tag)
+        elif el.tag in DATES:
+            old = root.find(el.tag)
+            text = (old.text or '').strip()
+            if len(el.text or '') > len(text) and (el.text or '').startswith(text) and re.fullmatch(r'\d{4}(-\d{2})?', text):
+                old.text = el.text
+                changed.append(el.tag)
+    if changed and not dry_run:
+        ET.indent(tree, space='    ')
+        # Keep the file's own start (its declaration and any comment) as it was.
+        with open(path, encoding='utf-8', errors='replace') as f:
+            original = f.read()
+        start = original.find('<artist')
+        head = original[:start] if start > 0 else '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(head + ET.tostring(root, encoding='unicode') + '\n')
+        os.replace(tmp, path)
+    return changed
+
+
 # --- main ---------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(description='Fetch artist information for Fusion.')
     ap.add_argument('--dry-run', action='store_true', help="show what would be done; don't download or write")
-    ap.add_argument('--refresh', action='store_true', help='rewrite artist.nfo files this script made, and retry artists marked done')
+    ap.add_argument('--refresh', action='store_true', help='rewrite artist.nfo files this script made, fill in missing fields in other artist.nfo files, and retry artists marked done')
     ap.add_argument('--only', help='just this artist (exact name)')
     ap.add_argument('--limit', type=int, default=0, help='stop after this many artists')
     args = ap.parse_args()
@@ -433,7 +482,10 @@ def main():
             have = {b: existing(folder, b) for b in ('artist', 'fanart', 'logo')}
             nfo_path = os.path.join(folder, 'artist.nfo')
             nfo_mine = os.path.exists(nfo_path) and MARK in open(nfo_path, encoding='utf-8', errors='ignore').read(400)
-            want_nfo = not os.path.exists(nfo_path) or (args.refresh and nfo_mine)
+            # Other tools' (or hand-made) artist.nfo files are only added to,
+            # and only with --refresh.
+            merge_nfo = args.refresh and os.path.exists(nfo_path) and not nfo_mine
+            want_nfo = not os.path.exists(nfo_path) or (args.refresh and nfo_mine) or merge_nfo
             if not want_nfo and all(have.values()):
                 stats['skipped'] += 1
                 continue
@@ -489,10 +541,16 @@ def main():
                     if not wiki_url and mb:
                         # Link the article even when the biography came from elsewhere.
                         _, wiki_url = wikipedia_intro(web, mb, lang.lower()) if 'wikipedia' not in order else ('', None)
-                    if not args.dry_run:
-                        with open(nfo_path, 'w', encoding='utf-8', newline='\n') as f:
-                            f.write(build_nfo(name, mbid, adb, mb, bio, wiki_url))
-                    wrote.append('artist.nfo')
+                    fresh = build_nfo(name, mbid, adb, mb, bio, wiki_url)
+                    if merge_nfo:
+                        added = merge_into(nfo_path, fresh, args.dry_run)
+                        if added:
+                            wrote.append('artist.nfo (added ' + ', '.join(added) + ')')
+                    else:
+                        if not args.dry_run:
+                            with open(nfo_path, 'w', encoding='utf-8', newline='\n') as f:
+                                f.write(fresh)
+                        wrote.append('artist.nfo')
                 where = os.path.relpath(folder, cfg['music_root'])
                 note(f'+  {name} -> {where}: {", ".join(wrote) or "nothing new"}')
                 state[name] = {'status': 'done', 'mbid': mbid, 'when': int(time.time())}

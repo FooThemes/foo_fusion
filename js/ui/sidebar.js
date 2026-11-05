@@ -55,7 +55,16 @@ export function mountSidebar(root, app) {
     list,
   );
 
-  const runSearch = debounce(() => view.setFilter(search.value.trim()), 250);
+  // Search always looks through the whole Collection, whichever playlist
+  // (or Now playing) was showing.
+  const searchFor = async (text) => {
+    if (text && (view.mode === 'nowplaying' || playlists.activePlaylist?.name !== COLLECTION)) {
+      leaveNowPlaying(COLLECTION);
+      await playlists.ensureCollection();
+    }
+    view.setFilter(text);
+  };
+  const runSearch = debounce(() => searchFor(search.value.trim()), 250);
   search.addEventListener('input', runSearch);
   search.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -64,7 +73,7 @@ export function mountSidebar(root, app) {
       search.blur();
     } else if (e.key === 'Enter') {
       runSearch.cancel();
-      view.setFilter(search.value.trim());
+      searchFor(search.value.trim());
     }
     e.stopPropagation();
   });

@@ -195,7 +195,8 @@ export function playlistMenu(p, targets = [p]) {
     } },
     '-',
     { label: 'Autoplaylist properties…', enabled: p.isAutoplaylist && !many, run: () => editAutoplaylist(p) },
-    { label: "foobar2000's autoplaylist editor…", enabled: p.isAutoplaylist && !many, run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) },
+    // Not for Collection and Favourites: their queries are Fusion's.
+    ...(special ? [] : [{ label: "foobar2000's autoplaylist editor…", enabled: p.isAutoplaylist && !many, run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) }]),
     { label: 'Convert to a normal playlist', enabled: p.isAutoplaylist && !special && !many, run: () => call('playlist.removeAutoplaylist', { playlist: p.index }) },
     '-',
     { label: many ? `Delete ${targets.length} playlists` : 'Delete', shortcut: 'Del', run: () => deletePlaylists(targets) },

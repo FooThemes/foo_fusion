@@ -13,7 +13,10 @@
   color: var(--text);
   box-shadow: -6px 0 24px rgba(0, 0, 0, 0.25);
   transform: translateX(105%);
-  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Hidden only once it has slid out (visibility switches after the slide). */
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+    visibility 0s linear 0.22s;
   display: flex;
   flex-direction: column;
   z-index: 20;
@@ -23,6 +26,9 @@
 .settings.open {
   transform: none;
   visibility: visible;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+    visibility 0s;
 }
 
 .set-head {
@@ -540,7 +546,9 @@
   color: var(--text);
   box-shadow: 6px 0 24px rgba(0, 0, 0, 0.25);
   transform: translateX(-105%);
-  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+    visibility 0s linear 0.22s;
   visibility: hidden;
   contain: layout paint;
   z-index: 20;
@@ -549,6 +557,9 @@
 .plm.open {
   transform: none;
   visibility: visible;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+    visibility 0s;
 }
 
 .plm-head {

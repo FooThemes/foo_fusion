@@ -53,7 +53,8 @@ export function mountHeader(root, app) {
       actions.append(textBtn('play', 'Play all', () => view.play(view.rowAt(0)), !has || view.total === 0));
       actions.append(textBtn('shuffle', 'Shuffle all', shuffleAll, !has));
       if (view.total) actions.append(textBtn('add', 'Add to', () => addAll(), !has));
-      if (pl.isAutoplaylist) actions.append(textBtn('autoplaylist', 'Properties', () => editAutoplaylist(pl)));
+      // Collection and Favourites are Fusion's own: nothing to change there.
+      if (pl.isAutoplaylist && !playlists.isSpecial(pl)) actions.append(textBtn('autoplaylist', 'Properties', () => editAutoplaylist(pl)));
       if (!playlists.isSpecial(pl)) {
         actions.append(textBtn('rename', 'Rename', () => renamePlaylist(pl)));
         actions.append(textBtn('delete', 'Delete', () => deletePlaylist(pl)));

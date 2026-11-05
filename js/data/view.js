@@ -120,7 +120,6 @@ class View extends Emitter {
     this.load();
   }
 
-  /** Jump to one artist's or genre's albums (from the expanded album's links). */
   /**
    * Every artist or genre in the Collection (lower case), for links that
    * should only be clickable when there's something to show. Cached for a
@@ -142,6 +141,7 @@ class View extends Emitter {
     return promise;
   }
 
+  /** Jump to one artist's or genre's albums (from the expanded album's links). */
   showValue(kind, key, fromGroup) {
     this.backTo = { mode: this.mode, drill: this.drill, expandedKey: fromGroup?.key };
     store.set('view', kind);

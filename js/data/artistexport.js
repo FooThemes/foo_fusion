@@ -7,6 +7,7 @@
 import { tryCall } from '../core/bridge.js';
 import { TF } from './patterns.js';
 import { playlists, COLLECTION } from './playlists.js';
+import { splitValues } from './view.js';
 
 const SEP = '|||';
 // MBIDs from the tag that matches where the names came from (ARTISTS, else
@@ -60,9 +61,8 @@ export async function exportGenres() {
   if (!res) throw new Error("Couldn't read the library");
   const genres = new Map(); // lower case -> { name, songs }
   for (const run of res.runs || []) {
-    for (const part of run.key.split(SEP)) {
-      for (const v of part.split(';')) {
-        const name = v.trim();
+    {
+      for (const name of splitValues(run.key, 'genres')) {
         if (!name || name.toLowerCase() === 'unknown genre') continue;
         const g = genres.get(name.toLowerCase()) || { name, songs: 0 };
         // The capitalised spelling wins ("J-Pop" over "j-pop"), as on the Genres tab.

@@ -44,6 +44,22 @@ export function mountSettings(root, app) {
   panel.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') app.toggleSettings(false);
   });
+  // A click anywhere outside the panel closes it (not one on the button that
+  // toggles it, nor in a dialog or menu the panel opened).
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (!panel.classList.contains('open') || panel.contains(e.target)) return;
+      if (e.target.closest?.('[data-settings-toggle], .dialog-back, .mock-menu')) return;
+      app.toggleSettings(false);
+    },
+    true,
+  );
+  // foobar2000's own windows: out of the way first.
+  const foobar = (method) => () => {
+    app.toggleSettings(false);
+    tryCall(method);
+  };
 
   // Highlighted while the window is fullscreen.
   const fullscreenBtn = quick('fullscreen', 'Fullscreen', () => tryCall('window.toggleFullscreen'));
@@ -80,7 +96,7 @@ export function mountSettings(root, app) {
         'div.set-quick',
         null,
         quick('menu', 'Main menu', async () => showMenu(await foobarMenuItems())),
-        quick('settings', 'Preferences', () => tryCall('misc.showPreferences')),
+        quick('settings', 'Preferences', foobar('misc.showPreferences')),
         fullscreenBtn,
       ),
       ...PAGES[tab](),
@@ -124,6 +140,7 @@ export function mountSettings(root, app) {
       ]),
       section('Tile sizes', [range('Albums', 'tileSize', 110, 260, 10), range('Artists', 'artistTileSize', 100, 240, 10)]),
       section('Genres', [
+        toggle('Split genres at / and ,', 'splitGenres', 'Songs tagged “Pop/Rock” or “Pop, Rock” show under Pop and under Rock. “Singer/Songwriter” stays whole.'),
         select('Genre tiles', 'genreTiles', [
           ['wide', 'Wide', 'Twice as wide as tall, as in the original skin'],
           ['square', 'Square', 'The same shape as album covers'],
@@ -164,6 +181,7 @@ export function mountSettings(root, app) {
         link('person', 'Look up new artists', () => startScript('new', 'Looking up new artists in a console window…')),
         link('refresh', 'Refresh all artists', () => startScript('refresh', 'Refreshing all artists in a console window (this takes a while)…')),
         link('tag', 'Look up genres', () => startScript('genres', 'Looking up genres in a console window…')),
+        link('refresh', 'Refresh all genres', () => startScript('genres-refresh', 'Refreshing all genres in a console window…')),
         link('info', 'Show report', () => startScript('report', '')),
         link('person', 'Export artist list…', async () => {
           try {
@@ -184,8 +202,8 @@ export function mountSettings(root, app) {
     ],
     more: () => [
       section('foobar2000', [
-        link('settings', 'Preferences…', () => tryCall('misc.showPreferences')),
-        link('library', 'Configure media library…', () => tryCall('config.showLibraryPreferences')),
+        link('settings', 'Preferences…', foobar('misc.showPreferences')),
+        link('library', 'Configure media library…', foobar('config.showLibraryPreferences')),
       ]),
       section('Fusion', [
         link('reset', 'Reset Fusion settings', async () => {

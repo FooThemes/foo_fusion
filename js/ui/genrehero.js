@@ -12,6 +12,7 @@ import { pictureUrl } from '../data/artistinfo.js';
 import { collageUrl } from './collage.js';
 import { showMenu } from './menus.js';
 import { view } from '../data/view.js';
+import { genreCase } from './artisthero.js';
 
 const GAP = 24; // between the header and the first row of albums
 const PIC_W = 320;
@@ -153,13 +154,26 @@ export class GenreHero {
       // In the library first (they're links), then up to a handful of the rest.
       const known = list.filter((g) => genres.has(g.toLowerCase()));
       const rest = list.filter((g) => !genres.has(g.toLowerCase()));
-      const shown = [...known, ...rest.slice(0, Math.max(0, 8 - known.length))];
-      shown.forEach((g, i) => {
+      const ordered = [...known, ...rest];
+      const item = (g) => {
         const lib = genres.get(g.toLowerCase());
-        line.append(...(i ? [', '] : []), lib ? this.#valueLink('genres', lib) : g);
-      });
-      const more = list.length - shown.length;
-      if (more > 0) line.append(el('span.ah-assoc-label', { text: ` and ${more} more` }));
+        return lib ? this.#valueLink('genres', lib) : genreCase(g);
+      };
+      const firstCount = Math.max(known.length, 8);
+      ordered.slice(0, firstCount).forEach((g, i) => line.append(...(i ? [', '] : []), item(g)));
+      const more = ordered.length - firstCount;
+      // "and 11 more": click for the rest.
+      if (more > 0) {
+        const btn = el('button.ah-more.gh-more', {
+          text: `and ${more} more`,
+          onclick: () => {
+            wrap.replaceWith(...ordered.slice(firstCount).flatMap((g) => [', ', item(g)]));
+            this.#measure();
+          },
+        });
+        const wrap = el('span', null, ' ', btn);
+        line.append(wrap);
+      }
       this.assoc.append(line);
     }
   }

@@ -93,13 +93,18 @@ export class Grid {
     for (const node of this.stale?.values() || []) this.#recycle(node);
     this.stale = new Map();
     for (const node of this.tiles.values()) {
-      if (kind === this.kind && node.dataset.key != null) this.stale.set(node.dataset.key, node);
+      // (Two tiles with one key: keep one; a node dropped here would stay on
+      // screen, stuck, over every later page.)
+      if (kind === this.kind && node.dataset.key != null && !this.stale.has(node.dataset.key)) this.stale.set(node.dataset.key, node);
       else this.#recycle(node);
     }
     this.kind = kind;
     this.tiles.clear();
     this.#showHero();
-    if (this.expanded >= view.groups.length) this.expanded = -1;
+    // The open album stays open by key (a re-sort moves it to another index),
+    // and where it was on screen.
+    const openOffset = keepScroll && this.expanded >= 0 && this.rowCount != null ? this.rowTop(this.expandedRow) - this.scroller.scrollTop : null;
+    this.expanded = this.expanded >= 0 && this.expandedKey != null ? view.groups.findIndex((g) => g.key === this.expandedKey) : -1;
     if (!keepScroll) {
       this.expanded = -1;
       this.scroller.scrollTop = 0;
@@ -107,6 +112,10 @@ export class Grid {
     this.panel.close(true);
     if (this.expanded >= 0) this.panel.open(view.groups[this.expanded], this.expanded);
     this.layout();
+    if (openOffset != null && this.expanded >= 0) {
+      this.scroller.scrollTop = Math.max(0, this.rowTop(this.expandedRow) - openOffset);
+      this.render();
+    }
   }
 
   layout() {
@@ -212,6 +221,17 @@ export class Grid {
       for (const node of this.stale.values()) this.#recycle(node);
       this.stale = null;
     }
+    this.#sweep();
+  }
+
+  /** Hide any tile node that no group is using (belt and braces against
+   *  tiles left behind on screen). */
+  #sweep() {
+    const used = new Set(this.tiles.values());
+    for (const node of this.layer.children) {
+      if (!node.classList.contains('tile') || node.hidden || used.has(node)) continue;
+      this.#recycle(node);
+    }
   }
 
   /** The artist's or genre's header on their page (hide one before showing
@@ -299,7 +319,7 @@ export class Grid {
     node.hidden = true;
     delete node.dataset.key;
     node.classList.remove('expanded', 'playing');
-    this.free.push(node);
+    if (!this.free.includes(node)) this.free.push(node);
   }
 
   #place(node, i) {
@@ -452,10 +472,25 @@ export class Grid {
     }
   }
 
-  /** Open the album with this key (if it's in the list). */
-  expandKey(key) {
-    const i = view.groups.findIndex((g) => g.key === key);
-    if (i >= 0 && this.expanded !== i) this.toggle(i);
+  /** Open the album with this key (if it's in the list). `jump`: already
+   *  open, at the top of the page, with no animation or scrolling. */
+  expandKey(key, { jump = false } = {}) {
+    const lower = (key || '').toLowerCase();
+    const i = view.groups.findIndex((g) => g.key === key || g.key.toLowerCase() === lower);
+    if (i < 0) return false;
+    if (jump) {
+      this.expanded = i;
+      this.expandedKey = view.groups[i].key;
+      this.panel.open(view.groups[i], i);
+      this.#updateHeight();
+      for (const [j, node] of this.tiles) this.#place(node, j);
+      this.scroller.scrollTop = Math.max(0, this.rowTop(this.expandedRow) - 8);
+      this.render();
+      for (const [j, node] of this.tiles) node.classList.toggle('expanded', j === i);
+      return true;
+    }
+    if (this.expanded !== i) this.toggle(i);
+    return true;
   }
 
   toggle(i) {
@@ -466,6 +501,7 @@ export class Grid {
     const prevRow = this.expandedRow;
     const wasOpen = this.expanded >= 0;
     this.expanded = i;
+    this.expandedKey = view.groups[i].key;
     this.layer.classList.toggle('shift', wasOpen && prevRow === this.expandedRow);
     this.panel.open(view.groups[i], i);
     this.#relayoutTiles();
@@ -480,6 +516,7 @@ export class Grid {
   collapse() {
     if (this.expanded < 0) return;
     this.expanded = -1;
+    this.expandedKey = null;
     this.panel.close();
     this.#relayoutTiles();
   }

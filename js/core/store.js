@@ -88,6 +88,7 @@ const DEFAULTS = {
   artistNoPicture: 'cover', // artists without a picture: 'cover' (an album's) or 'placeholder'
   songColumns: null, // Songs view columns in order (null: the defaults, see songs.js)
   genreInfoFolder: '', // one folder per genre: genre.nfo, folder.jpg, fanart.jpg
+  splitGenres: true, // "Pop/Rock" and "Pop, Rock" are two genres
   genreTiles: 'wide', // genre tiles: 'wide' (2:1, as the original) or 'square'
   artistScript: '', // path of tools/fusion-artist-info.py, to run it from Settings > Artists
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…

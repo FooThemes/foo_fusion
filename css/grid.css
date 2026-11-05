@@ -843,3 +843,7 @@
     height: 100px;
   }
 }
+
+.gh-more {
+  font-size: inherit;
+}

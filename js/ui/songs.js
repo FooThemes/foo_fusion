@@ -300,7 +300,7 @@ export class SongList {
 const CELL = {
   year: (t) => (t.date || '').slice(0, 4),
   date: (t) => t.date || '',
-  genre: (t, f) => splitValues(f.gn || t.genre || '').join(', '),
+  genre: (t, f) => splitValues(f.gn || t.genre || '', 'genres').join(', '),
   track: (t, f) => f.n || (t.trackNumber ? String(t.trackNumber) : ''),
   disc: (t) => (t.discNumber ? String(t.discNumber) : ''),
   len: (t) => formatTime(t.duration),
@@ -317,7 +317,7 @@ function goToItems(t) {
   // Every artist and genre on the song, by the names the Artists and Genres
   // tabs list (ARTISTS when tagged, else the album artist or artist).
   const artists = splitValues(f.ar || t.artist || '');
-  const genres = splitValues(f.gn || t.genre || '');
+  const genres = splitValues(f.gn || t.genre || '', 'genres');
   const items = [{ label: 'Go to album', run: async () => view.goTo('albums', await view.albumKeyOf(t.handle)) }];
   if (artists.length === 1) items.push({ label: 'Go to artist', run: () => view.goTo('artists', artists[0]) });
   else if (artists.length) items.push({ label: 'Go to artist', submenu: artists.map((a) => ({ label: a, run: () => view.goTo('artists', a) })) });

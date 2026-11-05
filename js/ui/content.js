@@ -98,14 +98,23 @@ export function mountContent(root) {
     }
     blankShown = false;
     if (pendingRestore === key) {
-      pendingRestore = null;
       const ret = view.returning;
-      view.returning = null;
-      if (scrollMemo.has(key)) {
-        scroller.scrollTop = scrollMemo.get(key);
-        current.render?.();
+      if (ret?.jump) {
+        // Going to an album: straight there, already open, no scrolling.
+        // Not in the list yet (still loading)? Try again on the next change.
+        if (!current.expandKey?.(ret.expandedKey, { jump: true }) && view.loading) {
+          renderMessage();
+          return;
+        }
+      } else {
+        if (scrollMemo.has(key)) {
+          scroller.scrollTop = scrollMemo.get(key);
+          current.render?.();
+        }
+        if (ret?.expandedKey) current.expandKey?.(ret.expandedKey);
       }
-      if (ret?.expandedKey) current.expandKey?.(ret.expandedKey);
+      pendingRestore = null;
+      view.returning = null;
     }
     renderMessage();
   }

@@ -79,7 +79,8 @@ class View extends Emitter {
       this.load();
     });
     store.subscribe((key) => {
-      if (key === 'separateDiscs' || (key === 'hidePlaceholderArtists' && this.mode === 'artists')) this.load();
+      if (key === 'splitGenres') delete libraryCache.genres;
+      if (key === 'separateDiscs' || (key === 'hidePlaceholderArtists' && this.mode === 'artists') || (key === 'splitGenres' && this.mode === 'genres')) this.load();
     });
   }
 
@@ -137,7 +138,7 @@ class View extends Emitter {
       ? Promise.resolve(new Map())
       : tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns: [kind === 'genres' ? TF.genresMulti : TF.artistsMulti] }).then((res) => {
           const names = new Map();
-          for (const r of res?.runs || []) for (const v of splitValues(r.key)) if (!names.has(v.toLowerCase())) names.set(v.toLowerCase(), v);
+          for (const r of res?.runs || []) for (const v of splitValues(r.key, kind)) if (!names.has(v.toLowerCase())) names.set(v.toLowerCase(), v);
           return names;
         });
     libraryCache[kind] = { at: now, promise };
@@ -174,7 +175,7 @@ class View extends Emitter {
     this.mode = kind;
     if (kind === 'albums') {
       this.drill = null;
-      this.returning = { expandedKey: key }; // the grid opens it once loaded
+      this.returning = { expandedKey: key, jump: true }; // the grid opens it once loaded
     } else this.drill = { kind, key, label: key };
     this.emit('mode', kind);
     this.#blank();
@@ -402,10 +403,10 @@ class View extends Emitter {
     } else if (this.drill) {
       // Albums of one artist/genre: the album runs inside every run that lists it.
       const want = this.drill.key.toLowerCase();
-      const subs = runs.filter((r) => splitValues(r.key).some((v) => v.toLowerCase() === want)).flatMap((r) => r.sub || []);
+      const subs = runs.filter((r) => splitValues(r.key, kind).some((v) => v.toLowerCase() === want)).flatMap((r) => r.sub || []);
       groups = mergeRuns(subs);
     } else {
-      groups = groupByValues(runs, kind === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST, kind === 'artists' && store.get('hidePlaceholderArtists') ? isPlaceholderArtist : null);
+      groups = groupByValues(runs, kind, kind === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST, kind === 'artists' && store.get('hidePlaceholderArtists') ? isPlaceholderArtist : null);
     }
     if (matched) groups = intersect(groups, matched);
     // Artist/genre tiles are alphabetical, so "descending" flips them directly.
@@ -678,11 +679,12 @@ const UNKNOWN_GENRE = 'Unknown Genre';
 const SEP = '|||';
 
 /** Values of a multi-value key: split on the field separator and on ";". */
-export function splitValues(key) {
+export function splitValues(key, kind = '') {
   const out = [];
   const seen = new Set();
+  const genres = kind === 'genres' && store.get('splitGenres');
   for (const part of key.split(SEP)) {
-    for (const v of part.split(';')) {
+    for (const v of genres ? splitGenreText(part) : part.split(';')) {
       const t = v.trim();
       if (t && !seen.has(t.toLowerCase())) {
         seen.add(t.toLowerCase());
@@ -710,12 +712,21 @@ function mergeRuns(runs) {
  * MusicBrainz's placeholder credits ("[unknown]", "[dialogue]",
  * "[traditional]"...): real tags, but not artists anyone browses to.
  */
+/** "Pop/Rock", "Pop, Pop Rock", "Rock; Pop" -> separate genres. A few names
+ *  have a slash of their own ("Singer/Songwriter") and stay whole. */
+const WHOLE_GENRES = /\b(singer\s*\/\s*song-?writer|r\s*\/\s*b|d\s*\/\s*b|c\s*\/\s*w)\b/gi;
+export function splitGenreText(text) {
+  const kept = [];
+  const masked = text.replace(WHOLE_GENRES, (m) => `\u0000${kept.push(m) - 1}\u0000`);
+  return masked.split(/\s*[;,/]\s*/).map((v) => v.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[i]));
+}
+
 export const isPlaceholderArtist = (name) => /^\[.+\]$/.test(name.trim());
 
-function groupByValues(runs, unknown, hide = null) {
+function groupByValues(runs, kind, unknown, hide = null) {
   const map = new Map();
   for (const r of runs) {
-    let values = splitValues(r.key);
+    let values = splitValues(r.key, kind);
     if (!values.length) values.push(unknown);
     // Hidden values get no tile; a song credited only to them gets none either.
     else if (hide) values = values.filter((v) => !hide(v));

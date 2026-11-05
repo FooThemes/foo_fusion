@@ -714,8 +714,8 @@ def mb_genre_index(web):
 
 SPARQL = """SELECT ?key ?item ?label ?desc ?enwiki
   (GROUP_CONCAT(DISTINCT ?alias; separator="|") AS ?aliases)
-  (GROUP_CONCAT(DISTINCT ?parentLabel; separator="|") AS ?parents)
-  (GROUP_CONCAT(DISTINCT ?childLabel; separator="|") AS ?children)
+  (GROUP_CONCAT(DISTINCT CONCAT(?parentMb, "=", ?parentLabel); separator="|") AS ?parents)
+  (GROUP_CONCAT(DISTINCT CONCAT(?childMb, "=", ?childLabel); separator="|") AS ?children)
   (GROUP_CONCAT(DISTINCT ?originLabel; separator="|") AS ?origins)
   (MIN(?inception) AS ?since)
 WHERE {
@@ -724,8 +724,8 @@ WHERE {
   OPTIONAL { ?item schema:description ?desc FILTER(LANG(?desc) = "en") }
   OPTIONAL { ?enwiki schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> }
   OPTIONAL { ?item skos:altLabel ?alias FILTER(LANG(?alias) = "en") }
-  OPTIONAL { ?item wdt:P279 ?parent . ?parent wdt:P8052 [] . ?parent rdfs:label ?parentLabel FILTER(LANG(?parentLabel) = "en") }
-  OPTIONAL { ?child wdt:P279 ?item . ?child wdt:P8052 [] . ?child rdfs:label ?childLabel FILTER(LANG(?childLabel) = "en") }
+  OPTIONAL { ?item wdt:P279 ?parent . ?parent wdt:P8052 ?parentMb . ?parent rdfs:label ?parentLabel FILTER(LANG(?parentLabel) = "en") }
+  OPTIONAL { ?child wdt:P279 ?item . ?child wdt:P8052 ?childMb . ?child rdfs:label ?childLabel FILTER(LANG(?childLabel) = "en") }
   OPTIONAL { ?item wdt:P495 ?origin . ?origin rdfs:label ?originLabel FILTER(LANG(?originLabel) = "en") }
   OPTIONAL { ?item wdt:P571 ?inception }
 }
@@ -783,8 +783,22 @@ def wikipedia_intros(web, urls, lang='en'):
     return out
 
 
-def build_genre_nfo(name, mbid, wd, intro):
+def family_names(pairs, names_by_id):
+    """"mbid=Wikidata label" pairs -> genre names, in MusicBrainz's spelling
+    ("rock", not Wikidata's "rock music"), else the label without "music"."""
+    out = {}
+    for pair in pairs:
+        gid, _, label = pair.partition('=')
+        name = names_by_id.get(gid)
+        if not name:
+            name = re.sub(r'\s+music$', '', label, flags=re.I) or label
+        out.setdefault(name.casefold(), name)
+    return sorted(out.values(), key=str.casefold)
+
+
+def build_genre_nfo(name, mbid, wd, intro, names_by_id=None):
     tags = []
+    names_by_id = names_by_id or {}
 
     def add(tag, value):
         if value:
@@ -801,9 +815,9 @@ def build_genre_nfo(name, mbid, wd, intro):
     add('since', wd.get('since'))
     for a in sorted(set(wd.get('aliases', [])), key=str.casefold)[:12]:
         add('alias', a)
-    for p in sorted(set(wd.get('parents', [])), key=str.casefold):
+    for p in family_names(wd.get('parents', []), names_by_id):
         add('parent', genre_case(p))
-    for c in sorted(set(wd.get('children', [])), key=str.casefold):
+    for c in family_names(wd.get('children', []), names_by_id):
         add('subgenre', genre_case(c))
     body = '\n'.join(tags)
     return f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n{GENRE_MARK}\n<genre>\n{body}\n</genre>\n'
@@ -829,6 +843,7 @@ def genres(cfg, args):
 
     note(f'--- {len(names)} genres' + (' (dry run)' if args.dry_run else ''))
     index = mb_genre_index(web)
+    names_by_id = {gid: n for n, gid in index.values()}
     todo, unknown, kept = {}, [], 0
     for name in names:
         hit = index.get(genre_key(name))
@@ -859,7 +874,7 @@ def genres(cfg, args):
     written = 0
     for name, (mbid, nfo, mine) in todo.items():
         d = wd.get(mbid, {})
-        fresh = build_genre_nfo(name, None if mbid.startswith('name:') else mbid, d, intros.get(d.get('wikipedia', '')))
+        fresh = build_genre_nfo(name, None if mbid.startswith('name:') else mbid, d, intros.get(d.get('wikipedia', '')), names_by_id)
         if args.dry_run:
             note(f'+  {name}: would write genre.nfo')
             continue

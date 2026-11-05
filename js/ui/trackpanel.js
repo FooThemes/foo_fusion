@@ -241,7 +241,7 @@ export class TrackPanel {
       parts.push(a);
     }
     if (head?.date || head?.year) parts.push(head.date || head.year);
-    for (const g of splitValues(head?.genre || '')) parts.push(link('genres', g));
+    for (const g of splitValues(head?.genre || '', 'genres')) parts.push(link('genres', g));
     for (const t of [discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null]) if (t) parts.push(t);
     clear(this.meta);
     parts.forEach((p, i) => this.meta.append(...(i ? [' · '] : []), p));
@@ -326,6 +326,14 @@ export class TrackPanel {
     if (!this.discs.length) this.#renderRows(null);
     const tracks = await view.tracks(this.rows);
     if (this.group !== group) return;
+    // The list reloaded underneath (e.g. a re-sort on opening): nothing came
+    // back; read the songs again rather than leave empty rows.
+    if (this.rows.length && tracks.every((t) => !t)) {
+      this.retries = (this.retries || 0) + 1;
+      if (this.retries <= 8) setTimeout(() => this.group === group && this.#load(), 250);
+      return;
+    }
+    this.retries = 0;
     this.tracks = tracks;
     const discs = splitDiscs(this.rows, tracks);
     const fresh = this.discs.length !== discs.length;

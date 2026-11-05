@@ -53,7 +53,7 @@ export function mountPlayerBar(root, app) {
   const next = el('button.btn-icon', { title: 'Next', onclick: () => player.next() }, icon('next'));
   const volBtn = el('button.btn-icon', { title: 'Volume', onclick: toggleVolume }, icon('volume'));
   // The original's "…" opened the settings panel; right-click keeps the menu.
-  const more = el('button.btn-icon', { title: 'Settings (right-click for the menu)', onclick: () => app.toggleSettings(), oncontextmenu: (e) => (e.preventDefault(), mainMenu()) }, icon('more'));
+  const more = el('button.btn-icon', { 'data-settings-toggle': '', title: 'Settings (right-click for the menu)', onclick: () => app.toggleSettings(), oncontextmenu: (e) => (e.preventDefault(), mainMenu()) }, icon('more'));
   const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, volBtn, more);
 
   const volFill = el('div.vol-fill');

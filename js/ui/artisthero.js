@@ -115,10 +115,14 @@ export class ArtistHero {
   async #renderMeta(info, key) {
     clear(this.meta);
     const tags = [...(info?.genres || []), ...(info?.styles || [])].filter((t, i, a) => a.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i).slice(0, 5);
-    const person = !!(info?.born || info?.died);
+    // A person is born and dies; a band forms and disbands. Older files have
+    // no <type>, so a band is also known by its members or a formed date
+    // (and its "born" / "died" then read as formed / disbanded).
+    const type = (info?.type || '').toLowerCase();
+    const person = type ? type === 'person' || type === 'character' : !(info?.members?.length || info?.formed || info?.disbanded) && !!(info?.born || info?.died);
     const life = person
       ? [info.born && `Born ${formatDate(info.born)}`, info.died && `died ${formatDate(info.died)}`]
-      : [info?.formed && `Formed ${formatDate(info.formed)}`, info?.disbanded && `disbanded ${formatDate(info.disbanded)}`];
+      : [(info?.formed || info?.born) && `Formed ${formatDate(info.formed || info.born)}`, (info?.disbanded || info?.died) && `disbanded ${formatDate(info.disbanded || info.died)}`];
     const lifeText = life.filter(Boolean).join(', ');
     const genres = tags.length ? await view.libraryValues('genres') : new Set();
     if (this.key !== key) return;

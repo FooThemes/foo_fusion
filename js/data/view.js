@@ -94,7 +94,9 @@ class View extends Emitter {
   /** { load: false } when a playlist switch (which loads anyway) follows. */
   setMode(mode, { load = true } = {}) {
     if (mode !== 'nowplaying') store.set('view', mode);
-    const regroup = mode !== this.mode && mode !== 'nowplaying';
+    // Also when leaving an artist's or genre's page through its own tab:
+    // back to the full list (which then returns to where it was scrolled).
+    const regroup = (mode !== this.mode || !!this.drill) && mode !== 'nowplaying';
     this.mode = mode;
     this.drill = null;
     this.backTo = null;

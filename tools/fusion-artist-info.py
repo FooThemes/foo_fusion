@@ -337,6 +337,7 @@ def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
     orig = mb.get('name') or adb.get('strArtist') or name
     add('name', orig)
     add('sortname', mb.get('sort-name'))
+    add('type', mb.get('type'))  # Kodi's field: Person, Group, Orchestra, Choir…
     # English and romanised names (not Kodi fields; Fusion shows them like
     # the _EN / _ROM tags).
     en, rom = name_versions(orig, mb)
@@ -353,10 +354,16 @@ def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
     person = mb.get('type') == 'Person' or (not mb.get('type') and adb.get('intMembers') == '1')
     # Full dates where MusicBrainz has them ("2002-10-24"), else the year.
     begin, end = life.get('begin'), life.get('end')
-    formed = best_date(begin, adb.get('intFormedYear'))
-    born = best_date(begin if person else '', adb.get('intBornYear'))
-    died = best_date(end if person else '', adb.get('intDiedYear'))
-    disbanded = best_date(end if not person else '', adb.get('strDisbanded'))
+    # People are born and die; bands form and split (TheAudioDB sometimes
+    # puts a band's formed year in its "born" field).
+    if person:
+        formed, disbanded = '', ''
+        born = best_date(begin, adb.get('intBornYear'))
+        died = best_date(end, adb.get('intDiedYear'))
+    else:
+        born, died = '', ''
+        formed = best_date(begin, adb.get('intFormedYear') or adb.get('intBornYear'))
+        disbanded = best_date(end, adb.get('strDisbanded') or adb.get('intDiedYear'))
     add('formed', '' if person else formed)
     add('born', born)
     add('died', died)

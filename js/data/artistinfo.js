@@ -136,6 +136,7 @@ function parseNfo(xml) {
   const all = (tag) => [...root.querySelectorAll(`:scope > ${tag}`)].map((n) => n.textContent.trim()).filter(Boolean);
   return {
     name: one('name'),
+    type: one('type'),
     // English and romanised names (Fusion's own fields; see versions.js).
     nameEn: one('name_en'),
     nameRom: one('name_rom'),

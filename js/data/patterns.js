@@ -32,6 +32,11 @@ export const TF = {
   // Track rows.
   trackNumber: "$if2(%tracknumber%,'')",
   trackArtist: '[%track artist%]',
+  // Songs view columns.
+  codec: '[%codec%]',
+  bitrate: '[%bitrate%]',
+  playCount: '[%play_count%]',
+  added: '[%added%]',
   discSubtitle: '[%discsubtitle%]',
 };
 

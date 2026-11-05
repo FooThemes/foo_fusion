@@ -367,7 +367,7 @@ button.heart .icon {
 
 .tp-row:hover button.heart,
 .song-row:hover button.heart,
-.pb-now:hover button.heart,
+.pb-controls button.heart,
 button.heart:focus-visible {
   opacity: 0.7;
 }

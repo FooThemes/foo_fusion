@@ -134,6 +134,10 @@ function tfEval(pattern, t) {
     return v ? `${v.orig}|||${v.en}|||${v.rom}` : '||||||';
   }
   if (pattern === TF.albumRaw) return t.album || '';
+  if (pattern === TF.codec) return t.codec || '';
+  if (pattern === TF.bitrate) return String(t.bitrate || '');
+  if (pattern === TF.playCount) return String((t.added * 7) % 23);
+  if (pattern === TF.added) return '2025-0' + (1 + (t.added % 9)) + '-1' + (t.added % 9) + ' 10:00:00';
   // Sort patterns: approximate with the leading field.
   const lead = pattern.split('|')[0];
   if (lead.includes('%album artist%')) return `${aa}|${t.date}|${al}|${String(t.discNumber).padStart(3, '0')}|${String(t.trackNumber).padStart(3, '0')}`;

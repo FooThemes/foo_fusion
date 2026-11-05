@@ -8,7 +8,7 @@
 .song-head,
 .song-row {
   display: grid;
-  grid-template-columns: 30px minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr) 56px minmax(0, 1.2fr) 28px 56px;
+  grid-template-columns: var(--song-cols, 30px minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr) 56px minmax(0, 1.2fr) 28px 56px);
   column-gap: 16px;
   align-items: center;
   height: 35px;
@@ -56,16 +56,31 @@
   font-weight: 600;
 }
 
-.song-row .c-artist,
-.song-row .c-album,
-.song-row .c-year,
-.song-row .c-genre,
-.song-row .c-len {
+/* Everything but the title is secondary. */
+.song-row > [data-col]:not(.c-title) {
   color: var(--text2);
 }
 
-.c-len {
+.song-head .right,
+.song-row .right {
   text-align: right;
+}
+
+/* Headers can be dragged to move their column. */
+.song-head [data-col] {
+  cursor: grab;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-head [data-col].dragging {
+  cursor: grabbing;
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .c-num,
@@ -74,17 +89,6 @@
   justify-content: center;
 }
 
-@media (max-width: 900px) {
-  .song-head,
-  .song-row {
-    grid-template-columns: 30px minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr) 28px 56px;
-  }
-
-  .c-year,
-  .c-genre {
-    display: none;
-  }
-}
 
 /* --- Now playing --------------------------------------------------------- */
 

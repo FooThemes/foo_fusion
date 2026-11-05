@@ -271,6 +271,21 @@ def best_date(mb_value, adb_value):
     return full_date(mb_value) or year(adb_value)
 
 
+GENRE_UPPER = {'r&b', 'edm', 'idm', 'ebm', 'uk', 'us', 'dj', 'rpg', 'vgm', 'nwobhm'}
+GENRE_SMALL = {'and', 'of', 'the', 'n', "'n'", 'in', 'with'}
+
+
+def genre_case(name):
+    """"j-pop" -> "J-Pop", "hard rock" -> "Hard Rock", "r&b" -> "R&B"."""
+    if not name or name != name.lower():
+        return name
+    words = name.split(' ')
+    return ' '.join(
+        w.upper() if w in GENRE_UPPER else w if (i and w in GENRE_SMALL) else re.sub(r'(^|[-/])(\w)', lambda m: m.group(1) + m.group(2).upper(), w)
+        for i, w in enumerate(words)
+    )
+
+
 def year(value):
     """A real year from a date or year field, else '' (TheAudioDB uses "0"
     for unknown)."""
@@ -343,7 +358,9 @@ def build_nfo(name, mbid, adb, mb, bio, wiki_url=None):
     en, rom = name_versions(orig, mb)
     add('name_en', en)
     add('name_rom', rom)
-    genres = split_list(adb.get('strGenre')) or [g['name'] for g in sorted(mb.get('genres', []), key=lambda g: -g.get('count', 0))[:3]]
+    # MusicBrainz genres are lower case ("j-pop"): capitalise them like
+    # TheAudioDB's and most tags ("J-Pop").
+    genres = split_list(adb.get('strGenre')) or [genre_case(g['name']) for g in sorted(mb.get('genres', []), key=lambda g: -g.get('count', 0))[:3]]
     for g in genres:
         add('genre', g)
     for s in split_list(adb.get('strStyle')):

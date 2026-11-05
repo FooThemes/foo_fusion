@@ -123,9 +123,10 @@ class View extends Emitter {
   }
 
   /**
-   * Every artist or genre in the Collection (lower case), for links that
-   * should only be clickable when there's something to show. Cached for a
-   * few minutes.
+   * Every artist or genre in the Collection: lower case -> the name as the
+   * library writes it, for links that should only be clickable when there's
+   * something to show (and in the library's spelling). Cached for a few
+   * minutes.
    */
   libraryValues(kind) {
     const now = Date.now();
@@ -133,11 +134,11 @@ class View extends Emitter {
     if (c && now - c.at < 5 * 60 * 1000) return c.promise;
     const pl = playlists.byName(COLLECTION);
     const promise = !pl
-      ? Promise.resolve(new Set())
+      ? Promise.resolve(new Map())
       : tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns: [kind === 'genres' ? TF.genresMulti : TF.artistsMulti] }).then((res) => {
-          const set = new Set();
-          for (const r of res?.runs || []) for (const v of splitValues(r.key)) set.add(v.toLowerCase());
-          return set;
+          const names = new Map();
+          for (const r of res?.runs || []) for (const v of splitValues(r.key)) if (!names.has(v.toLowerCase())) names.set(v.toLowerCase(), v);
+          return names;
         });
     libraryCache[kind] = { at: now, promise };
     return promise;
@@ -723,6 +724,8 @@ function groupByValues(runs, unknown, hide = null) {
       const k = v.toLowerCase();
       let g = map.get(k);
       if (!g) map.set(k, (g = { key: v, ranges: [], albums: new Set() }));
+      // "j-pop" and "J-Pop" are one tile; it takes the capitalised spelling.
+      else if (g.key === k && v !== k) g.key = v;
       g.ranges.push([r.start, r.count]);
       albums.forEach((a) => g.albums.add(a));
     }

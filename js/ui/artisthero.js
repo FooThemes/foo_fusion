@@ -124,12 +124,17 @@ export class ArtistHero {
       ? [info.born && `Born ${formatDate(info.born)}`, info.died && `died ${formatDate(info.died)}`]
       : [(info?.formed || info?.born) && `Formed ${formatDate(info.formed || info.born)}`, (info?.disbanded || info?.died) && `disbanded ${formatDate(info.disbanded || info.died)}`];
     const lifeText = life.filter(Boolean).join(', ');
-    const genres = tags.length ? await view.libraryValues('genres') : new Set();
+    const genres = tags.length ? await view.libraryValues('genres') : new Map();
     if (this.key !== key) return;
     const parts = [];
     if (tags.length) {
       const g = el('span');
-      tags.forEach((t, i) => g.append(...(i ? [', '] : []), genres.has(t.toLowerCase()) ? this.#valueLink('genres', t) : t));
+      // In the library's spelling when it has the genre ("J-Pop" for "j-pop"),
+      // else capitalised.
+      tags.forEach((t, i) => {
+        const known = genres.get(t.toLowerCase());
+        g.append(...(i ? [', '] : []), known ? this.#valueLink('genres', known) : genreCase(t));
+      });
       parts.push(g);
     }
     if (info?.yearsActive) parts.push(info.yearsActive);
@@ -216,4 +221,16 @@ function formatDate(text) {
   const [, y, mo, d] = m;
   const month = mo ? MONTHS[Number(mo) - 1] : '';
   return [d ? String(Number(d)) : '', month, y].filter(Boolean).join(' ');
+}
+
+const GENRE_UPPER = new Set(['r&b', 'edm', 'idm', 'ebm', 'uk', 'us', 'dj', 'rpg', 'vgm', 'nwobhm']);
+const GENRE_SMALL = new Set(['and', 'of', 'the', 'n', "'n'", 'in', 'with']);
+
+/** "j-pop" -> "J-Pop", "hard rock" -> "Hard Rock", "r&b" -> "R&B"; already capitalised names stay. */
+export function genreCase(name) {
+  if (!name || name !== name.toLowerCase()) return name;
+  return name
+    .split(' ')
+    .map((w, i) => (GENRE_UPPER.has(w) ? w.toUpperCase() : i && GENRE_SMALL.has(w) ? w : w.replace(/(^|[-/])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase())))
+    .join(' ');
 }

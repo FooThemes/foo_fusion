@@ -37,7 +37,7 @@ versions filled in automatically (Japanese, Chinese, Korean, Cyrillic, Greek;
 MusicBrainz versions always come first).<br><br>
 Settings: Options &gt; Plugins &gt; Language Variants.
 '''
-PLUGIN_VERSION = '1.4.2'
+PLUGIN_VERSION = '1.5'
 PLUGIN_API_VERSIONS = ['2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '2.8', '2.9', '2.10', '2.11', '2.12', '2.13']
 # GPL-3 because the bundled pykakasi (Japanese romanisation) is GPL-3.
 PLUGIN_LICENSE = 'GPL-3.0-or-later'
@@ -116,8 +116,13 @@ def parse_chain(text):
     return [k for k in re.split(r'[\s,;/>]+', (text or '').lower()) if k in KINDS]
 
 
+def norm(text):
+    """Compare-friendly: Unicode-normalised, whitespace collapsed, case folded."""
+    return re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', text or '')).strip().casefold()
+
+
 def same(a, b):
-    return (a or '').strip().casefold() == (b or '').strip().casefold()
+    return norm(a) == norm(b)
 
 
 def combine(values, main_chain, second_chain, fmt):
@@ -129,8 +134,25 @@ def combine(values, main_chain, second_chain, fmt):
     second = next((values[k] for k in second_chain if k != main_kind and values.get(k) and not same(values[k], main)), None)
     if not second or '{main}' not in fmt:
         return main
+    # A shared ending goes once, at the end: "スターマーカー (Album Mix)" +
+    # "Starmarker (Album Mix)" -> "スターマーカー (Starmarker) (Album Mix)".
+    main, second, suffix = split_shared(main, second)
     second = strip_shared(second, main)
-    return fmt.replace('{main}', main).replace('{second}', second)
+    if not second:
+        return (main + ' ' + suffix).strip()
+    return (fmt.replace('{main}', main).replace('{second}', second) + ' ' + suffix).strip()
+
+
+def split_shared(main, second):
+    """Peel bracketed endings both have ("(Album Mix)"); returns (main,
+    second, the shared ending)."""
+    suffix = ''
+    while True:
+        m1, m2 = BRACKETED.search(main), BRACKETED.search(second)
+        if not (m1 and m2) or m1.start() == 0 or m2.start() == 0 or norm(m1.group(2)) != norm(m2.group(2)):
+            return main, second, suffix
+        suffix = (m1.group(0).strip() + ' ' + suffix).strip()
+        main, second = main[:m1.start()].rstrip(), second[:m2.start()].rstrip()
 
 
 BRACKETED = re.compile(r'\s*([(\[{（［【〈《「『<~])([^()\[\]{}]*?)([)\]}）］】〉》」』>~])\s*$')
@@ -170,9 +192,35 @@ def best_alias(aliases, types):
     return best[1] if best else None
 
 
-def english_alias(credit):
-    """The artist's primary English alias, if MusicBrainz has one."""
-    return best_alias((credit.get('artist') or {}).get('aliases'), ('Artist name', 'Legal name'))
+def credit_versions(credits):
+    """(original, English) for an artist credit, credit by credit, with join
+    phrases. Only names in a non-Latin script get versions:
+      さくらももこ            -> original さくらももこ, English its English alias
+      ZUTOMAYO (credited name of ずっと真夜中でいいのに。)
+                              -> original ずっと真夜中でいいのに。, English ZUTOMAYO
+      C418 / zircon           -> left alone (a Latin name has no other version;
+                                 "Daniel Mark Rosenfeld" is a legal name, not a translation)
+    English is None when no credit has one."""
+    origs, ens, any_en = [], [], False
+    for c in credits or []:
+        cred = c.get('name') or (c.get('artist') or {}).get('name') or ''
+        artist = c.get('artist') or {}
+        canon = artist.get('name') or cred
+        join = c.get('joinphrase') or ''
+        orig, en = cred, None
+        if has_non_latin(cred) or has_non_latin(canon):
+            orig = cred if has_non_latin(cred) else canon
+            if not has_non_latin(cred):
+                en = cred  # credited on this release under its Latin name
+            else:
+                alias = best_alias(artist.get('aliases'), ('Artist name',))
+                en = alias if alias and not has_non_latin(alias) else None
+            if en and same(en, orig):
+                en = None
+        any_en = any_en or bool(en)
+        origs.append(orig + join)
+        ens.append((en or orig) + join)
+    return ''.join(origs).strip(), (''.join(ens).strip() if any_en else None)
 
 
 JAPANESE = re.compile('[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]')
@@ -414,21 +462,28 @@ class LanguageVariants:
     def album_processor(self, album, metadata, release):
         st = AlbumState(album, release)
         self.albums[album.id] = st
+        # Artist names come from the release's credits rather than Picard's
+        # tags, which may already be translated ("Translate artist names")
+        # or standardised; English versions from the credits too.
+        orig, en = credit_versions(release.get('artist-credit'))
         for field in ALBUM_FIELDS:
             st.album_orig[field] = metadata[field]
+        if release.get('artist-credit'):
+            st.album_orig['albumartist'] = orig
+            if en:
+                st.album_values.setdefault('albumartist', {})['credit_en'] = en
         st.targets.append((metadata, None, None, dict(st.album_orig)))
-
-        # English artist names from aliases (Picard's release lookup
-        # includes them).
-        en = credit_string(release.get('artist-credit'), english_alias)
-        if en:
-            st.album_values.setdefault('albumartist', {})['alias'] = en
         for medium in release.get('media') or []:
             for track in medium.get('tracks') or []:
-                en = credit_string(track.get('artist-credit') or (track.get('recording') or {}).get('artist-credit'), english_alias)
+                credits = track.get('artist-credit') or (track.get('recording') or {}).get('artist-credit')
+                if not credits:
+                    continue
+                orig, en = credit_versions(credits)
+                key = (str(medium.get('position')), str(track.get('position')))
+                values = st.track_values.setdefault(key, {}).setdefault('artist', {})
+                values['credit_orig'] = orig
                 if en:
-                    key = (str(medium.get('position')), str(track.get('position')))
-                    st.track_values.setdefault(key, {}).setdefault('artist', {})['alias'] = en
+                    values['credit_en'] = en
 
         # Recording and release (group) aliases: used when no pseudo-release
         # has that version.
@@ -470,7 +525,11 @@ class LanguageVariants:
             return
         orig = {f: metadata[f] for f, _ in FIELDS if f not in ALBUM_FIELDS}
         orig.update(st.album_orig)
-        target = (metadata, metadata['discnumber'], metadata['tracknumber'], orig)
+        disc, track = metadata['discnumber'], metadata['tracknumber']
+        credited = ((st.track_values.get((disc, track)) or {}).get('artist') or {}).get('credit_orig')
+        if credited:
+            orig['artist'] = credited
+        target = (metadata, disc, track, orig)
         if st.ready:
             self._apply(st, target)
         else:
@@ -628,7 +687,7 @@ class LanguageVariants:
         wanted = []
 
         def want(field, orig, values):
-            if field in fields and orig and not (values or {}).get('en') and not (values or {}).get('alias') and not (values or {}).get('alias_en') and not (values or {}).get('sib_en') \
+            if field in fields and orig and not (values or {}).get('en') and not (values or {}).get('credit_en') and not (values or {}).get('alias_en') and not (values or {}).get('sib_en') \
                     and needs_translation(orig, st.lang, st.script):
                 wanted.append(orig)
 
@@ -684,14 +743,17 @@ class LanguageVariants:
             orig = origs.get(field) or ''
             if not orig:
                 continue
+            # Latin-script text on an English (or unknown-language) release
+            # has nothing to translate or romanise: leave it alone.
+            if not needs_translation(orig, st.lang, st.script):
+                for k in KINDS:
+                    metadata.delete((field + sfx[k]).lower())
+                continue
             found = self._values_for(st, field, disc, track)
-            en = found.get('en') or found.get('alias') or found.get('sib_en') or found.get('alias_en')
+            en = found.get('en') or found.get('credit_en') or found.get('sib_en') or found.get('alias_en')
             if not en and field in mt_fields:
                 en = st.mt.get(orig)
             rom = found.get('rom') or found.get('sib_rom') or found.get('alias_rom')
-            # Artists: an English alias of a non-Latin name is its romanisation too.
-            if not rom and field in ('artist', 'albumartist') and found.get('alias') and has_non_latin(orig):
-                rom = found['alias']
             # Nothing from MusicBrainz: romanise it here, if that's on.
             if not rom and auto and auto_rom.needs_romanisation(orig):
                 if not auto_rom.load_vendor(USER_DIR, PLUGIN_VERSION):
@@ -706,14 +768,12 @@ class LanguageVariants:
                 log.debug('%s: romanised %s "%s" -> %s (%s; release %s/%s)', PLUGIN_NAME, field, orig, rom, by, st.lang, st.script)
             # An "English" title that's really the romanisation with a typo
             # ("KokoroToluNa..." for "KokoroToIuNa...") isn't English.
-            if en and rom and not found.get('en') and loose(en) == loose(rom):
+            if en and rom and not found.get('en') and loose(en) == loose(rom) and not same(en, rom):
                 en = None
             values = {'orig': orig, 'en': en, 'rom': rom}
             for k in ('en', 'rom'):
                 if values[k] and same(values[k], orig):
                     values[k] = None
-            if values['en'] and values['rom'] and same(values['en'], values['rom']) and found.get('rom') is None:
-                values['rom'] = None  # an alias, not a real romanisation
             for k in KINDS:
                 name = (field + sfx[k]).lower()
                 if values['en'] or values['rom']:

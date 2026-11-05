@@ -34,8 +34,17 @@ def title_case(word):
     return word[:1].upper() + word[1:] if word else word
 
 
+# Japanese and full-width punctuation as its ASCII counterpart.
+PUNCT = str.maketrans({
+    '。': '.', '、': ',', '・': ' ', '「': '"', '」': '"', '『': '"', '』': '"', '！': '!', '？': '?',
+    '（': '(', '）': ')', '［': '[', '］': ']', '【': '[', '】': ']', '〜': '~', '～': '~', '：': ':',
+    '；': ';', '，': ',', '．': '.', '　': ' ', '＆': '&', '＋': '+', '／': '/', '〈': '<', '〉': '>',
+    '《': '<<', '》': '>>', '♡': '♡',
+})
+
+
 def tidy(text):
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r'\s+', ' ', text.translate(PUNCT)).strip()
     text = re.sub(r'\s+([)\]}>,.!?:;])', r'\1', text)
     return re.sub(r'([(\[{<])\s+', r'\1', text)
 

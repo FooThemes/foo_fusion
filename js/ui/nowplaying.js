@@ -1,7 +1,7 @@
 // "Now playing": large artwork and details for the playing track, plus the
 // playback queue (or, when the queue is empty, what plays next).
 
-import { setTitle, setVersioned } from './titles.js';
+import { setTitle, setVersioned, versionText } from './titles.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { dragSource, dropTarget } from './dnd.js';

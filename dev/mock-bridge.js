@@ -509,6 +509,10 @@ export async function installMock() {
       emit('metadb:changed', { count: p.items.length, handles: p.items.map((i) => i.path) });
       return { successCount: p.items.length, failCount: 0, errors: [] };
     },
+    'metadata.readByPath': (p) => {
+      const t = lib.find((x) => x.handle === p.path) || lib[0];
+      return { path: p.path, metadata: { title: [t.title], artist: [t.artist], album: [t.album], date: [String(t.date)], genre: (t.genre || '').split('; '), tracknumber: [String(t.trackNumber)], musicbrainz_trackid: ['0000-1111'], replaygain_track_gain: ['-7.12 dB'] } };
+    },
     'titleformat.evalFields': (p) => {
       const t = lib.find((x) => x.handle === p.path);
       return { path: p.path, infoAvailable: true, ...Object.fromEntries(Object.entries(p.fields).map(([k, pat]) => [k, t ? tfEval(pat, t) : ''])) };

@@ -292,6 +292,15 @@ body.no-sidebar #playerbar {
   /* Sits on the player bar's colour, so it reads as part of the player and
      not as another item in the playlist list. */
   box-shadow: 0 0 0 20px var(--bar-bg);
+  transition: height 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), margin 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s, opacity 0.2s;
+}
+
+.big-art.shut {
+  height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  box-shadow: 0 0 0 0 var(--bar-bg);
 }
 
 @media (max-width: 800px) {

@@ -38,7 +38,7 @@ export function mountSidebar(root, app) {
   const navNow = navItem('nowPlaying', 'Now playing', () => view.setMode('nowplaying'), queueBadge);
   const newPlaylist = navItem('add', 'New playlist', () => newPlaylistDialog());
   newPlaylist.classList.add('nav-new');
-  const manage = el('button.btn-icon.side-manage', { title: 'Playlist manager (Ctrl+M)', onclick: () => app.togglePlaylistManager() }, icon('playlist'));
+  const manage = el('button.btn-icon.side-manage', { 'data-plm-toggle': '', title: 'Playlist manager (Ctrl+M)', onclick: () => app.togglePlaylistManager() }, icon('playlist'));
   const newRow = el('div.side-newrow', null, newPlaylist, manage);
 
   const list = el('div.pl-list', { role: 'listbox', 'aria-label': 'Playlists' });
@@ -168,16 +168,20 @@ export function mountSidebar(root, app) {
   applyWidth();
   render();
   renderQueue();
+  // Animate the panel's width only after the first layout (not on start).
+  setTimeout(() => document.body.classList.add('animate-layout'), 800);
 
   // Drag the divider to resize the panel (like the original's playlist manager).
   const resizer = document.getElementById('sidebar-resizer');
   resizer.addEventListener('pointerdown', (e) => {
     if (store.get('sidebarCollapsed')) return;
     resizer.setPointerCapture(e.pointerId);
+    document.body.classList.add('resizing-sidebar');
     const move = (ev) => document.documentElement.style.setProperty('--sidebar-w', clamp(ev.clientX, 180, 480) + 'px');
     const up = (ev) => {
       resizer.removeEventListener('pointermove', move);
       resizer.removeEventListener('pointerup', up);
+      document.body.classList.remove('resizing-sidebar');
       store.set('sidebarWidth', clamp(ev.clientX, 180, 480));
     };
     resizer.addEventListener('pointermove', move);

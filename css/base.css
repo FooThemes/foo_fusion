@@ -256,8 +256,24 @@ body.no-sidebar #app {
   grid-template-columns: 0 0 minmax(0, 1fr) auto;
 }
 
+/* The left panel slides open and shut (collapsing, hiding, showing). */
+body.animate-layout #app,
+body.animate-layout #playerbar {
+  transition: grid-template-columns 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+body.animate-layout.resizing-sidebar #app {
+  transition: none;
+}
+
+#sidebar {
+  overflow: hidden;
+  min-width: 0;
+}
+
 body.no-sidebar #sidebar {
-  display: none;
+  visibility: hidden;
+  transition: visibility 0s 0.22s;
 }
 
 /* Placeholder art (no cover found) */

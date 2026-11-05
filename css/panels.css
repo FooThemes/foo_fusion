@@ -1413,3 +1413,83 @@ body.pdragging * {
   margin: 5px 0;
   background: var(--line);
 }
+
+/* Playlist manager search */
+.plm-search-wrap {
+  position: relative;
+  margin: 0 16px 10px;
+}
+
+.plm-search-wrap .icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  color: var(--text2);
+  pointer-events: none;
+}
+
+.plm-search {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px 0 34px;
+  border: 2px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.plm-search:focus {
+  border-color: var(--accent);
+}
+
+.plm-empty {
+  padding: 16px 22px;
+  color: var(--text2);
+}
+
+/* Track info: Details / Tags */
+.info-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 14px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.info-tab {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.info-tab:hover {
+  color: var(--text);
+}
+
+.info-tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.info-section {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+
+.info-section:first-child {
+  margin-top: 0;
+}
+
+.info-note {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text2);
+}

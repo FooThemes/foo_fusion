@@ -18,6 +18,29 @@ import { folders } from '../data/folders.js';
 
 export function mountPlaylistManager(root, app) {
   const list = el('div.plm-list', { role: 'listbox', 'aria-label': 'Playlists', 'aria-multiselectable': 'true', tabindex: 0 });
+  // Filter the list by name (or folder name) as you type.
+  const search = el('input.plm-search', { type: 'search', placeholder: 'Search playlists', spellcheck: false, 'aria-label': 'Search playlists' });
+  let query = '';
+  search.addEventListener('input', () => {
+    query = search.value.trim().toLowerCase();
+    render();
+  });
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && search.value) {
+      e.stopPropagation();
+      search.value = '';
+      query = '';
+      render();
+    } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
+      e.preventDefault();
+      const first = list.querySelector('.plm-row[data-guid]');
+      if (!first) return;
+      const p = playlists.list.find((x) => x.guid === first.dataset.guid);
+      if (e.key === 'Enter' && p) return playlists.activate(p.index);
+      if (p) select(p, { button: 0 });
+      list.focus();
+    }
+  });
   const status = el('div.plm-status');
   const panel = el(
     'div.plm',
@@ -34,10 +57,37 @@ export function mountPlaylistManager(root, app) {
       tool('open', 'Load', 'Load a playlist file', () => runMainMenuAny(['File/Load playlist...', 'File/Load playlist…', 'Load playlist...'])),
       tool('sortAsc', 'Sort', 'Sort playlists by name', sortByName),
     ),
+    el('div.plm-search-wrap', null, icon('search'), search),
     list,
     status,
   );
   root.append(panel);
+
+  // A click outside closes the panel, as Settings does. Not a drag, though:
+  // songs dragged from the page are dropped onto playlists here.
+  let down = null;
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      down = null;
+      if (!panel.classList.contains('open') || panel.contains(e.target)) return;
+      if (e.target.closest?.('[data-plm-toggle], .dialog-back, .dd-layer, .mock-menu')) return;
+      down = { x: e.clientX, y: e.clientY };
+    },
+    true,
+  );
+  document.addEventListener('dragstart', () => (down = null), true);
+  document.addEventListener(
+    'pointerup',
+    (e) => {
+      const d = down;
+      down = null;
+      if (!d || !panel.classList.contains('open')) return;
+      if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 6) return; // dragged
+      open(false);
+    },
+    true,
+  );
 
   let selected = new Set(); // GUIDs
   let anchor = null;
@@ -73,6 +123,14 @@ export function mountPlaylistManager(root, app) {
       });
       return row;
     };
+    if (query) {
+      // Matches only, without folders (their names count as a match too).
+      const hits = playlists.list.filter((p) => !playlists.isHidden(p) && (p.name.toLowerCase().includes(query) || (folders.folderOf(p.guid) && folders.path(folders.folderOf(p.guid).id).toLowerCase().includes(query))));
+      for (const p of hits) list.append(playlistRow(p, false));
+      if (!hits.length) list.append(el('div.plm-empty', { text: 'No playlists match' }));
+      status.textContent = `${plural(hits.length, 'playlist')} of ${playlists.list.length}`;
+      return;
+    }
     for (const node of folders.rows()) {
       if (node.type === 'playlist') {
         const row = playlistRow(node.p, node.depth > 0);

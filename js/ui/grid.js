@@ -25,7 +25,7 @@ import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
 
 const genreTiles = new Map(); // genre|size -> picture or collage URL (null: none)
-const MARGIN = 40; // left/right margin, as in the original
+const MARGIN = 32; // left/right margin: with the tile padding (PAD), covers line up with the tabs above
 const PAD = 8; // gap around each cover
 const OVERSCAN = 2; // extra rows rendered above/below the viewport
 

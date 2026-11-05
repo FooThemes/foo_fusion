@@ -157,8 +157,23 @@ export function mountPlayerBar(root, app) {
   const bigArt = el('img', { alt: '' });
   const bigBox = el('div.art.ph-album.big-art', { hidden: true, onclick: () => app.showPlaying() }, bigArt);
   document.getElementById('sidebar').append(bigBox);
+  // Slides open and shut (its height) instead of popping in and out.
+  let bigTimer = 0;
+  function showBig(on) {
+    if (on === !bigBox.classList.contains('shut') && !bigBox.hidden) return;
+    clearTimeout(bigTimer);
+    if (on) {
+      bigBox.classList.add('shut');
+      bigBox.hidden = false;
+      void bigBox.offsetHeight; // start from shut
+      bigBox.classList.remove('shut');
+    } else if (!bigBox.hidden) {
+      bigBox.classList.add('shut');
+      bigTimer = setTimeout(() => (bigBox.hidden = true), 260);
+    }
+  }
   function updateBigArt(url) {
-    bigBox.hidden = !store.get('largeNowPlayingArt') || !player.active || store.get('sidebarCollapsed');
+    showBig(!!store.get('largeNowPlayingArt') && player.active && !store.get('sidebarCollapsed'));
     bigArt.classList.remove('loaded');
     if (url) {
       bigArt.onload = () => bigArt.classList.add('loaded');

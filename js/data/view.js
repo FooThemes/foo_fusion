@@ -457,7 +457,7 @@ class View extends Emitter {
           playlist: this.playlist.index,
           rows: missing.slice(i, i + 500),
           fields: TRACK_FIELDS,
-          formats: { n: TF.trackNumber, ds: TF.discSubtitle, m: MOOD_TF, vt: versionsTF('title'), va: versionsTF('artist'), vl: versionsTF('album') },
+          formats: { n: TF.trackNumber, ds: TF.discSubtitle, m: MOOD_TF, vt: versionsTF('title'), va: versionsTF('artist'), vl: versionsTF('album'), vd: versionsTF('discsubtitle') },
         });
         if (gen !== this.#generation) return rows.map(() => null);
         res?.tracks.forEach((t) => this.#trackCache.set(t.index, t));

@@ -114,8 +114,8 @@ export function mountPlayerBar(root, app) {
     const v = on ? await trackVersions(t) : null;
     if (player.track !== t) return;
     root.classList.toggle('idle', !on);
-    const tip = setVersioned(titleText, on ? t.title || t.path.split(/[\\/]/).pop() : '', v?.title, 'tracks');
-    artistText.textContent = on ? versionText(t.artist, v?.artist, 'tracks') : '';
+    const tip = setVersioned(titleText, on ? t.title || t.path.split(/[\\/]/).pop() : '', v?.title, 'titles');
+    artistText.textContent = on ? versionText(t.artist, v?.artist, 'artists') : '';
     tipText = on ? [t.title, t.artist, t.album].filter(Boolean).join('\n') + (tip ? `\n\n${tip}` : '') : '';
     requestAnimationFrame(() => [title, artist].forEach(marquee));
     heart.dataset.handle = on ? t.handle : '';

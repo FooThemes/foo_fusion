@@ -73,9 +73,17 @@ const DEFAULTS = {
   artistInfoFolder: '', // Kodi-style artist folders (artist.nfo, artist.jpg, fanart.jpg), e.g. E:\\Music\\_Artists
   showRemaining: false, // player bar shows -time remaining instead of the length
   // Original / English / romanised versions (see data/versions.js).
-  leadAlbums: 'en', // which version album titles lead with
-  leadTracks: 'orig', // song titles and artist names
-  otherVersion: 'beside', // the other version: 'beside' (dimmed), 'tooltip' or 'hidden'
+  // Which version leads ('orig' | 'en' | 'rom'), and what follows it dimmed
+  // ('auto' | 'orig' | 'en' | 'rom' | 'all' | 'none'), per kind of text.
+  leadAlbums: 'en',
+  leadDiscs: 'en',
+  leadTitles: 'orig',
+  leadArtists: 'orig',
+  thenAlbums: 'auto',
+  thenDiscs: 'auto',
+  thenTitles: 'auto',
+  thenArtists: 'auto',
+  versionTooltips: true, // list every version in tooltips
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…
   dimEditionTags: true, // grey out '(Single)', '(Deluxe Edition)'… at the end of titles
   dimWords: 'Single, EP, Deluxe, Edition, Remaster, Remastered, Live, Bonus, Expanded, Anniversary, Reissue, Demo, Acoustic, Instrumental, Mono, Version, Remix, Radio Edit',
@@ -104,6 +112,15 @@ export async function load() {
       // v2: discs are handled inside the album list, so stop splitting tiles
       // by disc unless the user turns it back on.
       if ((res.value.version || 1) < 2) data.separateDiscs = false;
+      // Language settings were two choices ("leadTracks" covered song titles
+      // and artists) plus one "otherVersion" for everything.
+      const old = res.value;
+      if (old.leadTracks && !('leadTitles' in old)) data.leadTitles = data.leadArtists = old.leadTracks;
+      if (old.leadAlbums && !('leadDiscs' in old)) data.leadDiscs = old.leadAlbums;
+      if (old.otherVersion && old.otherVersion !== 'beside' && !('thenTitles' in old)) {
+        data.thenAlbums = data.thenDiscs = data.thenTitles = data.thenArtists = 'none';
+        data.versionTooltips = old.otherVersion === 'tooltip';
+      }
       data.version = DEFAULTS.version;
     }
   } catch {

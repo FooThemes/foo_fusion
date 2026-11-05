@@ -11,11 +11,28 @@ import { forgetArtistInfo } from '../data/artistinfo.js';
 import { exportArtists } from '../data/artistexport.js';
 import { toast } from './toast.js';
 import { VERSION } from '../version.js';
+import { TEXT_KINDS } from '../data/versions.js';
+import { setVersioned } from './titles.js';
 
 const VERSION_CHOICES = [
   ['orig', 'Original'],
-  ['en', 'English', 'Else romanised, else original'],
-  ['rom', 'Romanised', 'Else English, else original'],
+  ['en', 'English'],
+  ['rom', 'Romanised'],
+];
+const THEN_CHOICES = [
+  ['auto', 'Automatic'],
+  ['orig', 'Original'],
+  ['en', 'English'],
+  ['rom', 'Romanised'],
+  ['all', 'Both others'],
+  ['none', 'Nothing'],
+];
+// Kinds of text, with a made-up example of each for the preview.
+const LANGUAGE_KINDS = [
+  ['albums', 'Album titles', { orig: '狂言', en: 'Farce', rom: 'Kyōgen' }],
+  ['discs', 'Disc subtitles', { orig: '初回限定盤', en: 'Limited Edition', rom: 'Shokai Gentei-ban' }],
+  ['titles', 'Song titles', { orig: 'スターマーカー (Album Mix)', en: 'Starmarker (Album Mix)', rom: 'Sutāmākā (Album Mix)' }],
+  ['artists', 'Artists', { orig: '宇多田ヒカル', en: 'Hikaru Utada', rom: 'Utada Hikaru' }],
 ];
 
 export function mountSettings(root, app) {
@@ -32,7 +49,30 @@ export function mountSettings(root, app) {
   tryCall('window.isFullscreen').then((r) => setFullscreen(r?.fullscreen));
   on('window:stateChanged', (e) => (!e.windowId || e.windowId === 'main') && setFullscreen(e.fullscreen ?? e.isFullscreen));
 
+  // Pages of the panel; the last one opened is remembered for the session.
+  const TABS = [
+    ['look', 'Look'],
+    ['library', 'Library'],
+    ['artists', 'Artists'],
+    ['languages', 'Languages'],
+    ['more', 'More'],
+  ];
+  let tab = 'look';
+  const tabs = el(
+    'div.set-tabs',
+    { role: 'tablist' },
+    TABS.map(([id, label]) =>
+      el('button.set-tab', { role: 'tab', dataset: { tab: id }, onclick: () => ((tab = id), (body.scrollTop = 0), render()) }, label),
+    ),
+  );
+  panel.insertBefore(tabs, body);
+
   function render() {
+    for (const b of tabs.children) {
+      const on = b.dataset.tab === tab;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    }
     clear(body).append(
       el(
         'div.set-quick',
@@ -41,6 +81,12 @@ export function mountSettings(root, app) {
         quick('settings', 'Preferences', () => tryCall('misc.showPreferences')),
         fullscreenBtn,
       ),
+      ...PAGES[tab](),
+    );
+  }
+
+  const PAGES = {
+    look: () => [
       section('Theme', [
         choice('Mode', 'dark', [
           [false, 'Light'],
@@ -48,38 +94,6 @@ export function mountSettings(root, app) {
         ]),
         swatches(),
         customColour(),
-      ]),
-      section('Library', [
-        toggle('Separate albums by disc', 'separateDiscs'),
-        toggle('Show year under albums', 'showAlbumYear'),
-        toggle('Show song counts under albums', 'showTrackCounts'),
-        range('Album size', 'tileSize', 110, 260, 10),
-        range('Artist size', 'artistTileSize', 100, 240, 10),
-        toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
-        toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
-        folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Artists not there are looked for in their own music folder, above their albums.'),
-        toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
-        wordsField(),
-      ]),
-      section('Languages', [
-        el('p.set-note', {
-          text: 'For songs tagged with original, English and romanised versions (TITLE_ORIG, TITLE_EN, TITLE_ROM and the same for artist and album, as the Language Variants Picard plugin writes). Other songs show as tagged.',
-        }),
-        choice('Album titles', 'leadAlbums', VERSION_CHOICES),
-        choice('Song titles and artists', 'leadTracks', VERSION_CHOICES),
-        choice('The other version', 'otherVersion', [
-          ['beside', 'Dimmed beside', 'e.g. “花火 Fireworks”; on album tiles, at the start of the second line'],
-          ['tooltip', 'In the tooltip', 'Shown when you point at the title'],
-          ['hidden', 'Hidden'],
-        ]),
-      ]),
-      section('Expanded album', [
-        choice('Background', 'listBackground', [
-          ['blur', 'Blurred cover', 'The cover, blurred, behind the songs'],
-          ['art', 'Album colours', 'Background and title colours taken from the cover'],
-          ['plain', 'Plain', 'The normal list colours'],
-        ]),
-        toggle('Show cover art', 'listArtLeft'),
       ]),
       section('Layout', [
         toggleInverse('Left panel', 'sidebarHidden'),
@@ -90,9 +104,35 @@ export function mountSettings(root, app) {
         toggle('Waveform seek bar', 'waveformSeekbar', 'Draws the playing song’s waveform in place of the plain bar'),
         toggle('Smooth scrolling', 'smoothScroll'),
       ]),
-      section('foobar2000', [
-        link('settings', 'Preferences…', () => tryCall('misc.showPreferences')),
-        link('library', 'Configure media library…', () => tryCall('config.showLibraryPreferences')),
+      section('Expanded album', [
+        select('Background', 'listBackground', [
+          ['blur', 'Blurred cover', 'The cover, blurred, behind the songs'],
+          ['art', 'Album colours', 'Background and title colours taken from the cover'],
+          ['plain', 'Plain', 'The normal list colours'],
+        ]),
+        toggle('Show cover art', 'listArtLeft'),
+      ]),
+    ],
+    library: () => [
+      section('Albums', [
+        toggle('Separate albums by disc', 'separateDiscs'),
+        toggle('Show year under albums', 'showAlbumYear'),
+        toggle('Show song counts under albums', 'showTrackCounts'),
+        range('Album size', 'tileSize', 110, 260, 10),
+        toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
+      ]),
+      section('Edition tags', [
+        toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
+        wordsField(),
+      ]),
+    ],
+    artists: () => [
+      section('Artists', [
+        range('Artist size', 'artistTileSize', 100, 240, 10),
+        toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
+      ]),
+      section('Artist information', [
+        folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Artists not there are looked for in their own music folder, above their albums.'),
         link('refresh', 'Refresh artwork and artist information', () => {
           refreshArt();
           toast('Looking for artwork and artist information again');
@@ -105,11 +145,71 @@ export function mountSettings(root, app) {
             toast(`Export failed: ${err.message}`);
           }
         }),
+      ]),
+    ],
+    languages: () => [
+      el('p.set-note', {
+        text: 'For songs tagged with original, English and romanised versions (TITLE_ORIG, TITLE_EN, TITLE_ROM and the same for artist, album and disc subtitle, as the Language Variants Picard plugin writes). Other songs show as tagged.',
+      }),
+      ...LANGUAGE_KINDS.map(([kind, label, sample]) => languageCard(kind, label, sample)),
+      toggle('List every version in tooltips', 'versionTooltips', 'Point at a title to see its original, English and romanised versions'),
+    ],
+    more: () => [
+      section('foobar2000', [
+        link('settings', 'Preferences…', () => tryCall('misc.showPreferences')),
+        link('library', 'Configure media library…', () => tryCall('config.showLibraryPreferences')),
+      ]),
+      section('Fusion', [
         link('reset', 'Reset Fusion settings', async () => {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();
         }),
+        el('p.set-about', { text: `Fusion ${VERSION}` }),
       ]),
-      el("p.set-about", { text: `Fusion ${VERSION}` }),
+    ],
+  };
+
+  // One kind of text: which version shows, what follows it, and how that looks.
+  function languageCard(kind, label, sample) {
+    const k = TEXT_KINDS[kind];
+    const preview = el('div.set-lang-preview');
+    const tip = setVersioned(preview, sample.orig, sample, kind);
+    preview.title = tip;
+    return el(
+      'div.set-lang',
+      null,
+      el('div.set-lang-head', null, el('span', { text: label }), preview),
+      el(
+        'div.set-lang-row',
+        null,
+        miniSelect('Show', `lead${k}`, VERSION_CHOICES),
+        miniSelect('Then', `then${k}`, THEN_CHOICES),
+      ),
+    );
+  }
+
+  function miniSelect(label, key, options) {
+    const sel = el(
+      'select.set-select',
+      { 'aria-label': label, onchange: () => store.set(key, sel.value) },
+      options.map(([value, text]) => el('option', { value, text, selected: store.get(key) === value })),
+    );
+    return el('label.set-mini-select', null, el('small', { text: label }), sel);
+  }
+
+  // A choice of three or more: one row with a drop-down, and the chosen
+  // option's explanation under it.
+  function select(label, key, options) {
+    const cur = options.find(([v]) => v === store.get(key));
+    const sel = el(
+      'select.set-select',
+      { 'aria-label': label, onchange: () => store.set(key, sel.value) },
+      options.map(([value, text]) => el('option', { value, text, selected: store.get(key) === value })),
+    );
+    return el(
+      'div.set-select-row',
+      null,
+      el('div.set-select-line', null, el('span', { text: label }), sel),
+      cur?.[2] ? el('small.set-select-hint', { text: cur[2] }) : null,
     );
   }
 
@@ -148,12 +248,15 @@ export function mountSettings(root, app) {
     const save = (list) => store.set('dimWords', [...new Set(list)].join(', '));
     const off = !store.get('dimEditionTags');
     const add = el('input.set-word-add', { type: 'text', placeholder: 'Add a word…', disabled: off, 'aria-label': 'Add a word' });
+    // Enter, comma or Tab finishes a word (Tab with nothing typed moves on as usual).
     add.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' && e.key !== ',') return;
+      if (e.key !== 'Enter' && e.key !== ',' && !(e.key === 'Tab' && !e.shiftKey && add.value.trim())) return;
       e.preventDefault();
       const w = add.value.trim().replace(/,/g, '');
-      if (w) save([...words(), w]);
       add.value = '';
+      if (w) save([...words(), w]);
+      // The list is redrawn: carry on typing in the new box.
+      requestAnimationFrame(() => document.querySelector('.set-word-add')?.focus());
     });
     const chips = words().map((w) =>
       el('span.set-chip', null, el('span', { text: w }), el('button', { title: `Remove "${w}"`, disabled: off, onclick: () => save(words().filter((x) => x !== w)) }, icon('close'))),
@@ -162,7 +265,7 @@ export function mountSettings(root, app) {
       'div.set-words-box' + (off ? '.off' : ''),
       null,
       el('div.set-chips', null, chips, add),
-      el('div.set-words-foot', null, el('small', { text: 'Works with (…), […], <…>, {…}, ~…~ and " - …" endings.' }), el('button.set-mini', { text: 'Defaults', disabled: off, onclick: () => store.set('dimWords', store.defaultOf('dimWords')) })),
+      el('div.set-words-foot', null, el('small', { text: 'Works with (…), […], <…>, {…}, ‹…›, «…», 【…】, ~…~, 〜…〜, -…- and " - …" endings.' }), el('button.set-mini', { text: 'Defaults', disabled: off, onclick: () => store.set('dimWords', store.defaultOf('dimWords')) })),
     );
   }
 

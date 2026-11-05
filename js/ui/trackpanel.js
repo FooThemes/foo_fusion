@@ -6,7 +6,7 @@
 // disc shows just that one with its cover in the big art slot.
 
 import { setTitle, setVersioned, versionText } from './titles.js';
-import { pickVersion, parseVersions, KINDS } from '../data/versions.js';
+import { pickVersion, parseVersions } from '../data/versions.js';
 import { albumColours } from '../data/albumcolours.js';
 import { splitValues } from '../data/view.js';
 import { el, clear, formatTime, formatDuration, plural } from '../core/util.js';
@@ -197,11 +197,11 @@ export class TrackPanel {
       this.title.title = '';
       return;
     }
-    setTitle(this.title, pick.lead + (head.albumSuffix || ''));
-    if (store.get('otherVersion') === 'beside') {
-      const others = [];
-      for (const k of KINDS) if (v[k] && ![pick.lead, ...others].some((o) => o.toLowerCase() === v[k].toLowerCase())) others.push(v[k]);
-      if (others.length) this.title.append(' ', el('span.alt-version', { text: others.join(' · ') }));
+    setTitle(this.title, pick.base + (pick.other ? '' : head.albumSuffix || ''));
+    if (pick.other) {
+      this.title.append(' ', el('span.alt-version', { text: pick.other }));
+      const end = [pick.suffix, head.albumSuffix].filter(Boolean).join(' ').trim();
+      if (end) this.title.append(' ', el('span', { text: end }));
     }
     this.title.title = pick.tip;
   }
@@ -221,7 +221,7 @@ export class TrackPanel {
     // With versions, the link shows the lead one and opens the original
     // (the name the Artists tab lists, from the untouched ARTISTS tag).
     const whoV = head?.versions?.albumArtist;
-    if (who) parts.push(link('artists', whoV?.orig || who, versionText(who, whoV, 'tracks')));
+    if (who) parts.push(link('artists', whoV?.orig || who, versionText(who, whoV, 'artists')));
     if (head?.date || head?.year) parts.push(head.date || head.year);
     for (const g of splitValues(head?.genre || '')) parts.push(link('genres', g));
     for (const t of [discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null]) if (t) parts.push(t);
@@ -283,7 +283,7 @@ export class TrackPanel {
     const ctx = (measureCtx ||= new OffscreenCanvas(1, 1).getContext('2d'));
     ctx.font = `14px ${getComputedStyle(document.body).fontFamily}`;
     const head = this.group?.head;
-    const albumArtist = versionText(head?.artist || '', head?.versions?.albumArtist, 'tracks');
+    const albumArtist = versionText(head?.artist || '', head?.versions?.albumArtist, 'artists');
     const want = new Set(this.visibleRows());
     this.widths = this.tracks
       .filter((t) => t && want.has(t.index))
@@ -441,16 +441,21 @@ function splitDiscs(rows, tracks) {
     const n = t?.discNumber || 0;
     let d = byNumber.get(n);
     if (!d) {
-      d = { number: n, subtitle: t?.formats?.ds || '', rows: [], tracks: [], first: t };
+      d = { number: n, subtitle: discSubtitle(t), rows: [], tracks: [], first: t };
       byNumber.set(n, d);
       discs.push(d);
     }
     d.rows.push(r);
     d.tracks.push(t);
-    if (!d.subtitle && t?.formats?.ds) d.subtitle = t.formats.ds;
+    if (!d.subtitle && t?.formats?.ds) d.subtitle = discSubtitle(t);
   });
   discs.sort((a, b) => a.number - b.number);
   return discs.length > 1 ? discs : [];
+}
+
+/** A disc's subtitle, in its lead version when it has versions. */
+function discSubtitle(t) {
+  return versionText(t?.formats?.ds || '', parseVersions(t?.formats?.vd), 'discs');
 }
 
 function discLabel(d) {
@@ -475,8 +480,8 @@ function trackRow(r, t, albumArtist) {
     el('span.tp-len', { text: t ? formatTime(t.duration) : '' }),
   );
   if (t) {
-    const tip = setVersioned(text, t.title || t.handle.split('\\').pop(), parseVersions(t.formats?.vt), 'tracks');
-    const note = artistNote(versionText(t.artist, parseVersions(t.formats?.va), 'tracks'), albumArtist);
+    const tip = setVersioned(text, t.title || t.handle.split('\\').pop(), parseVersions(t.formats?.vt), 'titles');
+    const note = artistNote(versionText(t.artist, parseVersions(t.formats?.va), 'artists'), albumArtist);
     if (note) text.append(el('span.tp-artist', { text: ` · ${note}` }));
     name.title = tip || name.textContent;
   }

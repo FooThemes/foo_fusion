@@ -25,6 +25,19 @@ function matcher() {
   return cache.re;
 }
 
+// A bracketed ending: (…) […] <…> {…} ‹…› «…» （…） ［…］ 【…】 〈…〉 《…》
+// ~…~ 〜…〜 ～…～ -…- (after a space), or " - …".
+const TAIL = new RegExp(
+  '\\s*(' +
+    [
+      '\\([^()]*\\)', '\\[[^[\\]]*\\]', '<[^<>]*>', '\\{[^{}]*\\}', '‹[^‹›]*›', '«[^«»]*»', '（[^（）]*）', '［[^［］]*］',
+      '【[^【】]*】', '〈[^〈〉]*〉', '《[^《》]*》', '~[^~]+~', '〜[^〜]+〜', '～[^～]+～', '(?<=\\s)-[^-\\s][^-]*-', '\\s-\\s[^-()[\\]<>{}~‹«（［【〈《〜～]+',
+    ].join('|') +
+    ')\\s*$',
+);
+const OPEN = /^[([<{‹«（［【〈《~〜～-]/;
+const CLOSE = /[)\]>}›»）］】〉》~〜～-]$/;
+
 /** Split off a trailing "(…)"/"[…]" group (or " - Single") that should be dimmed. */
 export function splitTitle(text) {
   const re = matcher();
@@ -33,10 +46,10 @@ export function splitTitle(text) {
   let cut = text.length;
   let i = text.length;
   for (;;) {
-    const tail = text.slice(0, i).match(/\s*(\([^()]*\)|\[[^[\]]*\]|<[^<>]*>|\{[^{}]*\}|~[^~]+~|\s-\s[^-()[\]<>{}~]+)\s*$/);
+    const tail = text.slice(0, i).match(TAIL);
     if (!tail) break;
     const inner = tail[1];
-    if (!re.test(' ' + inner.replace(/^\s-\s/, '').replace(/^[([<{~]|[)\]>}~]$/g, ' ') + ' ')) break;
+    if (!re.test(' ' + inner.replace(/^\s-\s/, '').replace(OPEN, ' ').replace(CLOSE, ' ') + ' ')) break;
     i -= tail[0].length;
     cut = i;
   }
@@ -64,12 +77,19 @@ export function setTitle(node, text) {
  */
 export function setVersioned(node, text, versions, kind) {
   const pick = pickVersion(versions, kind);
-  setTitle(node, pick ? pick.lead : text);
+  setTitle(node, pick ? pick.base : text);
   if (pick?.other) {
     const alt = document.createElement('span');
     alt.className = 'alt-version';
     alt.textContent = pick.other;
     node.append(' ', alt);
+    // A shared ending ("(Album Mix)") after both, dimmed like any edition tag.
+    if (pick.suffix) {
+      const end = document.createElement('span');
+      if (splitTitle('x ' + pick.suffix)[1]) end.className = 'dim-tag';
+      end.textContent = pick.suffix;
+      node.append(' ', end);
+    }
   }
   return pick?.tip || '';
 }

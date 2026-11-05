@@ -122,8 +122,8 @@ export class SongList {
     const t = view.cachedTrack(row);
     const c = node.children;
     const f = t?.formats || {};
-    const tip = setVersioned(c[1], t ? t.title || t.handle.split('\\').pop() : '', parseVersions(f.vt), 'tracks');
-    c[2].textContent = t ? versionText(t.artist || '', parseVersions(f.va), 'tracks') : '';
+    const tip = setVersioned(c[1], t ? t.title || t.handle.split('\\').pop() : '', parseVersions(f.vt), 'titles');
+    c[2].textContent = t ? versionText(t.artist || '', parseVersions(f.va), 'artists') : '';
     c[3].textContent = t ? versionText(t.album || '', parseVersions(f.vl), 'albums') : '';
     c[4].textContent = t ? (t.date || '').slice(0, 4) : '';
     c[5].textContent = t?.genre || '';

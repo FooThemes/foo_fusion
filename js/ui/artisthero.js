@@ -84,7 +84,7 @@ export class ArtistHero {
 
     // English / romanised names (name_en, name_rom), like titles: the lead
     // version, then the others smaller.
-    const pick = pickVersion(info && (info.nameEn || info.nameRom) ? { orig: name, en: info.nameEn, rom: info.nameRom } : null, 'tracks');
+    const pick = pickVersion(info && (info.nameEn || info.nameRom) ? { orig: name, en: info.nameEn, rom: info.nameRom } : null, 'artists');
     this.title.textContent = pick ? pick.lead : info?.name || name;
     if (pick?.other) this.title.append(' ', el('span.alt-version', { text: pick.other }));
     this.title.title = pick?.tip || '';

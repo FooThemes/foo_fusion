@@ -57,8 +57,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 68px;
-  padding: 8px 4px;
+  min-height: 56px;
+  padding: 6px 4px;
   background: var(--hover);
   font-size: 12px;
   line-height: 1.2;
@@ -986,4 +986,127 @@ body.pdragging * {
   font-size: 11.5px;
   color: var(--text2);
   line-height: 1.4;
+}
+
+/* Settings pages: tabs under the heading. */
+.set-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.set-tab {
+  padding: 8px 7px 7px;
+  font-size: 13px;
+  color: var(--text2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.set-tab:hover {
+  color: var(--text);
+}
+
+.set-tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.set-body > .set-quick {
+  margin-top: 16px;
+}
+
+/* A choice from a list: label and drop-down on one line, explanation under. */
+.set-select-row {
+  padding: 6px 0;
+}
+
+.set-select-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.set-select {
+  height: 28px;
+  padding: 0 6px;
+  background: var(--hover);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font: inherit;
+  font-size: 13px;
+  min-width: 120px;
+}
+
+.set-select:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.set-select option {
+  background: var(--panel-bg);
+  color: var(--text);
+}
+
+.set-select-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text2);
+}
+
+/* Languages: one card per kind of text, with a live example. */
+.set-lang {
+  margin: 10px 0;
+  padding: 10px 12px 12px;
+  background: var(--hover);
+}
+
+.set-lang-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.set-lang-head > span:first-child {
+  font-weight: 600;
+  flex: none;
+}
+
+.set-lang-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.set-lang-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.set-mini-select {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.set-mini-select small {
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.set-mini-select .set-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.set-body > .set-note {
+  margin-top: 16px;
 }

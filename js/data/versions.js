@@ -9,8 +9,10 @@ import * as store from '../core/store.js';
 import { tryCall } from '../core/bridge.js';
 
 export const KINDS = ['orig', 'en', 'rom'];
+/** Kinds of text, each with its own "show" and "then" settings. */
+export const TEXT_KINDS = { albums: 'Albums', discs: 'Discs', titles: 'Titles', artists: 'Artists' };
 /** Settings that change how versions show (redraw when they change). */
-export const VERSION_KEYS = ['leadAlbums', 'leadTracks', 'otherVersion'];
+export const VERSION_KEYS = ['versionTooltips', ...Object.values(TEXT_KINDS).flatMap((k) => [`lead${k}`, `then${k}`])];
 const LABEL = { orig: 'Original', en: 'English', rom: 'Romanised' };
 const SEP = '|||';
 
@@ -26,25 +28,51 @@ export function parseVersions(text) {
 }
 
 const CHAIN = { orig: ['orig'], en: ['en', 'rom', 'orig'], rom: ['rom', 'en', 'orig'] };
-const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const norm = (a) => a.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+const same = (a, b) => norm(a) === norm(b);
+const BRACKET = /\s*([(\[{（［【〈《「『<~‹«])([^()[\]{}]*?)([)\]}）］】〉》」』>~›»])\s*$/;
 
 /**
- * What to show for these versions: { lead, other, tip }. `kind` is 'albums'
- * (album titles, disc subtitles) or 'tracks' (song titles, artist names),
- * each with its own "Show titles in" setting. `other` is '' when the other
- * version is set to show only in the tooltip, or is hidden.
+ * What to show for these versions. `kind` is 'albums', 'discs', 'titles' or
+ * 'artists' (see TEXT_KINDS), each with a lead setting ("show") and what
+ * follows it dimmed ("then"). Returns
+ *   lead    the lead version, whole ("スターマーカー (Album Mix)")
+ *   base    the lead without an ending it shares with `other` ("スターマーカー")
+ *   suffix  that shared ending ("(Album Mix)"), to go after `other`
+ *   other   the version(s) shown dimmed ("Starmarker"), '' for none
+ *   tip     every version, for tooltips ('' when that's off)
  */
 export function pickVersion(v, kind) {
   if (!v) return null;
-  const want = store.get(kind === 'albums' ? 'leadAlbums' : 'leadTracks') || 'orig';
-  const leadKind = (CHAIN[want] || CHAIN.orig).find((k) => v[k]) || 'orig';
+  const k = TEXT_KINDS[kind] || 'Titles';
+  const want = store.get(`lead${k}`) || 'orig';
+  const leadKind = (CHAIN[want] || CHAIN.orig).find((x) => v[x]) || 'orig';
   const lead = v[leadKind];
-  const otherKind = leadKind === 'orig' ? ['en', 'rom'].find((k) => v[k] && !same(v[k], lead)) : !same(v.orig, lead) ? 'orig' : null;
-  const mode = store.get('otherVersion');
+  const then = store.get(`then${k}`) || 'auto';
+  const pick = (x) => (v[x] && !same(v[x], lead) ? v[x] : '');
+  let others;
+  if (then === 'none') others = [];
+  else if (then === 'all') others = KINDS.filter((x) => x !== leadKind).map(pick);
+  else if (then === 'auto') others = [leadKind === 'orig' ? pick('en') || pick('rom') : pick('orig')];
+  else others = [pick(then)];
+  others = others.filter((o, i, a) => o && a.findIndex((x) => same(x, o)) === i);
+  // A shared ending goes once, after the other version.
+  let base = lead;
+  let suffix = '';
+  for (;;) {
+    const m = base.match(BRACKET);
+    if (!m || m.index === 0 || !others.length || !others.every((o) => (o.match(BRACKET) || [])[2] !== undefined && same(o.match(BRACKET)[2], m[2]))) break;
+    suffix = (m[0].trim() + ' ' + suffix).trim();
+    base = base.slice(0, m.index).trimEnd();
+    others = others.map((o) => o.slice(0, o.match(BRACKET).index).trimEnd());
+  }
+  others = others.map((o) => stripShared(o, base)).filter(Boolean);
   return {
     lead,
-    other: otherKind && mode === 'beside' ? stripShared(v[otherKind], lead) : '',
-    tip: mode === 'hidden' ? '' : versionsTip(v),
+    base: others.length ? base : lead,
+    suffix: others.length ? suffix : '',
+    other: others.join(' · '),
+    tip: store.get('versionTooltips') ? versionsTip(v) : '',
   };
 }
 
@@ -54,10 +82,10 @@ export function pickVersion(v, kind) {
  * shows the second as just "Kibun Janai no".
  */
 function stripShared(other, lead) {
-  const folded = lead.toLowerCase();
+  const folded = norm(lead);
   for (;;) {
-    const m = other.match(/\s*[(\[{（［【〈《「『<~]([^()[\]{}]*?)[)\]}）］】〉》」』>~]\s*$/);
-    if (!m || m.index === 0 || !folded.includes(m[1].trim().toLowerCase())) return other;
+    const m = other.match(BRACKET);
+    if (!m || m.index === 0 || !folded.includes(norm(m[2]))) return other;
     other = other.slice(0, m.index).trimEnd();
   }
 }

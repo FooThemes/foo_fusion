@@ -293,7 +293,7 @@ export class Grid {
       // Original / English / romanised: the lead version as the title, the
       // other at the start of the second line ("狂言 · Ado").
       const pick = pickVersion(head?.versions?.album, 'albums');
-      const who = versionText(head?.artist || artist, head?.versions?.albumArtist, 'tracks');
+      const who = versionText(head?.artist || artist, head?.versions?.albumArtist, 'artists');
       setTitle(t1, pick ? pick.lead + (head.albumSuffix || '') : head?.title || album);
       const year = store.get('showAlbumYear') && head?.year ? ` · ${head.year}` : '';
       t2.textContent = (pick?.other ? `${pick.other} · ` : '') + who + year + (store.get('showTrackCounts') ? ` · ${plural(g.count, 'song')}` : '');
@@ -307,7 +307,7 @@ export class Grid {
       node.title = g.key;
       // English / romanised names from the artist's artist.nfo, when it has them.
       artistNameVersions(g.key, head?.handle).then((v) => {
-        const pick = pickVersion(v, 'tracks');
+        const pick = pickVersion(v, 'artists');
         if (!pick || node.dataset.key !== g.key) return;
         t1.textContent = pick.lead;
         t2.textContent = (pick.other ? `${pick.other} · ` : '') + albums;

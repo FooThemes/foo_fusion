@@ -12,6 +12,7 @@ import * as store from '../core/store.js';
 import { refreshArtist } from '../data/artwork.js';
 import { showMenu } from './menus.js';
 import { view } from '../data/view.js';
+import { editArtist } from './infoeditor.js';
 
 const GAP = 24; // between the header and the first row of albums
 
@@ -44,7 +45,10 @@ export class ArtistHero {
     this.node.addEventListener('contextmenu', (e) => {
       if (!this.name) return;
       e.preventDefault();
-      showMenu([{ label: 'Refresh artist information', run: () => refreshArtist(this.name, this.handle ? [this.handle] : []) }]);
+      showMenu([
+        { label: 'Edit artist information…', run: () => editArtist(this.name, this.handle) },
+        { label: 'Refresh artist information', run: () => refreshArtist(this.name, this.handle ? [this.handle] : []) },
+      ]);
     });
     store.subscribe((k) => {
       if (!VERSION_KEYS.includes(k) || !this.name) return;
@@ -99,6 +103,7 @@ export class ArtistHero {
     if (/^https?:\/\//.test(info?.website || '')) this.links.append(link('Website', info.website));
     if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
     if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/artist/${info.musicbrainz}`));
+    this.links.append(el('button.ah-link', { title: 'Edit the artist’s information and pictures', onclick: () => editArtist(this.name, this.handle) }, 'Edit', icon('edit')));
     this.node.classList.toggle('has-fanart', !!files.fanart);
     this.node.classList.toggle('no-picture', !files.picture);
     this.node.hidden = false;

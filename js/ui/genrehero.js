@@ -13,6 +13,7 @@ import { collageUrl } from './collage.js';
 import { showMenu } from './menus.js';
 import { view } from '../data/view.js';
 import { genreCase } from './artisthero.js';
+import { editGenre } from './infoeditor.js';
 
 const GAP = 24; // between the header and the first row of albums
 const PIC_W = 320;
@@ -46,7 +47,10 @@ export class GenreHero {
     this.node.addEventListener('contextmenu', (e) => {
       if (!this.name) return;
       e.preventDefault();
-      showMenu([{ label: 'Refresh genre information', run: () => forgetGenreInfo() }]);
+      showMenu([
+        { label: 'Edit genre information…', run: () => editGenre(this.name) },
+        { label: 'Refresh genre information', run: () => forgetGenreInfo() },
+      ]);
     });
     window.addEventListener('fusion:genrerefresh', () => {
       if (!this.name) return;
@@ -103,6 +107,7 @@ export class GenreHero {
     const link = (label, url) => el('button.ah-link', { title: url, onclick: () => tryCall('shell.openExternal', { url }) }, label, icon('link'));
     if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
     if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/genre/${info.musicbrainz}`));
+    this.links.append(el('button.ah-link', { title: 'Edit the genre’s information and pictures', onclick: () => editGenre(this.name) }, 'Edit', icon('edit')));
     const back = files?.fanart || files?.picture;
     this.node.classList.toggle('has-fanart', !!back);
     if (back) this.#setImage(this.fanart, back, 1600);

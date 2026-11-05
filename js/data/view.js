@@ -581,36 +581,87 @@ class View extends Emitter {
   }
 
   #playbackKey = null; // what the playback playlist currently holds
+  #playbackCount = 0; // its songs, once filled
+  #playbackFrom = 0; // rows[] index of its first song (while still filling)
+  #playbackBuild = null; // Promise of the fill in progress
 
   /**
    * Play from the songs view in the order shown: the rows are copied, in that
    * order, to a hidden "Fusion playback" playlist (reused while the list
    * hasn't changed) and played from there, so Next and the playback order
-   * modes follow the list on screen.
+   * modes follow the list on screen. Copying all of a big library takes
+   * foobar2000 seconds, so the clicked song and the next few hundred go in
+   * first and play at once; the rest follow in small steps (the songs before
+   * it last, at the top), so the window never freezes.
    */
   async #playSorted(row) {
     const rows = this.rows;
     const at = rows.indexOf(row);
     if (at < 0) return call('playlist.playTrack', { playlist: this.playlist.index, index: row });
     const key = `${this.playlist.guid}|${this.playlist.trackCount}|${this.currentSortKey()}|${store.get('sortDescending')}|${this.filter}`;
+    const keep = this.playlist.guid;
     let pb = playlists.byName(PLAYBACK);
-    if (!pb || this.#playbackKey !== key || pb.trackCount !== rows.length) {
-      const t0 = performance.now();
-      const handles = await this.handlesFor(rows);
+    const ready = pb && this.#playbackKey === key && this.#playbackCount === rows.length;
+    if (ready || (pb && this.#playbackKey === key && this.#playbackBuild)) {
+      // Filled (or filling, with this song already in): play it from there.
+      if (!ready && (at < this.#playbackFrom || at >= this.#playbackFrom + this.#playbackLoaded)) await this.#playbackBuild;
+      await call('playlist.playTrack', { playlistGuid: pb.guid, index: at - this.#playbackFrom });
+    } else {
+      const first = rows.slice(at, at + 300);
+      const handles = await this.handlesFor(first);
       if (!pb) {
         await call('playlist.create', { name: PLAYBACK, position: playlists.list.length });
         await playlists.refresh();
         pb = playlists.byName(PLAYBACK);
         if (!pb) return;
       } else await call('playlist.clear', { playlistGuid: pb.guid });
-      for (let i = 0; i < handles.length; i += 5000) await call('playlist.addHandles', { playlistGuid: pb.guid, handles: handles.slice(i, i + 5000) });
+      await call('playlist.addHandles', { playlistGuid: pb.guid, handles });
       this.#playbackKey = key;
-      logInfo(`playback list: ${handles.length} songs in ${Math.round(performance.now() - t0)} ms`);
+      this.#playbackCount = 0;
+      this.#playbackFrom = at;
+      this.#playbackLoaded = handles.length;
+      await call('playlist.playTrack', { playlistGuid: pb.guid, index: 0 });
+      this.#playbackBuild = this.#fillPlayback(pb.guid, rows, at, key);
     }
     // Creating a playlist can activate it; keep the user where they are.
-    const keep = this.playlist.guid;
-    await call('playlist.playTrack', { playlistGuid: pb.guid, index: at });
     if (playlists.activePlaylist?.guid !== keep) tryCall('playlist.setActive', { playlistGuid: keep });
+  }
+
+  #playbackLoaded = 0;
+
+  async #fillPlayback(guid, rows, at, key) {
+    const t0 = performance.now();
+    const pause = () => new Promise((r) => setTimeout(r, 40));
+    const stale = () => this.#playbackKey !== key;
+    try {
+      // The rest after the clicked song, then the ones before it (at the top).
+      for (let i = at + this.#playbackLoaded; i < rows.length; i += 1000) {
+        await pause();
+        if (stale()) return;
+        const handles = await this.handlesFor(rows.slice(i, Math.min(rows.length, i + 1000)));
+        if (stale()) return;
+        await call('playlist.addHandles', { playlistGuid: guid, handles });
+        this.#playbackLoaded += handles.length;
+      }
+      for (let end = at; end > 0; end -= 1000) {
+        await pause();
+        if (stale()) return;
+        const from = Math.max(0, end - 1000);
+        const handles = await this.handlesFor(rows.slice(from, end));
+        if (stale()) return;
+        await call('playlist.insertTracks', { playlistGuid: guid, position: 0, handles });
+        this.#playbackFrom = from;
+        this.#playbackLoaded += handles.length;
+      }
+      this.#playbackCount = rows.length;
+      logInfo(`playback list: ${rows.length} songs in ${Math.round(performance.now() - t0)} ms (in the background)`);
+    } catch (e) {
+      // Left part-filled: build it again next time.
+      if (!stale()) this.#playbackKey = null;
+      logInfo(`playback list failed: ${e.message}`);
+    } finally {
+      if (!stale()) this.#playbackBuild = null;
+    }
   }
 
   /** Is this playlist row of the current view the one playing? */
@@ -618,7 +669,11 @@ class View extends Emitter {
     if (player.playingIndex < 0) return false;
     if (player.playingPlaylist === this.playlist?.index) return player.playingIndex === row;
     const pb = playlists.byName(PLAYBACK);
-    if (pb && player.playingPlaylist === pb.index && this.#sortedView() && this.#playbackKey?.startsWith(this.playlist.guid + '|')) return this.rows[player.playingIndex] === row;
+    // From the playback copy: the same song (rows there shift while it fills).
+    if (pb && player.playingPlaylist === pb.index && this.#sortedView() && this.#playbackKey?.startsWith(this.playlist.guid + '|')) {
+      const t = this.#trackCache.get(row);
+      return t && player.track ? t.handle === player.track.handle : this.rows[player.playingIndex + this.#playbackFrom] === row;
+    }
     return false;
   }
 

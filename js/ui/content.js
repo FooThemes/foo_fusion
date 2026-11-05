@@ -100,12 +100,11 @@ export function mountContent(root) {
     if (pendingRestore === key) {
       const ret = view.returning;
       if (ret?.jump) {
-        // Going to an album: straight there, already open, no scrolling.
-        // Not in the list yet (still loading)? Try again on the next change.
-        if (!current.expandKey?.(ret.expandedKey, { jump: true }) && view.loading) {
-          renderMessage();
-          return;
-        }
+        // Going to an album: straight there, already open, no scrolling. The
+        // Collection can reload a few times on the way (a re-sort, foobar2000
+        // refilling it), so the page stays hidden until it has settled.
+        settleJump(key, ret);
+        return;
       } else {
         if (scrollMemo.has(key)) {
           scroller.scrollTop = scrollMemo.get(key);
@@ -119,8 +118,32 @@ export function mountContent(root) {
     renderMessage();
   }
 
+  let jumpTimer = 0;
+  let jumpStarted = 0;
+  function settleJump(key, ret) {
+    if (!jumpStarted) jumpStarted = performance.now();
+    scroller.classList.add('jumping');
+    loading.hidden = false;
+    clearTimeout(jumpTimer);
+    jumpTimer = setTimeout(() => {
+      if (pendingRestore !== key || lastKey !== key) return finishJump();
+      const late = performance.now() - jumpStarted > 4000;
+      if (view.loading && !late) return settleJump(key, ret);
+      const found = current?.expandKey?.(ret.expandedKey, { jump: true });
+      if (!found && !late) return settleJump(key, ret);
+      pendingRestore = null;
+      view.returning = null;
+      finishJump();
+    }, 250);
+  }
+  function finishJump() {
+    jumpStarted = 0;
+    scroller.classList.remove('jumping');
+    renderMessage();
+  }
+
   function renderMessage() {
-    loading.hidden = !(view.loading && currentKind === 'grid' && !view.groups.length);
+    loading.hidden = !(scroller.classList.contains('jumping') || (view.loading && currentKind === 'grid' && !view.groups.length));
     if (currentKind === 'nowplaying' || view.loading) {
       message.hidden = true;
       return;

@@ -245,3 +245,8 @@
   right: 2px;
   background: color-mix(in srgb, var(--text) 50%, transparent);
 }
+
+/* Going to an album: hidden until the Collection has settled (see content.js). */
+.content.jumping > * {
+  visibility: hidden;
+}

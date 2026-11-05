@@ -1,7 +1,8 @@
 // Playback state: transport, now-playing track, time, volume, order, queue.
 // One source of truth that the player bar, now-playing view and tiles read.
 
-import { call, tryCall, on } from '../core/bridge.js';
+import { call, tryCall, on, onAny } from '../core/bridge.js';
+import { debounce } from '../core/util.js';
 import { Emitter } from '../core/emitter.js';
 
 export const ORDERS = ['default', 'repeat-playlist', 'repeat-track', 'random', 'shuffle-tracks', 'shuffle-albums', 'shuffle-folders'];
@@ -106,6 +107,16 @@ class Player extends Emitter {
       if (!this.track) return;
       if (d.truncated || (d.handles || []).includes(this.track.handle)) tryCall('playback.getCurrentTrack').then((r) => r?.track && ((this.track = r.track), this.emit('track', r.track)));
     });
+    // Sorting, adding or removing songs (or whole playlists) moves the playing
+    // song to another row or playlist index: read where it is again, so the
+    // playing marks follow it.
+    const relocate = debounce(async () => {
+      if (this.playingIndex < 0 && this.state === 'stopped') return;
+      const before = `${this.playingPlaylist}:${this.playingIndex}`;
+      await this.#refreshLocation();
+      if (`${this.playingPlaylist}:${this.playingIndex}` !== before) this.emit('state', this.state);
+    }, 120);
+    onAny(['playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered', 'playlist:itemsReplaced', 'playlist:sorted', 'playlist:created', 'playlist:removed', 'playlist:reordered'], relocate);
     on('playback:edited', () => tryCall('playback.getCurrentTrack').then((r) => r?.track && ((this.track = r.track), this.emit('track', r.track))));
   }
 

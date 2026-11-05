@@ -19,7 +19,8 @@ import { GenreHero } from './genrehero.js';
 import { musicArtistFolder } from '../data/artistinfo.js';
 import { trackContextMenu, handlesOf } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
-import { genreFiles } from '../data/genreinfo.js';
+import { genreFiles, forgetGenreInfo } from '../data/genreinfo.js';
+import { editArtist, editGenre } from './infoeditor.js';
 import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
 
@@ -457,8 +458,12 @@ export class Grid {
   /** "Refresh artwork" for an album or genre; artist information for an artist. */
   #refreshItems(g, rows) {
     if (this.kind === 'artists') {
-      return [{ label: 'Refresh artist information', run: async () => refreshArtist(g.key, [g.head?.handle, ...(await handlesOf(rows, 50))].filter(Boolean)) }];
+      return [
+        { label: 'Edit artist information…', run: () => editArtist(g.key, g.head?.handle) },
+        { label: 'Refresh artist information', run: async () => refreshArtist(g.key, [g.head?.handle, ...(await handlesOf(rows, 50))].filter(Boolean)) },
+      ];
     }
+    if (this.kind === 'genres') return [{ label: 'Edit genre information…', run: () => editGenre(g.key) }, { label: 'Refresh artwork', run: () => forgetGenreInfo() }];
     return [{ label: 'Refresh artwork', run: async () => refreshArt(await handlesOf(rows)) }];
   }
 

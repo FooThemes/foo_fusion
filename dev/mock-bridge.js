@@ -373,6 +373,20 @@ export async function installMock() {
       emit('playlist:itemsRemoved', { playlist: i, newCount: pl.items.length });
       return {};
     },
+    'playlist.insertTracks': (p) => {
+      const [pl, i] = getPl(p);
+      const byPath = new Map(lib.map((t) => [t.handle, t]));
+      const add = p.handles.map((h) => byPath.get(h)).filter(Boolean);
+      pl.items.splice(p.position || 0, 0, ...add);
+      emit('playlist:itemsAdded', { playlist: i, count: add.length });
+      return { playlist: i, insertedCount: add.length };
+    },
+    'playlist.clear': (p) => {
+      const [pl, i] = getPl(p);
+      pl.items.length = 0;
+      emit('playlist:itemsRemoved', { playlist: i });
+      return {};
+    },
     'playlist.addHandles': (p) => {
       const [pl, i] = getPl(p);
       const byPath = new Map(lib.map((t) => [t.handle, t]));
@@ -519,7 +533,12 @@ export async function installMock() {
         : ({ images: [{ name: 'cover.jpg', path: p.directory + '\\cover.jpg', size: 1000 + (p.directory.length * 37) % 900 }] }),
     'file.exists': (p) => ({ exists: /_Genres\\(Rock|Jazz)\\genre\.nfo$/.test(p.path) || (p.path.includes('_Artists') || /^C:\\Music\\[^\\]+\\artist\.nfo$/.test(p.path)) && p.path.endsWith('artist.nfo'), isFile: true, isDirectory: false }),
     'webview.getSource': () => ({ source: 'activeTemplate', directory: 'C:\\fb\\profile\\webview-ui\\fusion', templateName: 'fusion' }),
-    'file.write': (p) => ((window.__mockWrites ||= []).push({ path: p.path, bytes: (p.content || '').length }), { bytesWritten: (p.content || '').length }),
+    'file.mkdir': (p) => ((window.__mockOps ||= []).push('mkdir ' + p.path), {}),
+    'file.copy': (p) => ((window.__mockOps ||= []).push(`copy ${p.source} -> ${p.destination}`), {}),
+    'file.delete': (p) => ((window.__mockOps ||= []).push(`delete ${p.path}${p.moveToTrash ? ' (trash)' : ''}`), {}),
+    'dialog.openFile': () => ({ filePaths: ['C:\\Users\\me\\Pictures\\new-photo.png'] }),
+    'shell.showInExplorer': (p) => (console.info('[mock] explorer', p.path), {}),
+    'file.write': (p) => ((window.__mockWrites ||= []).push({ path: p.path, bytes: (p.content || '').length, content: /\.nfo$/.test(p.path) ? p.content : undefined }), { bytesWritten: (p.content || '').length }),
     'file.read': (p) =>
       p.path.endsWith('logo.png') && window.__mockLogo
         ? { content: window.__mockLogo }

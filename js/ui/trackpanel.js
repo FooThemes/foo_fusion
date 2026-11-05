@@ -161,6 +161,13 @@ export class TrackPanel {
       this.tracks = null;
       this.discs = [];
       this.disc = 'all';
+      // Not the last album's cover while this one's loads.
+      for (const img of [this.cover, this.bg]) {
+        if (!img) continue;
+        delete img.dataset.artToken;
+        img.removeAttribute('src');
+        img.classList.remove('loaded');
+      }
     }
     this.#measure();
     this.#position();

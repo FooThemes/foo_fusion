@@ -1124,3 +1124,204 @@ body.pdragging * {
 .set-body > .set-note {
   margin-top: 16px;
 }
+
+/* Artist / genre information editor */
+.dialog.ie-dialog {
+  width: min(980px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 18px;
+}
+
+.ie-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ie-head h2 {
+  margin: 0 0 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ie-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.ie-pics {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ie-slot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.ie-label {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.ie-remove {
+  font-size: 12px;
+  padding: 0;
+}
+
+.ie-pic {
+  position: relative;
+  width: 100%;
+  background: var(--bg);
+  border: 2px dashed var(--line);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s;
+}
+
+.ie-pic:hover,
+.ie-pic:focus-visible,
+.ie-pic.over {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.ie-pic.ie-round {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  margin: 0 auto;
+}
+
+.ie-pic.ie-wide {
+  aspect-ratio: 2 / 1;
+}
+
+.ie-pic.ie-logo {
+  aspect-ratio: 3 / 1;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--line) 60%, transparent) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+}
+
+.ie-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ie-pic.ie-logo img {
+  object-fit: contain;
+}
+
+.ie-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text2);
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+}
+
+.ie-empty .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.ie-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text2);
+}
+
+.ie-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  align-content: start;
+}
+
+.ie-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ie-row[hidden] {
+  display: none;
+}
+
+.ie-row.ie-wide {
+  grid-column: 1 / -1;
+}
+
+.ie-input {
+  height: 32px;
+}
+
+.ie-text {
+  height: auto;
+  min-height: 140px;
+  padding: 8px 10px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.ie-error {
+  color: #e5484d !important;
+  margin: 10px 0 0 !important;
+}
+
+.ie-buttons {
+  align-items: center;
+  margin-top: 16px;
+}
+
+.ie-spacer {
+  flex: 1;
+}
+
+.ie-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 50%;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.ie-folder span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.ie-folder .icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .ie-body {
+    grid-template-columns: 1fr;
+  }
+}

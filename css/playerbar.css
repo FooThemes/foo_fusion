@@ -141,7 +141,9 @@ body.no-sidebar #playerbar {
   height: 100%;
 }
 .wave-front {
-  clip-path: inset(0 100% 0 0);
+  --wave-at: 0%;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(var(--wave-at) - 1.5px), transparent calc(var(--wave-at) + 1.5px));
+  mask-image: linear-gradient(to right, #000 calc(var(--wave-at) - 1.5px), transparent calc(var(--wave-at) + 1.5px));
 }
 /* Until the waveform is decoded, show a thin line so seeking still works. */
 .wave-box:not(.ready)::before {

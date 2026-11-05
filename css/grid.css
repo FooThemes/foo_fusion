@@ -847,3 +847,8 @@
 .gh-more {
   font-size: inherit;
 }
+
+/* Pictures already decoded: no fade when the header switches. */
+.artist-hero img.instant {
+  transition: none;
+}

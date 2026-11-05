@@ -24,6 +24,7 @@ import { editArtist, editGenre } from './infoeditor.js';
 import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
 
+const genreTiles = new Map(); // genre|size -> picture or collage URL (null: none)
 const MARGIN = 40; // left/right margin, as in the original
 const PAD = 8; // gap around each cover
 const OVERSCAN = 2; // extra rows rendered above/below the viewport
@@ -52,12 +53,17 @@ export class Grid {
     // Genre pictures or information changed (the script ran, the folder moved).
     window.addEventListener('fusion:genrerefresh', () => {
       forgetCollages();
+      genreTiles.clear();
       if (this.kind !== 'genres') return;
       for (const node of this.tiles.values()) delete node.querySelector('.art img').dataset.artToken;
       this.refreshHeads();
     });
 
     this.onScroll = rafThrottle(() => this.render());
+    const stopReveal = () => (this.revealUntil = 0);
+    scroller.addEventListener('wheel', stopReveal, { passive: true });
+    scroller.addEventListener('pointerdown', (e) => e.target === scroller && stopReveal());
+    scroller.addEventListener('keydown', stopReveal);
     scroller.addEventListener('scroll', this.onScroll, { passive: true });
     this.ro = new ResizeObserver(rafThrottle(() => this.layout()));
     this.ro.observe(scroller);
@@ -400,6 +406,16 @@ export class Grid {
     }
     art.dataset.label = '';
     const live = () => img.dataset.artToken === token;
+    // Drawn before (another tab, a re-sort): straight back, no fade.
+    const known = genreTiles.get(token);
+    if (known !== undefined) {
+      if (known) {
+        img.classList.add('instant', 'loaded');
+        img.src = known;
+      } else art.dataset.label = g.key;
+      return;
+    }
+    img.classList.remove('instant');
     let url = null;
     const files = await genreFiles(g.key);
     if (!live()) return;
@@ -411,6 +427,7 @@ export class Grid {
       url = await collageUrl(handles, w, h);
     }
     if (!live()) return;
+    genreTiles.set(token, url);
     if (!url) {
       img.removeAttribute('src');
       img.classList.remove('loaded');
@@ -510,12 +527,17 @@ export class Grid {
     this.layer.classList.toggle('shift', wasOpen && prevRow === this.expandedRow);
     this.panel.open(view.groups[i], i);
     this.#relayoutTiles();
+    // The songs arrive a moment later and make the panel taller: show it
+    // again then (unless the user has scrolled meanwhile).
+    this.revealUntil = performance.now() + 2000;
     this.#reveal();
   }
 
   /** The open album list changed height (disc picked, tracks loaded). */
   relayout() {
-    if (this.expanded >= 0) this.#relayoutTiles();
+    if (this.expanded < 0) return;
+    this.#relayoutTiles();
+    if (performance.now() < (this.revealUntil || 0)) this.#reveal();
   }
 
   collapse() {
@@ -546,7 +568,9 @@ export class Grid {
     const viewTop = this.scroller.scrollTop;
     const viewH = this.scroller.clientHeight;
     let target = null;
-    if (bottom > viewTop + viewH) target = Math.min(top, bottom - viewH);
+    // Taller than the window: its row of tiles at the top, the rest album.
+    if (bottom - top > viewH) target = Math.abs(viewTop - (top - 8)) > 2 ? top : null;
+    else if (bottom > viewTop + viewH) target = Math.min(top, bottom - viewH);
     else if (top < viewTop) target = top;
     if (target != null) this.scroller.scrollTo({ top: target - 8, behavior: store.get('smoothScroll') ? 'smooth' : 'auto' });
   }

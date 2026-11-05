@@ -56,6 +56,9 @@ async function load() {
 
 export const cacheReady = () => base != null;
 
+/** The cache folder (Windows path) and its URL path, for other small caches. */
+export const cacheFolder = () => (base ? { path: base, url: `/${FOLDER}` } : null);
+
 /** Cover file remembered for a folder: { name, size } | null (none) | undefined (unknown). */
 export function knownCover(dir) {
   const d = index.dirs[dir];

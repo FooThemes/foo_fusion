@@ -104,6 +104,7 @@ export async function artistDetails(name, handle = null) {
 
 /** Read the artist's (or every artist's) information again. */
 export function forgetArtistInfo(name = null) {
+  pictures.clear();
   if (!name) {
     found.clear();
     listing.clear();
@@ -182,7 +183,28 @@ function opaqueBounds(ctx, w, h) {
  * crops transparent margins (logos often come with lots of them, which
  * throws them out of line with the text below).
  */
-export async function pictureUrl(file, px, { trim = false } = {}) {
+const pictures = new Map(); // path|size|trim -> Promise<blob URL | null>
+
+export function pictureUrl(file, px, { trim = false } = {}) {
+  // Kept for the session: an artist's or genre's page opened again shows its
+  // pictures at once instead of reading and scaling the files again.
+  const key = `${file.path}|${file.size || ''}|${px || 0}|${trim}`;
+  let p = pictures.get(key);
+  if (!p) {
+    p = makePictureUrl(file, px, trim);
+    pictures.set(key, p);
+    p.then((u) => u || pictures.delete(key));
+    if (pictures.size > 300) pictures.delete(pictures.keys().next().value);
+  }
+  return p;
+}
+
+/** Forget the scaled pictures (files replaced or refreshed). */
+export function forgetPictures() {
+  pictures.clear();
+}
+
+async function makePictureUrl(file, px, trim) {
   const res = await tryCall('file.read', { path: file.path, encoding: 'binary' });
   if (!res?.content) return null;
   let bin;

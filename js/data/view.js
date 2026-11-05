@@ -34,8 +34,18 @@ class View extends Emitter {
   reversed = false; // descending order shown for a locked (auto)playlist
   selection = new Set();
   #trackCache = new Map(); // row -> track
+  #quickCache = new Map(); // row -> track without the titleformat extras (see quickTracks)
   #generation = 0;
   #ownSortUntil = 0;
+  // The last groups of each page (tab, artist, genre…), shown straight away
+  // when it's opened again while the real load runs, instead of a blank
+  // "Loading…" page. The load then replaces them (usually with the same).
+  #snapshots = new Map();
+
+  #snapshotKey() {
+    const pl = playlists.activePlaylist;
+    return pl ? [pl.guid, pl.trackCount, this.mode, this.drill?.kind || '', this.drill?.key || '', this.filter, store.get('separateDiscs'), this.currentSortKey(), store.get('sortDescending')].join('|') : '';
+  }
 
   async init() {
     this.mode = store.get('view');
@@ -57,6 +67,7 @@ class View extends Emitter {
       // Our own heart clicks already updated the screen.
       if (!all && favourites.ownChange(handles)) return;
       this.#trackCache.clear();
+    this.#quickCache.clear();
       this.#sortCache = null;
       await this.load();
       this.emit('metadata');
@@ -243,9 +254,10 @@ class View extends Emitter {
 
   /** Empty the page (shown as loading) before loading another one. */
   #blank() {
-    this.groups = [];
-    this.rows = [];
-    this.total = 0;
+    const snap = this.mode !== 'songs' && this.mode !== 'nowplaying' ? this.#snapshots.get(this.#snapshotKey()) : null;
+    this.groups = snap ? snap.groups : [];
+    this.rows = snap ? null : [];
+    this.total = snap ? snap.total : 0;
     this.loading = true;
     this.emit('loading', true);
     this.emit('change');
@@ -300,6 +312,7 @@ class View extends Emitter {
     const pl = playlists.activePlaylist;
     this.playlist = pl;
     this.#trackCache.clear();
+    this.#quickCache.clear();
 
     if (!pl) {
       this.groups = [];
@@ -323,7 +336,11 @@ class View extends Emitter {
     // Songs in an autoplaylist are sorted here instead (see #sortedRows), so
     // going between Songs and Albums doesn't rebuild the library either.
     const clientSongs = this.mode === 'songs' && pl.isLocked;
-    const wantSort = !clientSongs && (opts.sort || (!valueView && store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp));
+    // An artist's or genre's page of an autoplaylist (the Collection) puts its
+    // few albums in order itself, instead of having foobar2000 rebuild the
+    // whole library in another order (and back again for the Albums tab).
+    const clientGroups = !!this.drill && pl.isLocked;
+    const wantSort = !clientSongs && !clientGroups && (opts.sort || (!valueView && store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp));
     this.reversed = false;
     if (wantSort && pl.trackCount > 0 && this.canSort(pl)) {
       this.#ownSortUntil = performance.now() + 30000;
@@ -356,7 +373,7 @@ class View extends Emitter {
     }
     // Autoplaylists are locked against reordering, so "descending" is applied
     // to what we show rather than to the playlist itself.
-    this.reversed = pl.isLocked && desc;
+    this.reversed = pl.isLocked && desc && !clientGroups;
 
     let matched = null;
     const q = this.filter ? searchQuery(this.filter) : '';
@@ -409,6 +426,10 @@ class View extends Emitter {
       groups = groupByValues(runs, kind, kind === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST, kind === 'artists' && store.get('hidePlaceholderArtists') ? isPlaceholderArtist : null);
     }
     if (matched) groups = intersect(groups, matched);
+    if (clientGroups && groups.length > 1) {
+      groups = await this.#sortGroups(pl, groups, pattern, desc);
+      if (gen !== this.#generation) return;
+    }
     // Artist/genre tiles are alphabetical, so "descending" flips them directly.
     const valueTiles = kind !== 'albums' && !this.drill;
     if (valueTiles ? store.get('sortDescending') : this.reversed) groups.reverse();
@@ -428,10 +449,28 @@ class View extends Emitter {
     this.groups = groups;
     this.total = groups.reduce((n, g) => n + g.count, 0);
     this.rows = null;
+    const snapKey = this.#snapshotKey();
+    this.#snapshots.delete(snapKey);
+    this.#snapshots.set(snapKey, { groups, total: this.total });
+    if (this.#snapshots.size > 16) this.#snapshots.delete(this.#snapshots.keys().next().value);
     await this.syncSelection(false);
     this.#done(gen);
     this.#loadHeads(gen);
   });
+
+  /** Groups in the order of a sort pattern (evaluated on each one's first song). */
+  async #sortGroups(pl, groups, pattern, desc) {
+    const keys = [];
+    for (let i = 0; i < groups.length; i += 500) {
+      const chunk = groups.slice(i, i + 500);
+      const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows: chunk.map((g) => firstRow(g)), fields: ['handle'], formats: { s: pattern } });
+      chunk.forEach((g, n) => keys.push(res?.tracks?.[n]?.formats?.s ?? ''));
+    }
+    const order = groups.map((g, i) => [g, keys[i]]);
+    order.sort((a, b) => groupCollator.compare(a[1], b[1]));
+    if (desc) order.reverse();
+    return order.map(([g]) => g);
+  }
 
   /** Sorting needs an unlocked playlist, or one of Fusion's own autoplaylists. */
   canSort(pl = this.playlist) {
@@ -501,6 +540,7 @@ class View extends Emitter {
   refreshHeads() {
     if (this.mode === 'songs') {
       this.#trackCache.clear();
+    this.#quickCache.clear();
       this.emit('change');
     } else this.#loadHeads(this.#generation);
   }
@@ -536,7 +576,28 @@ class View extends Emitter {
   }
 
   cachedTrack(row) {
-    return this.#trackCache.get(row) || null;
+    return this.#trackCache.get(row) || this.#quickCache.get(row) || null;
+  }
+
+  /** Has this row its full track data (versions, codec … not just the tags)? */
+  hasFullTrack(row) {
+    return this.#trackCache.has(row);
+  }
+
+  /**
+   * Plain fields only (title, artist, album …: no titleformat), which
+   * foobar2000 returns many times faster: the Songs list shows these at once
+   * while scrolling, and the full data replaces them a moment later.
+   */
+  async quickTracks(rows) {
+    const missing = rows.filter((r) => !this.#trackCache.has(r) && !this.#quickCache.has(r));
+    if (!missing.length || !this.playlist) return;
+    const gen = this.#generation;
+    for (let i = 0; i < missing.length; i += 2000) {
+      const res = await tryCall('playlist.getTracksAt', { playlist: this.playlist.index, rows: missing.slice(i, i + 2000), fields: TRACK_FIELDS });
+      if (gen !== this.#generation) return;
+      res?.tracks.forEach((t) => this.#trackCache.has(t.index) || this.#quickCache.set(t.index, { ...t, quick: true }));
+    }
   }
 
   // --- selection (mirrors the foobar2000 playlist selection) ---------------
@@ -707,6 +768,8 @@ class View extends Emitter {
   }
 }
 
+const groupCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 export function firstRow(g) {
   return g.rows ? g.rows[0] : g.start;
 }
@@ -769,11 +832,14 @@ function mergeRuns(runs) {
  */
 /** "Pop/Rock", "Pop, Pop Rock", "Rock; Pop" -> separate genres. A few names
  *  have a slash of their own ("Singer/Songwriter") and stay whole. */
-const WHOLE_GENRES = /\b(singer\s*\/\s*song-?writer|r\s*\/\s*b|d\s*\/\s*b|c\s*\/\s*w)\b/gi;
+// Discogs's "Folk, World, & Country" is one genre, commas and all.
+const WHOLE_GENRES = /\b(singer\s*\/\s*song-?writer|r\s*\/\s*b|d\s*\/\s*b|c\s*\/\s*w|folk\s*,\s*world\s*,?\s*(?:&|and)\s*country)\b/gi;
 export function splitGenreText(text) {
   const kept = [];
   const masked = text.replace(WHOLE_GENRES, (m) => `\u0000${kept.push(m) - 1}\u0000`);
-  return masked.split(/\s*[;,/]\s*/).map((v) => v.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[i]));
+  const parts = masked.split(/\s*[;,/]\s*/).map((v) => v.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[i]));
+  // "Rock, Pop, & Soul": the list's last item is "Soul", not "& Soul".
+  return parts.map((p) => p.replace(/^(?:&|and\b)\s*/i, ''));
 }
 
 export const isPlaceholderArtist = (name) => /^\[.+\]$/.test(name.trim());

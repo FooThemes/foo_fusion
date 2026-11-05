@@ -19,7 +19,8 @@ const ROW_H = 35;
 const PAGE = 120;
 
 // Columns the Songs view can show (right-click the header to pick, drag a
-// header to move it). The playing-song marker always comes first.
+// header to move it, drag its right edge to size it). The playing-song
+// marker sits at the start of the title.
 const COLUMNS = {
   title: { label: 'Title', width: 'minmax(0, 3fr)', always: true },
   artist: { label: 'Artist', width: 'minmax(0, 2fr)' },
@@ -30,14 +31,15 @@ const COLUMNS = {
   genre: { label: 'Genre', width: 'minmax(0, 1.2fr)' },
   track: { label: 'Track', width: '48px', right: true },
   disc: { label: 'Disc', width: '44px', right: true },
-  fav: { label: '', menu: 'Favourite', width: '28px' },
+  fav: { label: '', menu: 'Favourite', width: '28px', icon: 'heart' },
   len: { label: 'Length', width: '56px', right: true },
   codec: { label: 'Format', width: '72px' },
   bitrate: { label: 'Bitrate', width: '80px', right: true },
   plays: { label: 'Plays', width: '52px', right: true, menu: 'Plays (foo_playcount)' },
   added: { label: 'Added', width: '96px', menu: 'Added (foo_playcount)' },
 };
-const DEFAULT_COLUMNS = ['title', 'artist', 'album', 'year', 'genre', 'fav', 'len'];
+const DEFAULT_COLUMNS = ['fav', 'title', 'artist', 'album', 'year', 'genre', 'len'];
+const MIN_WIDTH = 28;
 
 function columns() {
   const list = (store.get('songColumns') || DEFAULT_COLUMNS).filter((k) => COLUMNS[k]);
@@ -54,8 +56,9 @@ export class SongList {
     this.#buildHeader();
     this.headerRow.addEventListener('contextmenu', (e) => (e.preventDefault(), this.#columnMenu()));
     this.#dragColumns();
+    this.#resizeColumns();
     this.offStore = store.subscribe((k) => {
-      if (k !== 'songColumns') return;
+      if (k !== 'songColumns' && k !== 'songColumnWidths') return;
       this.#buildHeader();
       for (const node of [...this.nodes.values(), ...this.free]) node.remove();
       this.nodes.clear();
@@ -92,6 +95,7 @@ export class SongList {
   }
 
   destroy() {
+    this.destroyed = true;
     this.offFav();
     this.offStore();
     this.ro.disconnect();
@@ -104,6 +108,7 @@ export class SongList {
   }
 
   setData(keepScroll = false) {
+    this.prefetching = null;
     for (const node of this.nodes.values()) this.#recycle(node);
     this.nodes.clear();
     this.sizer.style.height = view.total * ROW_H + 40 + 'px';
@@ -136,11 +141,57 @@ export class SongList {
 
   #buildHeader() {
     this.cols = columns();
-    this.wrap.style.setProperty('--song-cols', ['30px', ...this.cols.map((k) => COLUMNS[k].width)].join(' '));
+    const widths = store.get('songColumnWidths') || {};
+    this.wrap.style.setProperty('--song-cols', this.cols.map((k) => (widths[k] ? `${widths[k]}px` : COLUMNS[k].width)).join(' '));
     this.headerRow.replaceChildren(
-      el('div.c-num'),
-      ...this.cols.map((k) => el(`div.c-${k}${COLUMNS[k].right ? '.right' : ''}`, { text: COLUMNS[k].label, dataset: { col: k } })),
+      ...this.cols.map((k) =>
+        el(
+          `div.c-${k}${COLUMNS[k].right ? '.right' : ''}`,
+          { dataset: { col: k }, title: COLUMNS[k].menu || COLUMNS[k].label },
+          COLUMNS[k].icon ? icon(COLUMNS[k].icon) : el('span.col-label', { text: COLUMNS[k].label }),
+          el('span.col-resize', { title: 'Drag to resize; double-click for the default width' }),
+        ),
+      ),
     );
+  }
+
+  /** Drag a header's right edge to size its column (double-click: default). */
+  #resizeColumns() {
+    let drag = null;
+    this.headerRow.addEventListener('pointerdown', (e) => {
+      const handle = e.target.closest('.col-resize');
+      if (!handle || e.button !== 0) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const cell = handle.parentElement;
+      drag = { key: cell.dataset.col, x: e.clientX, w: cell.getBoundingClientRect().width };
+      this.headerRow.setPointerCapture(e.pointerId);
+      this.headerRow.classList.add('resizing');
+    }, true);
+    this.headerRow.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const w = Math.max(MIN_WIDTH, Math.round(drag.w + e.clientX - drag.x));
+      drag.now = w;
+      // Live, without rebuilding the rows: just the column template.
+      const widths = { ...(store.get('songColumnWidths') || {}), [drag.key]: w };
+      this.wrap.style.setProperty('--song-cols', this.cols.map((k) => (widths[k] ? `${widths[k]}px` : COLUMNS[k].width)).join(' '));
+    });
+    const end = () => {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      this.headerRow.classList.remove('resizing');
+      if (d.now) store.set('songColumnWidths', { ...(store.get('songColumnWidths') || {}), [d.key]: d.now });
+    };
+    this.headerRow.addEventListener('pointerup', end);
+    this.headerRow.addEventListener('pointercancel', end);
+    this.headerRow.addEventListener('dblclick', (e) => {
+      const handle = e.target.closest('.col-resize');
+      if (!handle) return;
+      const widths = { ...(store.get('songColumnWidths') || {}) };
+      delete widths[handle.parentElement.dataset.col];
+      store.set('songColumnWidths', widths);
+    });
   }
 
   /** Right-click the header: tick the columns to show. */
@@ -153,7 +204,7 @@ export class SongList {
     showMenu([
       ...Object.entries(COLUMNS).map(([k, c]) => ({ label: c.menu || c.label, checked: shown.has(k), enabled: !c.always, run: () => toggle(k) })),
       '-',
-      { label: 'Reset columns', run: () => store.set('songColumns', [...DEFAULT_COLUMNS]) },
+      { label: 'Reset columns', run: () => (store.set('songColumnWidths', {}), store.set('songColumns', [...DEFAULT_COLUMNS])) },
     ]);
   }
 
@@ -162,7 +213,7 @@ export class SongList {
     let drag = null;
     this.headerRow.addEventListener('pointerdown', (e) => {
       const cell = e.target.closest('[data-col]');
-      if (!cell || e.button !== 0) return;
+      if (!cell || e.button !== 0 || e.target.closest('.col-resize')) return;
       drag = { cell, key: cell.dataset.col, x: e.clientX, moved: false };
       this.headerRow.setPointerCapture(e.pointerId);
     });
@@ -197,7 +248,7 @@ export class SongList {
   }
 
   #make() {
-    const node = el('div.song-row', { role: 'option' }, el('div.c-num'), ...this.cols.map((k) => el(`div.c-${k}.ellipsis${COLUMNS[k].right ? '.right' : ''}`, { dataset: { col: k } })));
+    const node = el('div.song-row', { role: 'option' }, ...this.cols.map((k) => el(`div.c-${k}.ellipsis${COLUMNS[k].right ? '.right' : ''}`, { dataset: { col: k } })));
     this.sizer.append(node);
     return node;
   }
@@ -214,7 +265,7 @@ export class SongList {
     const f = t?.formats || {};
     let tip = '';
     this.cols.forEach((k, i) => {
-      const c = node.children[i + 1];
+      const c = node.children[i];
       switch (k) {
         case 'title':
           tip = setVersioned(c, t ? t.title || t.handle.split('\\').pop() : '', t ? parseVersions(f.vt) : null, 'titles');
@@ -229,7 +280,7 @@ export class SongList {
           setVersioned(c, t?.albumArtist || '', t ? parseVersions(f.vaa) : null, 'artists');
           break;
         case 'fav':
-          if (t) {
+          if (t && !t.quick) {
             const loved = favourites.state(t);
             const b = c.firstChild;
             if (b && b.dataset.handle === t.handle) setHeart(b, loved);
@@ -248,17 +299,29 @@ export class SongList {
     node.classList.toggle('selected', view.selection.has(row));
     const playing = view.isPlayingRow(row);
     node.classList.toggle('playing', playing);
-    const num = node.children[0];
-    if (playing) num.replaceChildren(icon(player.state === 'paused' ? 'pause' : 'nowPlaying'));
-    else if (num.firstChild) num.textContent = '';
+    // The playing marker at the start of the title.
+    const title = node.querySelector('.c-title');
+    const mark = title?.querySelector(':scope > .play-mark');
+    const want = playing ? (player.state === 'paused' ? 'pause' : 'nowPlaying') : null;
+    if (!want) mark?.remove();
+    else if (mark?.dataset.icon !== want) {
+      mark?.remove();
+      const m = el('span.play-mark', { dataset: { icon: want } }, icon(want));
+      title.prepend(m);
+    }
   }
 
   async #fetchVisible() {
-    const need = [];
-    for (const [pos, node] of this.nodes) {
-      const row = Number(node.dataset.row);
-      if (!view.cachedTrack(row) && !this.fetching.has(row)) need.push(row);
+    const shown = [...this.nodes.values()].map((node) => Number(node.dataset.row));
+    // First the plain tags (fast), so rows never sit blank while scrolling…
+    const bare = shown.filter((r) => !view.cachedTrack(r));
+    if (bare.length) {
+      await view.quickTracks(bare);
+      for (const [pos, node] of this.nodes) if (bare.includes(Number(node.dataset.row))) this.#fill(node, pos);
     }
+    this.#prefetchAll();
+    // …then everything else (versions, codec, play counts).
+    const need = shown.filter((row) => !view.hasFullTrack(row) && !this.fetching.has(row));
     if (!need.length) return;
     need.sort((a, b) => a - b);
     const batch = need.slice(0, PAGE * 2);
@@ -267,6 +330,23 @@ export class SongList {
     batch.forEach((r) => this.fetching.delete(r));
     for (const [pos, node] of this.nodes) this.#fill(node, pos);
     if (need.length > batch.length) this.loadVisible();
+  }
+
+  /** The plain tags of the whole list, in the background, so a jump
+   *  anywhere (dragging the scrollbar) shows text straight away. */
+  #prefetchAll() {
+    if (this.prefetching === view.playlist?.guid + '|' + view.total) return;
+    const key = (this.prefetching = view.playlist?.guid + '|' + view.total);
+    const total = view.total;
+    (async () => {
+      for (let pos = 0; pos < total; pos += 1500) {
+        await new Promise((r) => setTimeout(r, 120));
+        if (this.prefetching !== key || this.destroyed) return;
+        const rows = [];
+        for (let i = pos; i < Math.min(total, pos + 1500); i++) rows.push(view.rowAt(i));
+        await view.quickTracks(rows);
+      }
+    })();
   }
 
   refreshSelection() {

@@ -56,8 +56,14 @@ export async function showAppMenu(app) {
  * foobar2000's own context menu for playlist rows, with Fusion's `extra`
  * items (e.g. "Refresh artwork") at the top.
  */
-export async function trackContextMenu(rows, extra = []) {
+export async function trackContextMenu(rows, extra = [], { select = true } = {}) {
   if (!rows.length) return;
+  // For a whole album or disc (its cover, title or disc entry): the menu acts
+  // on those songs without selecting them in the list.
+  if (!select) {
+    const handles = await handlesOf(rows);
+    return handles.length ? contextMenu({ mode: 'handles', handles }, extra) : null;
+  }
   const sel = view.selection;
   const same = rows.length === sel.size && rows.every((r) => sel.has(r));
   if (!same) await view.select(rows, { focus: rows[0] });
@@ -71,7 +77,7 @@ export async function trackContextMenu(rows, extra = []) {
  * run through foobar2000.
  */
 export async function contextMenu(target, extra = []) {
-  if (!extra.length) return tryCall('menu.showNativePopup', target);
+  if (!extra.length && target.mode !== 'handles') return tryCall('menu.showNativePopup', target);
   const res = await tryCall('menu.getContextMenu', { ...target, withAvailability: false });
   const conv = (nodes) =>
     (nodes || [])
@@ -202,17 +208,27 @@ export function playlistMenu(p, targets = [p]) {
       await playlists.activate(p.index);
       await runMainMenuAny(['File/Save playlist...', 'File/Save playlist…', 'Save playlist...']);
     } },
-    '-',
-    { label: 'Autoplaylist properties…', enabled: p.isAutoplaylist && !many, run: () => editAutoplaylist(p) },
-    // Not for Collection and Favourites: their queries are Fusion's.
-    ...(special ? [] : [{ label: "foobar2000's autoplaylist editor…", enabled: p.isAutoplaylist && !many, run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) }]),
-    { label: 'Convert to a normal playlist', enabled: p.isAutoplaylist && !special && !many, run: () => call('playlist.removeAutoplaylist', { playlist: p.index }) },
-    '-',
-    { label: many ? `Delete ${targets.length} playlists` : 'Delete', shortcut: 'Del', run: () => deletePlaylists(targets) },
+    // Autoplaylist items only for autoplaylists; Collection and Favourites
+    // (Fusion's own queries) can't be converted, edited in foobar2000 or deleted.
+    ...(p.isAutoplaylist && !many
+      ? [
+          '-',
+          { label: 'Autoplaylist properties…', run: () => editAutoplaylist(p) },
+          ...(special
+            ? []
+            : [
+                { label: "foobar2000's autoplaylist editor…", run: () => call('playlist.showAutoplaylistUI', { playlist: p.index }) },
+                { label: 'Convert to a normal playlist', run: () => call('playlist.removeAutoplaylist', { playlist: p.index }) },
+              ]),
+        ]
+      : []),
+    ...(targets.some((t) => playlists.isSpecial(t)) ? [] : ['-', { label: many ? `Delete ${targets.length} playlists` : 'Delete', shortcut: 'Del', run: () => deletePlaylists(targets) }]),
   ]);
 }
 
 export async function deletePlaylists(list) {
+  // Collection and Favourites stay (Fusion depends on them).
+  list = list.filter((p) => !playlists.isSpecial(p));
   if (!list.length) return;
   const one = list.length === 1;
   const ok = await confirmDialog(one ? `Delete "${list[0].name}"?` : `Delete ${list.length} playlists?`, `${one ? 'This playlist' : 'These playlists'} will be removed. The music files are not touched.`, 'Delete');

@@ -3,6 +3,7 @@
 import { setVersioned } from './titles.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import { el, formatTime, clamp } from '../core/util.js';
+import { tryCall } from '../core/bridge.js';
 import { icon, setIcon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { player, ORDER_LABELS } from '../data/player.js';
@@ -10,9 +11,10 @@ import { nowPlayingUrl, isRawUrl, refreshArt } from '../data/artwork.js';
 import { view } from '../data/view.js';
 import { playlists } from '../data/playlists.js';
 import { showMenu, showAppMenu, contextMenu } from './menus.js';
+import { dropdown } from './dropdown.js';
 import { heartButton, setHeart } from './heart.js';
 import { favourites } from '../data/favourites.js';
-import { mountWaveform } from './waveform.js';
+import { mountWaveform, prefetchWave } from './waveform.js';
 
 export function mountPlayerBar(root, app) {
   const cover = el('img', { alt: '' });
@@ -123,6 +125,9 @@ export function mountPlayerBar(root, app) {
   async function renderTrack() {
     const t = player.track;
     const on = player.active && t;
+    // The waveform first: it's the slowest part.
+    wave.track(on ? t.handle : null);
+    if (on) prefetchNext();
     // Original / English / romanised versions, when the song has them.
     const v = on ? await trackVersions(t) : null;
     if (player.track !== t) return;
@@ -133,7 +138,6 @@ export function mountPlayerBar(root, app) {
     requestAnimationFrame(() => [title, artist].forEach(marquee));
     heart.dataset.handle = on ? t.handle : '';
     heart.hidden = !on;
-    wave.track(on ? t.handle : null);
     if (on) favourites.load([t.handle]).then(([state]) => heart.dataset.handle === t.handle && setHeart(heart, state));
     const key = on ? t.handle : null;
     if (key === artTrack) return;
@@ -200,6 +204,19 @@ export function mountPlayerBar(root, app) {
     knob.style.left = frac * 100 + '%';
     wave.progress(frac);
     seek.setAttribute('aria-valuenow', Math.round(frac * 100));
+  }
+  // The next song's waveform, a few seconds in (in playlist order; with
+  // shuffle the next song isn't known).
+  let nextTimer = 0;
+  function prefetchNext() {
+    clearTimeout(nextTimer);
+    if (!store.get('waveformSeekbar')) return;
+    nextTimer = setTimeout(async () => {
+      if (player.order !== 'default' && player.order !== 'repeat-playlist') return;
+      if (player.playingPlaylist < 0 || player.playingIndex < 0) return;
+      const res = await tryCall('playlist.getTracksAt', { playlist: player.playingPlaylist, rows: [player.playingIndex + 1], fields: ['handle'] });
+      prefetchWave(res?.tracks?.[0]?.handle);
+    }, 4000);
   }
   let raf = 0;
   function tick() {
@@ -283,8 +300,8 @@ export function mountPlayerBar(root, app) {
     orderBtn.classList.toggle('on', o !== 'default');
     orderBtn.title = `Playback order: ${ORDER_LABELS[o]}`;
   }
-  function orderMenu() {
-    showMenu(Object.entries(ORDER_LABELS).map(([k, label]) => ({ label, checked: player.order === k, run: () => player.setOrder(k) })));
+  function orderMenu(e) {
+    dropdown(e.currentTarget, Object.entries(ORDER_LABELS).map(([k, label]) => ({ label, checked: player.order === k, run: () => player.setOrder(k) })), { align: 'right' });
   }
 
   // --- main menu (replaces the hidden foobar2000 menu bar) -----------------

@@ -12,10 +12,11 @@ import { pictureUrl } from '../data/artistinfo.js';
 import { collageUrl } from './collage.js';
 import { showMenu } from './menus.js';
 import { view } from '../data/view.js';
-import { genreCase } from './artisthero.js';
+import { genreCase, preload } from './artisthero.js';
 import { editGenre } from './infoeditor.js';
 
-const GAP = 24; // between the header and the first row of albums
+const GAP = 24;
+const statsCache = new Map(); // genre|songs -> { seconds, artists, top } // between the header and the first row of albums
 const PIC_W = 320;
 const PIC_H = 160;
 
@@ -70,36 +71,35 @@ export class GenreHero {
     const fresh = name !== this.name;
     if (fresh) this.expanded = false;
     this.name = name;
-    const key = sig;
-    this.title.textContent = name;
-    this.node.hidden = false;
-    this.#renderStats(key, fresh);
-    if (!fresh && this.info !== undefined) return this.#renderPicture(key);
-    if (fresh) {
-      this.info = undefined;
-      clear(this.meta);
-      clear(this.assoc);
-      clear(this.bio);
-      clear(this.links);
-      this.fanart.classList.remove('loaded');
-      this.fanart.removeAttribute('src');
-      delete this.fanart.dataset.src;
-      this.picture.classList.remove('loaded');
-      this.picture.removeAttribute('src');
-      this.pictureFor = null;
-      this.#measure();
+    if (!fresh && this.info !== undefined) {
+      this.#renderStats(sig, false);
+      return this.#renderPicture();
     }
-    const [files, info] = await Promise.all([genreFiles(name), genreDetails(name)]);
+    // Everything first, then the header changes in one go (the previous
+    // genre's stays up meanwhile) instead of text, then pictures.
+    const [files, info, genres] = await Promise.all([genreFiles(name), genreDetails(name), view.libraryValues('genres')]);
+    if (this.name !== name) return;
+    const back = files?.fanart || files?.picture;
+    const handles = this.#collageHandles();
+    const [ready, collage] = await Promise.all([
+      preload([
+        [files?.picture, PIC_W * 2],
+        [back, 1600],
+      ]),
+      !files?.picture && handles.length ? Promise.race([collageUrl(handles, PIC_W, PIC_H), new Promise((r) => setTimeout(() => r(null), 350))]) : null,
+    ]);
     if (this.name !== name) return;
     this.files = files;
     this.info = info;
+    this.title.textContent = name;
+    this.node.hidden = false;
+    this.#renderStats(sig, true);
     // "genre of popular music · United States, United Kingdom · since 1950"
-    clear(this.meta);
     const parts = [info?.summary && info.summary[0].toUpperCase() + info.summary.slice(1), info?.origins?.length && info.origins.join(', '), /^\d{4}/.test(info?.since || '') && `since ${info.since.slice(0, 4)}`].filter(Boolean);
     this.meta.textContent = parts.join(' · ');
     this.meta.hidden = !parts.length;
     this.title.title = info?.aliases?.length ? `Also known as ${info.aliases.join(', ')}` : '';
-    await this.#renderAssoc(info, name);
+    this.#renderAssoc(info, genres);
     clear(this.bio);
     for (const para of (info?.description || '').split(/\n+/).filter(Boolean)) this.bio.append(el('p', { text: para }));
     this.bio.hidden = !info?.description;
@@ -108,43 +108,62 @@ export class GenreHero {
     if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
     if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/genre/${info.musicbrainz}`));
     this.links.append(el('button.ah-link', { title: 'Edit the genre’s information and pictures', onclick: () => editGenre(this.name) }, 'Edit', icon('edit')));
-    const back = files?.fanart || files?.picture;
-    this.node.classList.toggle('has-fanart', !!back);
-    if (back) this.#setImage(this.fanart, back, 1600);
-    this.#renderPicture(this.key);
+    // Pictures: the genre's own, else the collage (behind the header too).
+    this.node.classList.toggle('has-fanart', !!(back || collage));
+    if (files?.picture) {
+      this.pictureFor = 'own';
+      this.#setImage(this.picture, files.picture, PIC_W * 2, ready[0]);
+    } else {
+      this.pictureFor = collage ? handles.join('|') : null;
+      this.#showUrl(this.picture, collage);
+    }
+    if (back) this.#setImage(this.fanart, back, 1600, ready[1]);
+    else this.#showUrl(this.fanart, collage);
+    if (!collage && !files?.picture) this.#renderPicture();
     this.#measure();
   }
 
-  /** The genre's own picture, else its biggest albums' covers. */
-  async #renderPicture(key) {
-    const name = this.name;
-    if (this.files?.picture) {
-      if (this.pictureFor !== 'own') {
-        this.pictureFor = 'own';
-        this.#setImage(this.picture, this.files.picture, PIC_W * 2);
-      }
+  /** The four biggest albums' first songs, for the collage. */
+  #collageHandles() {
+    return [...view.groups]
+      .filter((g) => g.head?.handle)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4)
+      .map((g) => g.head.handle);
+  }
+
+  /** A URL already decoded (or null: clear), shown at once. */
+  #showUrl(img, url) {
+    img.classList.add('instant');
+    if (!url) {
+      img.classList.remove('loaded');
+      img.removeAttribute('src');
       return;
     }
-    const top = [...view.groups].filter((g) => g.head?.handle).sort((a, b) => b.count - a.count).slice(0, 4);
-    const handles = top.map((g) => g.head.handle);
+    if (img.src !== url) img.src = url;
+    img.classList.add('loaded');
+  }
+
+  /** No picture of its own: the collage, once its albums' covers are known. */
+  async #renderPicture() {
+    if (this.files?.picture) return;
+    const name = this.name;
+    const handles = this.#collageHandles();
     const sig = handles.join('|');
     if (!handles.length || sig === this.pictureFor) return;
     this.pictureFor = sig;
     const url = await collageUrl(handles, PIC_W, PIC_H);
     if (this.name !== name || this.pictureFor !== sig || !url) return;
-    this.picture.onload = () => this.picture.classList.add('loaded');
-    this.picture.src = url;
-    // No fanart: the collage behind the header too.
-    if (!this.files?.fanart && !this.files?.picture && this.fanart.dataset.src !== url) {
-      this.fanart.dataset.src = url;
-      this.fanart.onload = () => this.fanart.classList.add('loaded');
-      this.fanart.src = url;
+    for (const img of this.files?.fanart ? [this.picture] : [this.picture, this.fanart]) {
+      img.classList.remove('instant');
+      img.onload = () => img.classList.add('loaded');
+      img.src = url;
     }
-    void key;
+    this.node.classList.add('has-fanart');
   }
 
   /** "Part of Pop, Blues" / "Includes Metal, Punk": genres the library has are links. */
-  async #renderAssoc(info, name) {
+  #renderAssoc(info, genres) {
     clear(this.assoc);
     const groups = [
       ['Part of', info?.parents || []],
@@ -152,8 +171,6 @@ export class GenreHero {
     ].filter(([, list]) => list.length);
     this.assoc.hidden = !groups.length;
     if (!groups.length) return;
-    const genres = await view.libraryValues('genres');
-    if (this.name !== name) return;
     for (const [label, list] of groups) {
       const line = el('div', null, el('span.ah-assoc-label', { text: label + ' ' }));
       // In the library first (they're links), then up to a handful of the rest.
@@ -194,32 +211,38 @@ export class GenreHero {
       this.stats.textContent = line([plural(songs, 'song')]);
       clear(this.top || (this.top = el('div.gh-top')));
     }
-    // Songs' artists and lengths: one read of the page's songs (once per genre).
+    // Songs' artists and lengths: one read of the page's songs (once per genre,
+    // kept for the session, so going back shows them at once).
     if (this.statsFor === this.name) return;
     const name = this.name;
     const rows = groups.flatMap((g) => view.groupRows(g));
     if (!rows.length || !view.playlist) return;
     this.statsFor = name;
     this.statsDone = false;
-    let seconds = 0;
-    const byArtist = new Map();
-    for (let i = 0; i < rows.length; i += 2000) {
-      const res = await tryCall('playlist.getTracksAt', { playlist: view.playlist.index, rows: rows.slice(i, i + 2000), fields: ['duration', 'albumArtist', 'artist'] });
-      if (this.name !== name) return;
-      for (const t of res?.tracks || []) {
-        seconds += Number(t.duration) || 0;
-        const who = (t.albumArtist || t.artist || '').trim();
-        if (who && !/^various artists$/i.test(who)) byArtist.set(who, (byArtist.get(who) || 0) + 1);
+    const cacheKey = `${name}|${songs}`;
+    let stat = statsCache.get(cacheKey);
+    if (!stat) {
+      let seconds = 0;
+      const byArtist = new Map();
+      for (let i = 0; i < rows.length; i += 2000) {
+        const res = await tryCall('playlist.getTracksAt', { playlist: view.playlist.index, rows: rows.slice(i, i + 2000), fields: ['duration', 'albumArtist', 'artist'] });
+        if (this.name !== name) return (this.statsFor = null);
+        for (const t of res?.tracks || []) {
+          seconds += Number(t.duration) || 0;
+          const who = (t.albumArtist || t.artist || '').trim();
+          if (who && !/^various artists$/i.test(who)) byArtist.set(who, (byArtist.get(who) || 0) + 1);
+        }
       }
+      stat = { seconds, artists: byArtist.size, top: [...byArtist.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6) };
+      statsCache.set(cacheKey, stat);
     }
-    if (this.name !== name) return;
+    const artists = stat.top.length > 1 ? await view.libraryValues('artists') : null;
+    if (this.name !== name) return (this.statsFor = null);
     this.statsDone = true;
-    this.stats.textContent = line([plural(byArtist.size, 'artist'), plural(songs, 'song'), seconds ? formatDuration(seconds) : '']);
-    const top = [...byArtist.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    this.stats.textContent = line([plural(stat.artists, 'artist'), plural(songs, 'song'), stat.seconds ? formatDuration(stat.seconds) : '']);
+    const top = stat.top;
     clear(this.top);
     if (top.length > 1) {
-      const artists = await view.libraryValues('artists');
-      if (this.name !== name) return;
       this.top.append(el('span.ah-assoc-label', { text: 'Top artists ' }));
       top.forEach(([who], i) => this.top.append(...(i ? [', '] : []), artists.has(who.toLowerCase()) ? this.#valueLink('artists', artists.get(who.toLowerCase())) : who));
       this.stats.after(this.top);
@@ -232,8 +255,9 @@ export class GenreHero {
     return el('button.ah-value', { text: value, title: kind === 'artists' ? `Show ${value}` : `Show ${value} albums`, onclick: () => view.showValue(kind, value) });
   }
 
-  async #setImage(img, file, px) {
-    img.classList.remove('loaded');
+  async #setImage(img, file, px, ready = null) {
+    if (ready) return this.#showUrl(img, ready);
+    img.classList.remove('loaded', 'instant');
     const name = this.name;
     const url = await pictureUrl(file, px);
     if (!url || this.name !== name) return;

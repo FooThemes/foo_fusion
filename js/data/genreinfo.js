@@ -9,6 +9,7 @@
 
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
+import { forgetPictures } from './artistinfo.js';
 
 const PICTURE = ['folder', 'genre', 'thumb', 'poster', 'cover'];
 const FANART = ['fanart', 'backdrop', 'background'];
@@ -60,6 +61,7 @@ export async function genreDetails(name) {
 
 /** Read genre folders again (after the script has run, or the folder changed). */
 export function forgetGenreInfo() {
+  forgetPictures();
   files.clear();
   details.clear();
   window.dispatchEvent(new CustomEvent('fusion:genrerefresh'));

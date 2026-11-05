@@ -87,6 +87,7 @@ const DEFAULTS = {
   gifCovers: 'large', // animate GIF covers: 'large' (open album, Now Playing), 'everywhere' or 'never'
   artistNoPicture: 'cover', // artists without a picture: 'cover' (an album's) or 'placeholder'
   songColumns: null, // Songs view columns in order (null: the defaults, see songs.js)
+  songColumnWidths: {}, // Songs view column -> width in px (sized by hand)
   genreInfoFolder: '', // one folder per genre: genre.nfo, folder.jpg, fanart.jpg
   splitGenres: true, // "Pop/Rock" and "Pop, Rock" are two genres
   genreTiles: 'wide', // genre tiles: 'wide' (2:1, as the original) or 'square'

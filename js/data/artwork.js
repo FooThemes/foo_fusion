@@ -306,7 +306,15 @@ function parentReady(handle, cssSize) {
 async function loadParentCover(dir, px) {
   const res = await tryCall('artwork.getFolderImages', { directory: dir });
   const images = res?.images || [];
-  if (!images.length) return null;
+  if (!images.length) {
+    // Remembered too (on disk, for later sessions): a box set with no cover
+    // of its own goes straight to the disc's cover instead of looking again.
+    if (res) {
+      dirPick.set(dir, null);
+      rememberCover(dir, null);
+    }
+    return null;
+  }
   const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
   const pick =
     (await pickByPatterns((await artPatterns()).front.filter((p) => !/[%$]/.test(p)), images, null)) ||
@@ -546,7 +554,11 @@ function readyUrl(path, type, cssSize) {
  * leaves the element's placeholder showing. Ignores late answers if the
  * element has since been reused for another track.
  */
-export function bindArt(img, path, cssSize, types = ['front']) {
+/**
+ * hold: keep the picture shown until the new one has loaded (the open album's
+ * cover), instead of fading through the placeholder.
+ */
+export function bindArt(img, path, cssSize, types = ['front'], { hold = false } = {}) {
   const token = `${path}|${types.join(',')}|${cssSize}`;
   if (img.dataset.artToken === token) return;
   img.dataset.artToken = token;
@@ -589,7 +601,7 @@ export function bindArt(img, path, cssSize, types = ['front']) {
       };
       img.classList.toggle('alpha', isCachedAlpha(pick, sizeBucket(cssSize)));
       img.classList.toggle('instant', instant);
-      img.classList.toggle('loaded', instant);
+      img.classList.toggle('loaded', instant || (hold && img.classList.contains('loaded')));
       img.decoding = instant ? 'sync' : 'async';
       img.src = disk;
       // Check the folder again in the background (a cover may have changed).
@@ -606,11 +618,30 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     img.classList.add('loaded', 'instant');
     return;
   }
-  img.classList.remove('loaded', 'instant', 'alpha');
+  const holding = hold && img.classList.contains('loaded') && img.getAttribute('src');
+  if (!holding) {
+    img.classList.remove('loaded', 'instant', 'alpha');
+    img.removeAttribute('src');
+  } else {
+    // Only briefly: a slow cover (a big box-set scan) mustn't leave the
+    // previous album's cover up.
+    setTimeout(() => {
+      if (img.dataset.artToken !== token || img.dataset.shown === token) return;
+      img.classList.remove('loaded', 'instant', 'alpha');
+      img.removeAttribute('src');
+    }, 300);
+  }
   img.decoding = 'async';
-  img.removeAttribute('src');
   const attempt = async (i) => {
-    if (i >= types.length || img.dataset.artToken !== token) return;
+    if (img.dataset.artToken !== token) return;
+    if (i >= types.length) {
+      // Nothing found: the placeholder (not the previous album's cover).
+      if (holding) {
+        img.classList.remove('loaded', 'instant', 'alpha');
+        img.removeAttribute('src');
+      }
+      return;
+    }
     const type = types[i];
     const keep = type === 'front' && unscaled(path, cssSize);
     let url;
@@ -650,7 +681,10 @@ export function bindArt(img, path, cssSize, types = ['front']) {
     img.classList.toggle('alpha', rawUrls.has(url));
     img.onload = () => {
       markLoaded(url);
-      if (img.dataset.artToken === token) img.classList.add('loaded');
+      if (img.dataset.artToken === token) {
+        img.dataset.shown = token;
+        img.classList.add('loaded');
+      }
       // Keep a small copy on disk for next time (once the cover file is known).
       const save = () => {
         const pick = coverFile(type, path);

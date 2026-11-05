@@ -6,6 +6,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { showMenu, addToItems } from './menus.js';
+import { dropdown } from './dropdown.js';
 import { favourites } from '../data/favourites.js';
 import { toast } from './toast.js';
 
@@ -21,7 +22,7 @@ export function mountSelectionBar(root) {
     clear(bar).append(...[
       el('div.selbar-count', { text: rows.length, title: `${rows.length} selected` }),
       b('play', 'Play', () => view.play(rows[0])),
-      b('add', 'Add to', () => showMenu(addToItems(rows))),
+      b('add', 'Add to', (e) => dropdown(e.currentTarget, addToItems(rows))),
       b('queue', 'Add to queue', () => view.queueRows(rows)),
       b('heart', 'Like', async () => {
         const handles = await view.handlesFor(rows);

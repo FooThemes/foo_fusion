@@ -9,6 +9,7 @@ import { view } from '../data/view.js';
 import { player, ORDER_LABELS } from '../data/player.js';
 import { playlists } from '../data/playlists.js';
 import { showMenu, addToItems, renamePlaylist, deletePlaylist } from './menus.js';
+import { dropdown } from './dropdown.js';
 import { editAutoplaylist } from './autoplaylist.js';
 
 const TABS = [
@@ -52,7 +53,7 @@ export function mountHeader(root, app) {
       const has = pl.trackCount > 0;
       actions.append(textBtn('play', 'Play all', () => view.play(view.rowAt(0)), !has || view.total === 0));
       actions.append(textBtn('shuffle', 'Shuffle all', shuffleAll, !has));
-      if (view.total) actions.append(textBtn('add', 'Add to', () => addAll(), !has));
+      if (view.total) actions.append(textBtn('add', 'Add to', (e) => addAll(e), !has));
       // Collection and Favourites are Fusion's own: nothing to change there.
       if (pl.isAutoplaylist && !playlists.isSpecial(pl)) actions.append(textBtn('autoplaylist', 'Properties', () => editAutoplaylist(pl)));
       if (!playlists.isSpecial(pl)) {
@@ -90,14 +91,14 @@ export function mountHeader(root, app) {
     return '';
   }
 
-  function sortMenu() {
+  function sortMenu(e) {
     const keys = VIEW_SORTS[view.drill ? 'albums' : view.mode] || [];
     const cur = view.currentSortKey();
-    showMenu(keys.map((k) => ({ label: SORTS[k].label, checked: k === cur, run: () => view.setSort(k) })));
+    dropdown(e.currentTarget, keys.map((k) => ({ label: SORTS[k].label, checked: k === cur, run: () => view.setSort(k) })));
   }
 
-  function orderMenu() {
-    showMenu(Object.entries(ORDER_LABELS).map(([k, label]) => ({ label, checked: player.order === k, run: () => player.setOrder(k) })));
+  function orderMenu(e) {
+    dropdown(e.currentTarget, Object.entries(ORDER_LABELS).map(([k, label]) => ({ label, checked: player.order === k, run: () => player.setOrder(k) })));
   }
 
   async function shuffleAll() {
@@ -106,9 +107,9 @@ export function mountHeader(root, app) {
     if (n) view.play(view.rowAt(Math.floor(Math.random() * n)));
   }
 
-  function addAll() {
+  function addAll(e) {
     const rows = view.rows || (view.groups.length ? view.groups.flatMap((g) => view.groupRows(g)) : Array.from({ length: view.total }, (_, i) => i));
-    showMenu(addToItems(rows));
+    dropdown(e.currentTarget, addToItems(rows));
   }
 
   view.on('change', render);

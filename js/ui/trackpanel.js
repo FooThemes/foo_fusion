@@ -16,6 +16,7 @@ import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt, albumArtTypes, preloadArt, refreshArt } from '../data/artwork.js';
 import { showMenu, addToItems, trackContextMenu, handlesOf } from './menus.js';
+import { dropdown } from './dropdown.js';
 import { RowSelector } from './rowselect.js';
 import { heartButton, refreshHearts } from './heart.js';
 import { draggableRows, selectionOr } from './dnd.js';
@@ -53,12 +54,17 @@ export class TrackPanel {
     // Right-click the cover: foobar2000's menu for the album (or the disc shown).
     this.coverBox.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      if (this.group) trackContextMenu(this.visibleRows(), this.#refreshItems(this.rows));
+      if (this.group) trackContextMenu(this.visibleRows(), this.#refreshItems(this.rows), { select: false });
     });
     // Covers loaded again ("Refresh artwork"): colours from the new cover.
     window.addEventListener('fusion:artrefresh', () => this.group && this.#renderCover());
     this.coverLabel = el('div.tp-cover-label', { hidden: true });
     this.title = el('h2.tp-title.ellipsis');
+    // The title too (the whole album, nothing selected).
+    this.title.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (this.group) trackContextMenu(this.visibleRows(), this.#refreshItems(this.rows), { select: false });
+    });
     this.meta = el('div.tp-meta.ellipsis');
     this.buttons = el('div.tp-buttons');
     this.discBar = el('div.tp-discs', { role: 'tablist', 'aria-label': 'Discs', hidden: true });
@@ -161,13 +167,6 @@ export class TrackPanel {
       this.tracks = null;
       this.discs = [];
       this.disc = 'all';
-      // Not the last album's cover while this one's loads.
-      for (const img of [this.cover, this.bg]) {
-        if (!img) continue;
-        delete img.dataset.artToken;
-        img.removeAttribute('src');
-        img.classList.remove('loaded');
-      }
     }
     this.#measure();
     this.#position();
@@ -257,7 +256,7 @@ export class TrackPanel {
     const rows = () => this.visibleRows();
     clear(this.buttons).append(
       btn('play', 'Play', () => view.play(rows()[0])),
-      btn('add', 'Add to', () => showMenu(addToItems(rows()))),
+      btn('add', 'Add to', (e) => dropdown(e.currentTarget, addToItems(rows()), { align: 'right' })),
       btn('queue', 'Add to queue', () => view.queueRows(rows())),
       btn('close', 'Close', () => this.grid.collapse()),
     );
@@ -269,7 +268,11 @@ export class TrackPanel {
     const clearVars = () => ['--list-bg', '--list-text', '--list-text2', '--accent', '--accent-text'].forEach((v) => st.removeProperty(v));
     this.colourFor = variant + handle;
     if (!handle) return clearVars();
+    // The previous album's colours only briefly while this cover loads.
+    const want = variant + handle;
+    const stale = setTimeout(() => this.colourFor === want && clearVars(), 300);
     const pal = await albumColours(handle, this.cover, variant);
+    clearTimeout(stale);
     if (this.colourFor !== variant + handle) return; // another disc/album was picked meanwhile
     if (!pal) return clearVars();
     st.setProperty('--list-bg', pal.bg);
@@ -288,9 +291,10 @@ export class TrackPanel {
     const handle = disc?.first?.handle || this.group?.head?.handle;
     // "All discs" prefers the box-set cover in the folder above the discs.
     const types = disc ? ['front'] : albumArtTypes(store.get('separateDiscs'));
-    if (handle) bindArt(this.cover, handle, 260, types);
+    // The previous cover stays until this one has loaded (no placeholder flash).
+    if (handle) bindArt(this.cover, handle, 260, types, { hold: true });
     // The blurred background follows the cover shown too.
-    if (handle && store.get('listBackground') === 'blur') bindArt(this.bg, handle, 160, types);
+    if (handle && store.get('listBackground') === 'blur') bindArt(this.bg, handle, 160, types, { hold: true });
     // Album colours follow the cover shown: a disc's own cover when one is picked.
     this.#applyColours(store.get('listBackground') === 'art' ? handle : null, disc ? `disc${disc.number}` : 'all');
     this.coverLabel.hidden = !disc;
@@ -374,7 +378,7 @@ export class TrackPanel {
           oncontextmenu: (e) => {
             e.preventDefault();
             const d = key === 'all' ? null : this.discs.find((x) => x.number === key);
-            trackContextMenu(d ? d.rows : this.rows, this.#refreshItems(this.rows));
+            trackContextMenu(d ? d.rows : this.rows, this.#refreshItems(this.rows), { select: false });
           },
         },
         thumb ? el('span.art.ph-album.tp-disc-art', null, thumb) : icon('disc'),
@@ -423,7 +427,13 @@ export class TrackPanel {
         this.list.append(
           el(
             'div.tp-section',
-            { style: { height: SECTION_H + 'px' } },
+            {
+              style: { height: SECTION_H + 'px' },
+              oncontextmenu: (e) => {
+                e.preventDefault();
+                trackContextMenu(d.rows, this.#refreshItems(this.rows), { select: false });
+              },
+            },
             el('span.art.ph-album.tp-section-art', null, thumb),
             el('span.tp-section-title.ellipsis', { text: discLabel(d) }),
             el('span.tp-section-meta', { text: [plural(d.rows.length, 'song'), len ? formatDuration(len) : null].filter(Boolean).join(' · ') }),
@@ -456,8 +466,12 @@ export class TrackPanel {
 
   refreshPlaying() {
     const playing = player.playingPlaylist === view.playlist?.index ? player.playingIndex : -1;
+    // By the song itself when its data is here (a row number can be stale
+    // for a moment after the playlist changes), else by row.
+    const handle = player.active ? player.track?.handle : null;
     for (const node of this.list.querySelectorAll('.tp-row')) {
-      const on = Number(node.dataset.row) === playing;
+      const t = view.cachedTrack(Number(node.dataset.row));
+      const on = t && handle && !t.quick ? t.handle === handle : Number(node.dataset.row) === playing;
       node.classList.toggle('playing', on);
       const num = node.children[0];
       if (on && !num.querySelector('.icon')) num.replaceChildren(icon(player.state === 'paused' ? 'pause' : 'nowPlaying'));

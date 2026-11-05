@@ -84,6 +84,14 @@ export class ArtistHero {
     const info = /^\[.+\]$|^various artists$/i.test(name.trim()) ? null : nfo;
     if (this.key !== key) return;
     if (!files || (!files.picture && !files.fanart && !info)) return this.#hide();
+    // The pictures first (usually already scaled and decoded this session),
+    // so the header changes in one go instead of text, then pictures.
+    const ready = await preload([
+      [files.logo, 800, true],
+      [files.picture, 400],
+      [files.fanart, 1600],
+    ]);
+    if (this.key !== key) return;
     this.found = true;
 
     // English / romanised names (name_en, name_rom), like titles: the lead
@@ -110,9 +118,9 @@ export class ArtistHero {
     // A logo, when there is one, stands in for the name (kept for screen readers).
     this.node.classList.toggle('has-logo', !!files.logo);
     this.logo.alt = pick ? pick.lead : this.title.textContent;
-    this.#setImage(this.logo, files.logo, 800);
-    this.#setImage(this.picture, files.picture, 400);
-    this.#setImage(this.fanart, files.fanart, 1600);
+    this.#setImage(this.logo, files.logo, 800, ready[0]);
+    this.#setImage(this.picture, files.picture, 400, ready[1]);
+    this.#setImage(this.fanart, files.fanart, 1600, ready[2]);
     this.#measure();
   }
 
@@ -174,7 +182,15 @@ export class ArtistHero {
     return el('button.ah-value', { text: value, title: kind === 'artists' ? `Show ${value}` : `Show ${value} albums`, onclick: () => view.showValue(kind, value) });
   }
 
-  async #setImage(img, file, px) {
+  async #setImage(img, file, px, ready = null) {
+    // Ready (decoded): shown at once, no fade.
+    img.classList.toggle('instant', !!ready);
+    if (ready) {
+      img.onload = null;
+      if (img.src !== ready) img.src = ready;
+      img.classList.add('loaded');
+      return;
+    }
     img.classList.remove('loaded');
     img.removeAttribute('src');
     if (!file) return;
@@ -215,6 +231,25 @@ export class ArtistHero {
       this.grid.layout();
     }
   }
+}
+
+/**
+ * Scaled picture URLs for [file, px, trim] entries, each decoded, waiting at
+ * most a moment: entries not ready by then are null (they fade in later).
+ */
+export async function preload(entries, wait = 350) {
+  const out = entries.map(() => null);
+  const jobs = entries.map(async ([file, px, trim], i) => {
+    if (!file) return;
+    const url = await pictureUrl(file, px, { trim: !!trim });
+    if (!url) return;
+    const im = new Image();
+    im.src = url;
+    await im.decode().catch(() => {});
+    out[i] = url;
+  });
+  await Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, wait))]);
+  return out.slice();
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

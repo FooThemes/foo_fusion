@@ -1325,3 +1325,91 @@ body.pdragging * {
     grid-template-columns: 1fr;
   }
 }
+
+/* Fusion's own drop-down menus (Sort by, order, Add to) */
+.dd-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+}
+
+.dd-menu {
+  position: fixed;
+  pointer-events: auto;
+  min-width: 180px;
+  max-width: 340px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 6px 0;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  animation: dd-in 0.12s ease-out;
+}
+
+@keyframes dd-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.dd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 14px 0 8px;
+  color: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dd-item:hover:not(:disabled),
+.dd-item:focus-visible,
+.dd-item.sub-open {
+  background: var(--hover);
+  outline: none;
+}
+
+.dd-item:disabled {
+  color: var(--text2);
+  opacity: 0.6;
+}
+
+.dd-item.checked {
+  color: var(--accent);
+}
+
+.dd-check {
+  flex: none;
+  width: 16px;
+  display: flex;
+}
+
+.dd-check .icon,
+.dd-arrow .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.dd-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-key {
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.dd-sep {
+  height: 1px;
+  margin: 5px 0;
+  background: var(--line);
+}

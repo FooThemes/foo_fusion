@@ -244,11 +244,17 @@ def target_folder(cfg, name):
     return os.path.join(cfg['music_root'], cfg['artists_folder'] or '_Artists', safe_folder_name(name))
 
 
+IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tbn'}
+
+
 def existing(folder, base):
+    """The folder's artist.* / fanart.* / logo.* picture, if any (artist.nfo
+    isn't a picture)."""
     if not os.path.isdir(folder):
         return None
     for f in os.listdir(folder):
-        if os.path.splitext(f)[0].lower() == base:
+        stem, ext = os.path.splitext(f)
+        if stem.lower() == base and ext.lower() in IMAGE_EXTS:
             return f
     return None
 
@@ -462,8 +468,20 @@ def main():
     ap.add_argument('--refresh', action='store_true', help='rewrite artist.nfo files this script made, fill in missing fields in other artist.nfo files, and retry artists marked done')
     ap.add_argument('--only', help='just this artist (exact name)')
     ap.add_argument('--limit', type=int, default=0, help='stop after this many artists')
+    ap.add_argument('--report', action='store_true', help="list artists that weren't found, failed, were skipped or have no picture (also saved to fusion-artist-info-report.txt)")
+    ap.add_argument('--pause', action='store_true', help='wait for Enter before closing (for runs started from Fusion)')
     args = ap.parse_args()
+    try:
+        run(args)
+    finally:
+        if args.pause:
+            try:
+                input('\nDone. Press Enter to close.')
+            except EOFError:
+                pass
 
+
+def run(args):
     cfg = load_settings()
     for k in ('music_root', 'artist_list'):
         if not cfg[k] or not os.path.exists(cfg[k]):
@@ -473,6 +491,8 @@ def main():
 
     with open(cfg['artist_list'], encoding='utf-8') as f:
         artists = json.load(f)['artists']
+    if args.report:
+        return report(cfg, artists)
     if args.only:
         artists = [a for a in artists if a['name'].casefold() == args.only.casefold()] or [{'name': args.only, 'mbid': None}]
     state = {}
@@ -590,6 +610,52 @@ def main():
     if not args.dry_run:
         save_state(state)
     note('--- ' + ', '.join(f'{v} {k}' for k, v in stats.items()))
+
+
+def report(cfg, artists):
+    """What happened to each artist, from the state file and the folders."""
+    state = {}
+    if os.path.exists(STATE):
+        with open(STATE, encoding='utf-8') as f:
+            state = json.load(f)
+    groups = {k: [] for k in ('not found', 'failed', 'placeholder', 'not yet', 'no picture', 'no artist.nfo')}
+    for a in artists:
+        name = a['name']
+        st = state.get(name, {})
+        if is_placeholder(name, a.get('mbid')):
+            groups['placeholder'].append(name)
+            continue
+        folder = target_folder(cfg, name)
+        if st.get('status') == 'not found':
+            groups['not found'].append(name + ('' if a.get('mbid') else '  (no MusicBrainz ID in the tags)'))
+        elif st.get('status') == 'failed':
+            groups['failed'].append(f"{name}: {st.get('error', '')}")
+        elif not st:
+            groups['not yet'].append(name)
+        else:
+            if not existing(folder, 'artist'):
+                groups['no picture'].append(name)
+            if not os.path.exists(os.path.join(folder, 'artist.nfo')):
+                groups['no artist.nfo'].append(name)
+    titles = {
+        'not found': "Not found on MusicBrainz or TheAudioDB (check the name, or tag MUSICBRAINZ_ARTISTID)",
+        'failed': 'Failed (tried again on the next run)',
+        'placeholder': 'Skipped: MusicBrainz placeholders, not artists',
+        'not yet': 'Not looked up yet',
+        'no picture': 'Looked up, but no picture was found',
+        'no artist.nfo': 'Looked up, but no artist.nfo (an older run, or kept from another tool)',
+    }
+    lines = [f'Fusion artist information report, {time.strftime("%Y-%m-%d %H:%M")}', f'{len(artists)} artists in the list', '']
+    for key, names in groups.items():
+        lines.append(f'{titles[key]}: {len(names)}')
+        lines += [f'    {n}' for n in sorted(names, key=str.casefold)]
+        lines.append('')
+    text = '\n'.join(lines)
+    print(text)
+    path = os.path.join(HERE, 'fusion-artist-info-report.txt')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(text)
+    print(f'Saved to {path}')
 
 
 def save_state(state):

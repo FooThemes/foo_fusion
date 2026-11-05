@@ -9,6 +9,7 @@ import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.j
 import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
 import { exportArtists } from '../data/artistexport.js';
+import { runArtistScript } from '../data/artistscript.js';
 import { toast } from './toast.js';
 import { VERSION } from '../version.js';
 import { TEXT_KINDS } from '../data/versions.js';
@@ -136,8 +137,8 @@ export function mountSettings(root, app) {
     artists: () => [
       section('Artists', [
         select('Artists without a picture', 'artistNoPicture', [
-          ['cover', 'Show an album cover', 'One of their album covers stands in'],
-          ['placeholder', 'Show a blank artist picture', 'The same plain picture for every artist without one'],
+          ['cover', 'Album cover', 'One of their album covers stands in'],
+          ['placeholder', 'Blank picture', 'The same plain picture for every artist without one'],
         ]),
         toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
       ]),
@@ -147,6 +148,12 @@ export function mountSettings(root, app) {
           refreshArt();
           toast('Looking for artwork and artist information again');
         }),
+      ]),
+      section('Artist information script', [
+        pathField('Script', 'artistScript', 'Where fusion-artist-info.py is (its settings file sits beside it). Needs Python.', 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py'),
+        link('person', 'Look up new artists', () => startScript('new', 'Looking up new artists in a console window…')),
+        link('refresh', 'Refresh all artists', () => startScript('refresh', 'Refreshing all artists in a console window (this takes a while)…')),
+        link('info', 'Show report', () => startScript('report', '')),
         link('person', 'Export artist list…', async () => {
           try {
             const r = await exportArtists();
@@ -177,6 +184,21 @@ export function mountSettings(root, app) {
       ]),
     ],
   };
+
+  async function startScript(mode, message) {
+    try {
+      await runArtistScript(mode);
+      if (message) toast(message, 6000);
+    } catch (err) {
+      toast(err.message, 8000);
+    }
+  }
+
+  function pathField(label, key, hint, placeholder) {
+    const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder, spellcheck: false, 'aria-label': label });
+    input.addEventListener('change', () => store.set(key, input.value.trim().replace(/^"|"$/g, '')));
+    return el('label.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), input);
+  }
 
   // Fusion's version, and foobar2000's and its WebView2 component's.
   let hostVersions = null;

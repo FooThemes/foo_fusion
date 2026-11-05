@@ -410,6 +410,16 @@ export function refreshArt(handles = null) {
   rebind((path) => inDirs(path) || dirs.has(splitPath(path).parent));
 }
 
+/** Every artist's picture and information again (after the artist script has run). */
+export function refreshArtistInfo() {
+  newVersion();
+  for (const k of [...dirPick.keys()]) if (k.startsWith('info:')) dirPick.delete(k), forgetDir(k);
+  infoUrls.clear();
+  forgetArtistInfo();
+  rebind((path, types) => types.some((t) => t.startsWith('info:')));
+  window.dispatchEvent(new CustomEvent('fusion:artistrefresh', { detail: { name: null } }));
+}
+
 /** Refresh an artist's picture, fanart, logo and information. */
 export function refreshArtist(name, handles = []) {
   newVersion();

@@ -503,6 +503,11 @@ export async function installMock() {
       const byPath = new Map(lib.map((t) => [t.handle, t]));
       return { results: p.paths.map((path) => ({ path, success: true, result: byPath.get(path) ? tfEval(p.pattern, byPath.get(path)) : '' })) };
     },
+    'shell.spawn': (p) => {
+      if (p.executable === 'py') throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+      console.info('[mock] spawn', p.executable, (p.args || []).join(' '));
+      return { processId: 4242 };
+    },
     'config.getVersionInfo': () => ({ version: 'v2.26.2', foobar2000: 'v2.26.2', versionFull: 'foobar2000 v2.26.2', is64bit: true, isPortable: true, plugin: { name: 'foo_ui_webview2', version: '1.0.0' } }),
     'misc.getFoobarPath': () => ({ path: 'C:\\Program Files\\foobar2000', value: 'C:\\Program Files\\foobar2000' }),
     'misc.showPreferences': () => (console.info('[mock] preferences'), {}),

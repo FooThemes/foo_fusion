@@ -723,16 +723,27 @@ function groupByValues(runs, unknown, hide = null) {
     for (const v of values) {
       const k = v.toLowerCase();
       let g = map.get(k);
-      if (!g) map.set(k, (g = { key: v, ranges: [], albums: new Set() }));
+      if (!g) map.set(k, (g = { key: v, ranges: [], albums: new Set(), sizes: new Map() }));
       // "j-pop" and "J-Pop" are one tile; it takes the capitalised spelling.
       else if (g.key === k && v !== k) g.key = v;
+      // Each album's first row and size, for a genre tile's cover collage.
+      for (const s of r.sub || []) {
+        const a = g.sizes.get(s.key.toLowerCase()) || { start: s.start, count: 0 };
+        a.count += s.count;
+        g.sizes.set(s.key.toLowerCase(), a);
+      }
       g.ranges.push([r.start, r.count]);
       albums.forEach((a) => g.albums.add(a));
     }
   }
   const unknownKey = unknown.toLowerCase();
   return [...map.values()]
-    .map((g) => ({ ...finishGroup(g), albumCount: g.albums.size }))
+    .map((g) => ({
+      ...finishGroup(g),
+      albumCount: g.albums.size,
+      // First rows of the four biggest albums.
+      collageRows: [...g.sizes.values()].sort((a, b) => b.count - a.count).slice(0, 4).map((a) => a.start),
+    }))
     .sort((a, b) => {
       // "Unknown ..." (blank tag) is pinned first, the rest alphabetical.
       const ua = a.key.toLowerCase() === unknownKey;

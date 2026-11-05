@@ -512,20 +512,25 @@ export async function installMock() {
     'misc.getFoobarPath': () => ({ path: 'C:\\Program Files\\foobar2000', value: 'C:\\Program Files\\foobar2000' }),
     'misc.showPreferences': () => (console.info('[mock] preferences'), {}),
     'artwork.getFolderImages': (p) =>
-      p.directory.includes('_Artists') || /^C:\\Music\\[^\\]+$/.test(p.directory)
+      p.directory.includes('_Genres')
+        ? { images: /\\Rock$/.test(p.directory) ? [{ name: 'folder.png', path: p.directory + '\\folder.png', size: 9000 }, { name: 'fanart.png', path: p.directory + '\\fanart.png', size: 9000 }] : [] }
+        : p.directory.includes('_Artists') || /^C:\\Music\\[^\\]+$/.test(p.directory)
         ? { images: [{ name: 'artist.png', path: p.directory + '\\artist.png', size: 5000 }, { name: 'fanart.png', path: p.directory + '\\fanart.png', size: 9000 }] }
         : ({ images: [{ name: 'cover.jpg', path: p.directory + '\\cover.jpg', size: 1000 + (p.directory.length * 37) % 900 }] }),
-    'file.exists': (p) => ({ exists: (p.path.includes('_Artists') || /^C:\\Music\\[^\\]+\\artist\.nfo$/.test(p.path)) && p.path.endsWith('artist.nfo'), isFile: true, isDirectory: false }),
+    'file.exists': (p) => ({ exists: /_Genres\\(Rock|Jazz)\\genre\.nfo$/.test(p.path) || (p.path.includes('_Artists') || /^C:\\Music\\[^\\]+\\artist\.nfo$/.test(p.path)) && p.path.endsWith('artist.nfo'), isFile: true, isDirectory: false }),
     'webview.getSource': () => ({ source: 'activeTemplate', directory: 'C:\\fb\\profile\\webview-ui\\fusion', templateName: 'fusion' }),
     'file.write': (p) => ((window.__mockWrites ||= []).push({ path: p.path, bytes: (p.content || '').length }), { bytesWritten: (p.content || '').length }),
     'file.read': (p) =>
       p.path.endsWith('logo.png') && window.__mockLogo
         ? { content: window.__mockLogo }
+        : p.path.endsWith('genre.nfo')
+        ? { content: `<?xml version="1.0"?><genre><name>${p.path.split('\\').slice(-2, -1)[0]}</name><musicBrainzGenreID>0e3fc579-2d24-4f20-9dae-736e1ec78798</musicBrainzGenreID><summary>genre of popular music</summary><description>${p.path.split('\\').slice(-2, -1)[0]} is a broad genre of popular music that originated as "rock and roll" in the United States in the late 1940s and early 1950s.[1] `.concat('It has its roots in earlier styles. '.repeat(25), `
+Second paragraph.</description><wikipedia>https://en.wikipedia.org/wiki/Rock_music</wikipedia><origin>United States</origin><origin>United Kingdom</origin><since>1950</since><alias>Rock music</alias><parent>Pop</parent><parent>Blues</parent><subgenre>Metal</subgenre><subgenre>Punk</subgenre><subgenre>Folk</subgenre></genre>`) }
         : p.path.endsWith('artist.nfo')
         ? { content: `<?xml version="1.0"?><artist><musicBrainzArtistID>cc2c9c3c-b7bc-4b8b-84d8-4fbd8779e493</musicBrainzArtistID><wikipedia>https://en.wikipedia.org/wiki/Adele</wikipedia><name>${p.path.split('\\').slice(-2, -1)[0]}</name>${p.path.includes('宇多田ヒカル') ? '<sortname>Utada, Hikaru</sortname><name_en>Hikaru Utada</name_en><name_rom>Utada Hikaru</name_rom>' : ''}<genre>Soul</genre><genre>J-Pop</genre><style>Rock/Pop</style><website>https://example.com/</website><memberof mbid="a">Ado</memberof><memberof mbid="b" ended="true">Nobody Band</memberof><yearsactive>2000s - 2010s</yearsactive><formed>2006-03-14</formed><biography>First paragraph of a long biography. `.concat('Lorem ipsum dolor sit amet. '.repeat(30), `\nSecond paragraph here.</biography></artist>`) }
         : p.path.endsWith('artist.png')
           ? { content: 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAaElEQVR4Xu3RAQkAIQAEQTXXJzGnAeVTLMJMgjt2nm+Pl62Xx/8cqClQU6CmQE2BmgI1BWoK1BSoKVBToKZATYGaAjUFagrUFKgpUFOgpkBNgZoCNQVqCtQUqClQU6CmQE2BmgI1BWoXdNwByjj3hm8AAAAASUVORK5CYII=' }
-          : p.path.endsWith('fanart.png')
+          : p.path.endsWith('fanart.png') || p.path.endsWith('folder.png')
             ? { content: 'iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAIAAACwpMoFAAAA6UlEQVR4Xu3RAQkAIADAMDWNcQxmaLHG2Rqcz33uoGt10/gMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+Me5cMBuCPoBK4AAAAASUVORK5CYII=' }
             : ({ content: `<html><body style="font:14px Segoe UI,sans-serif;padding:16px"><h1>${p.path.split('\\').pop()}</h1><p>(mock help page)</p><h2>Examples</h2><pre>ARTIST IS Adele\nGENRE HAS rock AND %rating% GREATER 3</pre></body></html>`, size: 100 }),
     'menu.showNativePopup': () => (console.info('[mock] native context menu'), {}),

@@ -70,6 +70,10 @@ contact =
 language = EN
 ; Where biographies come from, first that has one wins.
 biography = wikipedia, audiodb
+; Genre information (--genres): a subfolder of music_root, one folder per genre.
+genres_folder = _Genres
+; The genre list Fusion exports; empty: fusion-genres.json beside artist_list.
+genre_list =
 """
 
 
@@ -82,7 +86,10 @@ def load_settings():
     cp = configparser.ConfigParser()
     cp.read(SETTINGS, encoding='utf-8')
     s = cp['fusion-artist-info']
-    return {k: s.get(k, '').strip() for k in ['music_root', 'artists_folder', 'artist_list', 'fanart_api_key', 'audiodb_key', 'contact', 'language', 'biography']}
+    cfg = {k: s.get(k, '').strip() for k in ['music_root', 'artists_folder', 'artist_list', 'fanart_api_key', 'audiodb_key', 'contact', 'language', 'biography', 'genres_folder', 'genre_list']}
+    if not cfg['genre_list'] and cfg['artist_list']:
+        cfg['genre_list'] = os.path.join(os.path.dirname(cfg['artist_list']), 'fusion-genres.json')
+    return cfg
 
 
 # --- web ----------------------------------------------------------------
@@ -416,7 +423,7 @@ REPEATED = {'genre', 'style', 'mood', 'memberof', 'member'}
 DATES = {'born', 'formed', 'died', 'disbanded'}
 
 
-def merge_into(path, fresh, dry_run):
+def merge_into(path, fresh, dry_run, root_tag='artist'):
     """Fill in an artist.nfo this script didn't write: add the fields it
     lacks, and make a date more precise when the new one agrees with it
     ("1974" -> "1974-11-15"). Nothing already there is changed or removed.
@@ -428,7 +435,7 @@ def merge_into(path, fresh, dry_run):
     except (ET.ParseError, OSError) as e:
         raise RuntimeError(f"can't read its artist.nfo to update it ({e})")
     root = tree.getroot()
-    if root.tag != 'artist':
+    if root.tag != root_tag:
         return []
     new = ET.fromstring(fresh.split('\n', 2)[2] if fresh.startswith('<?xml') else fresh)
     have = {child.tag for child in root if isinstance(child.tag, str)}
@@ -451,7 +458,7 @@ def merge_into(path, fresh, dry_run):
         # Keep the file's own start (its declaration and any comment) as it was.
         with open(path, encoding='utf-8', errors='replace') as f:
             original = f.read()
-        start = original.find('<artist')
+        start = original.find('<' + root_tag)
         head = original[:start] if start > 0 else '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
@@ -469,6 +476,7 @@ def main():
     ap.add_argument('--only', help='just this artist (exact name)')
     ap.add_argument('--limit', type=int, default=0, help='stop after this many artists')
     ap.add_argument('--report', action='store_true', help="list artists that weren't found, failed, were skipped or have no picture (also saved to fusion-artist-info-report.txt)")
+    ap.add_argument('--genres', action='store_true', help='genre information instead: genre.nfo files in genres_folder (with --refresh: rewrite or fill in existing ones)')
     ap.add_argument('--pause', action='store_true', help='wait for Enter before closing (for runs started from Fusion)')
     args = ap.parse_args()
     try:
@@ -493,6 +501,8 @@ def run(args):
         artists = json.load(f)['artists']
     if args.report:
         return report(cfg, artists)
+    if args.genres:
+        return genres(cfg, args)
     if args.only:
         artists = [a for a in artists if a['name'].casefold() == args.only.casefold()] or [{'name': args.only, 'mbid': None}]
     state = {}
@@ -650,12 +660,221 @@ def report(cfg, artists):
         lines.append(f'{titles[key]}: {len(names)}')
         lines += [f'    {n}' for n in sorted(names, key=str.casefold)]
         lines.append('')
+    # Genres without a genre.nfo (from --genres), when Fusion has exported them.
+    if cfg.get('genre_list') and os.path.exists(cfg['genre_list']):
+        with open(cfg['genre_list'], encoding='utf-8') as f:
+            genre_names = [g['name'] for g in json.load(f).get('genres', []) if g.get('name')]
+        groot = os.path.join(cfg['music_root'], cfg['genres_folder'] or '_Genres')
+        missing = [g for g in genre_names if not os.path.exists(os.path.join(groot, safe_folder_name(g), 'genre.nfo'))]
+        lines.append(f'Genres without information (genre.nfo): {len(missing)} of {len(genre_names)}')
+        lines += [f'    {g}' for g in sorted(missing, key=str.casefold)]
+        lines.append('')
     text = '\n'.join(lines)
     print(text)
     path = os.path.join(HERE, 'fusion-artist-info-report.txt')
     with open(path, 'w', encoding='utf-8') as f:
         f.write(text)
     print(f'Saved to {path}')
+
+
+# --- genres ---------------------------------------------------------------
+#
+# MusicBrainz's web service only gives a genre's name and ID, so the rest
+# comes from Wikidata, which records each genre's MusicBrainz ID: its English
+# name, aliases, a one-line summary, where and when it began, parent genres
+# and subgenres, and its Wikipedia article (for the description).
+
+GENRE_MARK = '<!-- written by fusion-artist-info (genres) -->'
+GENRE_CACHE = os.path.join(HERE, 'fusion-genres-mb.json')
+
+
+def genre_key(name):
+    """Compare-friendly: "J-Pop", "j pop" and "JPop" all become "jpop"."""
+    return re.sub(r'[^0-9a-z]+', '', (name or '').casefold().replace('&', 'and'))
+
+
+def mb_genre_index(web):
+    """Every MusicBrainz genre {key: (name, id)}, fetched 100 at a time and kept a month."""
+    if os.path.exists(GENRE_CACHE) and time.time() - os.path.getmtime(GENRE_CACHE) < 30 * 86400:
+        with open(GENRE_CACHE, encoding='utf-8') as f:
+            rows = json.load(f)
+    else:
+        rows, offset, total = [], 0, None
+        while total is None or offset < total:
+            page = web.get(f'https://musicbrainz.org/ws/2/genre/all?limit=100&offset={offset}&fmt=json') or {}
+            total = page.get('genre-count', 0)
+            rows += [[g['name'], g['id']] for g in page.get('genres', [])]
+            offset += 100
+            if not page.get('genres'):
+                break
+        with open(GENRE_CACHE, 'w', encoding='utf-8') as f:
+            json.dump(rows, f)
+    return {genre_key(name): (name, gid) for name, gid in rows}
+
+
+SPARQL = """SELECT ?key ?item ?label ?desc ?enwiki
+  (GROUP_CONCAT(DISTINCT ?alias; separator="|") AS ?aliases)
+  (GROUP_CONCAT(DISTINCT ?parentLabel; separator="|") AS ?parents)
+  (GROUP_CONCAT(DISTINCT ?childLabel; separator="|") AS ?children)
+  (GROUP_CONCAT(DISTINCT ?originLabel; separator="|") AS ?origins)
+  (MIN(?inception) AS ?since)
+WHERE {
+  %s
+  OPTIONAL { ?item rdfs:label ?label FILTER(LANG(?label) = "en") }
+  OPTIONAL { ?item schema:description ?desc FILTER(LANG(?desc) = "en") }
+  OPTIONAL { ?enwiki schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> }
+  OPTIONAL { ?item skos:altLabel ?alias FILTER(LANG(?alias) = "en") }
+  OPTIONAL { ?item wdt:P279 ?parent . ?parent wdt:P8052 [] . ?parent rdfs:label ?parentLabel FILTER(LANG(?parentLabel) = "en") }
+  OPTIONAL { ?child wdt:P279 ?item . ?child wdt:P8052 [] . ?child rdfs:label ?childLabel FILTER(LANG(?childLabel) = "en") }
+  OPTIONAL { ?item wdt:P495 ?origin . ?origin rdfs:label ?originLabel FILTER(LANG(?originLabel) = "en") }
+  OPTIONAL { ?item wdt:P571 ?inception }
+}
+GROUP BY ?key ?item ?label ?desc ?enwiki"""
+
+
+def wikidata_genres(web, keys, by_name=False):
+    """{key: details}, 50 per query. Keys are MusicBrainz genre IDs, or
+    (by_name) lower-case names matched against the labels and aliases of
+    things Wikidata calls a music genre (for genres MusicBrainz doesn't list)."""
+    out = {}
+    for i in range(0, len(keys), 50):
+        chunk = keys[i:i + 50]
+        if by_name:
+            values = ' '.join('"%s"@en' % k.replace('\\', '').replace('"', '') for k in chunk)
+            match = f'VALUES ?key {{ {values} }}\n  ?item rdfs:label|skos:altLabel ?key .\n  ?item wdt:P31 wd:Q188451 .'
+        else:
+            values = ' '.join(f'"{k}"' for k in chunk)
+            match = f'VALUES ?key {{ {values} }}\n  ?item wdt:P8052 ?key .'
+        q = urllib.parse.urlencode({'query': SPARQL % match, 'format': 'json'})
+        res = web.get(f'https://query.wikidata.org/sparql?{q}') or {}
+        for row in res.get('results', {}).get('bindings', []):
+            v = {k: x['value'] for k, x in row.items()}
+            split = lambda k: [x for x in v.get(k, '').split('|') if x]
+            if v['key'] in out:
+                continue  # several items share the name: keep the first
+            out[v['key']] = {
+                'wikidata': v['item'].rsplit('/', 1)[-1],
+                'label': v.get('label', ''),
+                'summary': v.get('desc', ''),
+                'wikipedia': v.get('enwiki', ''),
+                'aliases': split('aliases'),
+                'parents': split('parents'),
+                'children': split('children'),
+                'origins': split('origins'),
+                'since': (v.get('since') or '')[:4],
+            }
+    return out
+
+
+def wikipedia_intros(web, urls, lang='en'):
+    """{article url: (introduction, url)} for English Wikipedia articles, 20 per request."""
+    titles = {urllib.parse.unquote(u.rsplit('/wiki/', 1)[-1]).replace('_', ' '): u for u in urls if '/wiki/' in u}
+    out = {}
+    names = list(titles)
+    for i in range(0, len(names), 20):
+        q = urllib.parse.urlencode({'action': 'query', 'prop': 'extracts|info', 'inprop': 'url', 'exintro': 1, 'explaintext': 1, 'exlimit': 20, 'format': 'json', 'titles': '|'.join(names[i:i + 20])})
+        res = (web.get(f'https://{lang}.wikipedia.org/w/api.php?{q}') or {}).get('query', {})
+        # Titles the API normalised ("J-pop" stays, "j-pop" -> "J-pop").
+        fixed = {n['to']: n['from'] for n in res.get('normalized', [])}
+        for page in res.get('pages', {}).values():
+            title = fixed.get(page.get('title'), page.get('title'))
+            if title in titles and page.get('extract'):
+                out[titles[title]] = (clean_bio(page['extract']), page.get('fullurl') or titles[title])
+    return out
+
+
+def build_genre_nfo(name, mbid, wd, intro):
+    tags = []
+
+    def add(tag, value):
+        if value:
+            tags.append(f'    <{tag}>{escape(str(value))}</{tag}>')
+
+    add('name', name)
+    add('musicBrainzGenreID', mbid)
+    add('wikidata', wd.get('wikidata'))
+    add('summary', wd.get('summary') and wd['summary'][:1].upper() + wd['summary'][1:])
+    add('description', intro[0] if intro else '')
+    add('wikipedia', (intro[1] if intro else '') or wd.get('wikipedia'))
+    for o in wd.get('origins', []):
+        add('origin', o)
+    add('since', wd.get('since'))
+    for a in sorted(set(wd.get('aliases', [])), key=str.casefold)[:12]:
+        add('alias', a)
+    for p in sorted(set(wd.get('parents', [])), key=str.casefold):
+        add('parent', genre_case(p))
+    for c in sorted(set(wd.get('children', [])), key=str.casefold):
+        add('subgenre', genre_case(c))
+    body = '\n'.join(tags)
+    return f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n{GENRE_MARK}\n<genre>\n{body}\n</genre>\n'
+
+
+def genres(cfg, args):
+    """genre.nfo for every genre in Fusion's genre list that MusicBrainz knows."""
+    path = cfg['genre_list']
+    if not path or not os.path.exists(path):
+        sys.exit(f'Genre list "{path}" not found: export it from Fusion (Settings > Artists > Look up genres does this).')
+    with open(path, encoding='utf-8') as f:
+        names = [g['name'] for g in json.load(f)['genres'] if g.get('name')]
+    if args.only:
+        names = [n for n in names if n.casefold() == args.only.casefold()] or [args.only]
+    root = os.path.join(cfg['music_root'], cfg['genres_folder'] or '_Genres')
+    web = Web(cfg['contact'])
+    log = open(os.path.join(HERE, 'fusion-artist-info.log'), 'a', encoding='utf-8')
+
+    def note(msg):
+        print(msg)
+        log.write(time.strftime('%Y-%m-%d %H:%M:%S ') + msg + '\n')
+        log.flush()
+
+    note(f'--- {len(names)} genres' + (' (dry run)' if args.dry_run else ''))
+    index = mb_genre_index(web)
+    todo, unknown, kept = {}, [], 0
+    for name in names:
+        hit = index.get(genre_key(name))
+        nfo = os.path.join(root, safe_folder_name(name), 'genre.nfo')
+        mine = os.path.exists(nfo) and GENRE_MARK in open(nfo, encoding='utf-8', errors='ignore').read(400)
+        if os.path.exists(nfo) and not args.refresh:
+            kept += 1
+            continue
+        if not hit:
+            unknown.append(name)
+            continue
+        todo[name] = (hit[1], nfo, mine)
+        if args.limit and len(todo) >= args.limit:
+            break
+    wd = wikidata_genres(web, sorted({m for m, _, _ in todo.values() if m}))
+    # Not MusicBrainz genres ("video game music"): Wikidata by name.
+    if unknown:
+        by_name = wikidata_genres(web, sorted({n.lower() for n in unknown}), by_name=True)
+        for name in list(unknown):
+            if name.lower() in by_name:
+                unknown.remove(name)
+                key = 'name:' + name.lower()
+                wd[key] = by_name[name.lower()]
+                nfo = os.path.join(root, safe_folder_name(name), 'genre.nfo')
+                mine = os.path.exists(nfo) and GENRE_MARK in open(nfo, encoding='utf-8', errors='ignore').read(400)
+                todo[name] = (key, nfo, mine)
+    intros = wikipedia_intros(web, [d['wikipedia'] for d in wd.values() if d.get('wikipedia')])
+    written = 0
+    for name, (mbid, nfo, mine) in todo.items():
+        d = wd.get(mbid, {})
+        fresh = build_genre_nfo(name, None if mbid.startswith('name:') else mbid, d, intros.get(d.get('wikipedia', '')))
+        if args.dry_run:
+            note(f'+  {name}: would write genre.nfo')
+            continue
+        os.makedirs(os.path.dirname(nfo), exist_ok=True)
+        if os.path.exists(nfo) and not mine:
+            added = merge_into(nfo, fresh, False, root_tag='genre')
+            note(f'+  {name}: genre.nfo' + (f' (added {", ".join(added)})' if added else ' (nothing new)'))
+        else:
+            with open(nfo, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(fresh)
+            note(f'+  {name}: genre.nfo' + ('' if d else ' (MusicBrainz knows it; no Wikidata details)'))
+        written += 1
+    for name in unknown:
+        note(f'?  {name}: not found on MusicBrainz or Wikidata')
+    note(f'--- {written} new, {kept} skipped, {len(unknown)} not found, 0 failed')
 
 
 def save_state(state):

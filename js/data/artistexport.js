@@ -47,3 +47,36 @@ export async function exportArtists() {
   if (!ok) throw new Error("Couldn't write " + path);
   return { path, count: list.length, withId: list.filter((a) => a.mbid).length };
 }
+
+/**
+ * The library's genres (as the Genres tab lists them, with song counts), for
+ * tools/fusion-artist-info.py --genres. Written to fusion-genres.json beside
+ * fusion-artists.json in the profile folder.
+ */
+export async function exportGenres() {
+  const pl = playlists.byName(COLLECTION) || playlists.activePlaylist;
+  if (!pl) throw new Error('No Collection playlist');
+  const res = await tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns: [TF.genresMulti] });
+  if (!res) throw new Error("Couldn't read the library");
+  const genres = new Map(); // lower case -> { name, songs }
+  for (const run of res.runs || []) {
+    for (const part of run.key.split(SEP)) {
+      for (const v of part.split(';')) {
+        const name = v.trim();
+        if (!name || name.toLowerCase() === 'unknown genre') continue;
+        const g = genres.get(name.toLowerCase()) || { name, songs: 0 };
+        // The capitalised spelling wins ("J-Pop" over "j-pop"), as on the Genres tab.
+        if (g.name === g.name.toLowerCase() && name !== name.toLowerCase()) g.name = name;
+        g.songs += run.count;
+        genres.set(name.toLowerCase(), g);
+      }
+    }
+  }
+  const list = [...genres.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const prof = await tryCall('misc.getProfilePath');
+  const dir = (prof?.path || prof?.value || '').replace(/[\\/]$/, '');
+  const path = `${dir}\\fusion-genres.json`;
+  const ok = await tryCall('file.write', { path, content: JSON.stringify({ exported: new Date().toISOString(), genres: list }, null, 1), atomic: true });
+  if (!ok) throw new Error("Couldn't write " + path);
+  return { path, count: list.length };
+}

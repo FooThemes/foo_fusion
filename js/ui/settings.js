@@ -8,6 +8,7 @@ import { tryCall, on } from '../core/bridge.js';
 import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.js';
 import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
+import { forgetGenreInfo } from '../data/genreinfo.js';
 import { exportArtists } from '../data/artistexport.js';
 import { runArtistScript } from '../data/artistscript.js';
 import { toast } from './toast.js';
@@ -122,6 +123,12 @@ export function mountSettings(root, app) {
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
       ]),
       section('Tile sizes', [range('Albums', 'tileSize', 110, 260, 10), range('Artists', 'artistTileSize', 100, 240, 10)]),
+      section('Genres', [
+        select('Genre tiles', 'genreTiles', [
+          ['wide', 'Wide', 'Twice as wide as tall, as in the original skin'],
+          ['square', 'Square', 'The same shape as album covers'],
+        ]),
+      ]),
       section('Covers', [
         select('Animated GIF covers', 'gifCovers', [
           ['large', 'Large covers only', 'The open album and Now Playing animate; tiles show a still frame (much lighter with big GIFs)'],
@@ -142,6 +149,9 @@ export function mountSettings(root, app) {
         ]),
         toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
       ]),
+      section('Genre information', [
+        folderField('Genre information folder', 'genreInfoFolder', 'One folder per genre with genre.nfo and folder.jpg (a wide picture works best). The artist script fills it in with “Look up genres”; without a picture, genres show a strip of their album covers.', 'e.g. E:\\Music\\_Genres'),
+      ]),
       section('Artist information', [
         folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Artists not there are looked for in their own music folder, above their albums.'),
         link('refresh', 'Refresh artwork and artist information', () => {
@@ -153,6 +163,7 @@ export function mountSettings(root, app) {
         pathField('Script', 'artistScript', 'Where fusion-artist-info.py is (its settings file sits beside it). Needs Python.', 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py'),
         link('person', 'Look up new artists', () => startScript('new', 'Looking up new artists in a console window…')),
         link('refresh', 'Refresh all artists', () => startScript('refresh', 'Refreshing all artists in a console window (this takes a while)…')),
+        link('tag', 'Look up genres', () => startScript('genres', 'Looking up genres in a console window…')),
         link('info', 'Show report', () => startScript('report', '')),
         link('person', 'Export artist list…', async () => {
           try {
@@ -275,11 +286,12 @@ export function mountSettings(root, app) {
     return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
   }
 
-  function folderField(label, key, hint) {
-    const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder: 'e.g. E:\\Music\\_Artists', spellcheck: false, 'aria-label': label });
+  function folderField(label, key, hint, placeholder = 'e.g. E:\\Music\\_Artists') {
+    const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder, spellcheck: false, 'aria-label': label });
     input.addEventListener('change', () => {
       store.set(key, input.value.trim());
       forgetArtistInfo();
+      forgetGenreInfo();
       app.reload?.();
     });
     return el('label.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), input);

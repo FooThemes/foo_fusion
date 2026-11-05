@@ -15,9 +15,12 @@ import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt, albumArtTypes, warmArt, refreshArt, refreshArtist } from '../data/artwork.js';
 import { ArtistHero } from './artisthero.js';
+import { GenreHero } from './genrehero.js';
 import { musicArtistFolder } from '../data/artistinfo.js';
 import { trackContextMenu, handlesOf } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
+import { genreFiles } from '../data/genreinfo.js';
+import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
 
 const MARGIN = 40; // left/right margin, as in the original
@@ -42,7 +45,16 @@ export class Grid {
     this.kind = 'albums';
     this.top = 16; // where the first row starts (below the artist header, if any)
     this.hero = new ArtistHero(this);
-    this.layer.append(this.hero.node);
+    this.genreHero = new GenreHero(this);
+    this.layer.append(this.hero.node, this.genreHero.node);
+
+    // Genre pictures or information changed (the script ran, the folder moved).
+    window.addEventListener('fusion:genrerefresh', () => {
+      forgetCollages();
+      if (this.kind !== 'genres') return;
+      for (const node of this.tiles.values()) delete node.querySelector('.art img').dataset.artToken;
+      this.refreshHeads();
+    });
 
     this.onScroll = rafThrottle(() => this.render());
     scroller.addEventListener('scroll', this.onScroll, { passive: true });
@@ -86,7 +98,7 @@ export class Grid {
     }
     this.kind = kind;
     this.tiles.clear();
-    this.hero.show(view.drill?.kind === 'artists' ? view.drill.key : null, this.#artistTrack());
+    this.#showHero();
     if (this.expanded >= view.groups.length) this.expanded = -1;
     if (!keepScroll) {
       this.expanded = -1;
@@ -111,15 +123,20 @@ export class Grid {
     }
     this.lastWidth = w;
     const round = this.kind === 'artists';
-    const min = round ? store.get('artistTileSize') : store.get('tileSize');
+    // Genres are wide (2:1), as in the original skin, unless set to square.
+    const wide = this.kind === 'genres' && store.get('genreTiles') !== 'square';
+    const min = round ? store.get('artistTileSize') : wide ? Math.round(store.get('tileSize') * 1.7) : store.get('tileSize');
     const inner = w - MARGIN * 2;
     this.cols = Math.max(1, Math.floor(inner / (min + PAD * 2)));
     this.tileW = Math.floor(inner / this.cols);
     const art = this.tileW - PAD * 2;
-    this.tileH = art + PAD + (round ? 58 : this.kind === 'genres' ? 14 : 54);
+    const artH = wide ? Math.round(art / 2) : art;
+    this.tileH = artH + PAD + (round ? 58 : 54);
     this.artSize = art;
+    this.artH = artH;
     this.layer.style.setProperty('--tile-w', this.tileW + 'px');
     this.layer.style.setProperty('--art', art + 'px');
+    this.layer.style.setProperty('--art-h', artH + 'px');
     this.rowCount = Math.ceil(view.groups.length / this.cols);
     this.panel.layout(w);
     this.#updateHeight();
@@ -197,6 +214,19 @@ export class Grid {
     }
   }
 
+  /** The artist's or genre's header on their page (hide one before showing
+   *  the other: hiding puts the albums back at the top). */
+  #showHero() {
+    const kind = view.drill?.kind;
+    if (kind === 'genres') {
+      this.hero.show(null);
+      this.genreHero.show(view.drill.key);
+    } else {
+      this.genreHero.show(null);
+      this.hero.show(kind === 'artists' ? view.drill.key : null, this.#artistTrack());
+    }
+  }
+
   /** On an artist's page: a track from an album in the artist's own folder
    *  (not a guest spot on someone else's album), for Kodi's folder fallback. */
   #artistTrack() {
@@ -218,7 +248,7 @@ export class Grid {
   #warm() {
     clearTimeout(this.warmTimer);
     this.warmTimer = setTimeout(() => {
-      if (!this.artSize) return;
+      if (!this.artSize || this.kind === 'genres') return;
       for (const g of view.groups) if (g.head?.handle) warmArt([g.head.handle], this.artSize, this.#types(g));
     }, 300);
   }
@@ -226,7 +256,7 @@ export class Grid {
   /** Text/art arrived for groups [from, to). */
   refreshHeads() {
     this.#warm();
-    if (view.drill?.kind === 'artists') this.hero.show(view.drill.key, this.#artistTrack());
+    if (view.drill) this.#showHero();
     for (const [i, node] of this.tiles) this.#fill(node, i);
     if (this.expanded >= 0) this.panel.refreshHead(view.groups[this.expanded]);
   }
@@ -316,19 +346,61 @@ export class Grid {
         node.title = pick.tip || g.key;
       });
     } else {
-      t1.textContent = '';
-      t2.textContent = '';
+      const albums = plural(g.albumCount || g.sub?.length || 1, 'album');
+      t1.textContent = g.key;
+      t2.textContent = albums;
       art.classList.add('ph-genre');
-      art.dataset.label = g.key;
-      node.title = `${g.key}\n${plural(g.albumCount || g.sub?.length || 1, 'album')}`;
+      node.title = `${g.key}\n${albums}`;
+      this.#genreArt(node, g, sameAlbum);
+      return;
     }
-    art.dataset.label = this.kind === 'genres' ? g.key : '';
+    art.dataset.label = '';
     if (head?.handle) bindArt(img, head.handle, this.artSize, this.#types(g));
     else if (!sameAlbum) {
       delete img.dataset.artToken;
       img.removeAttribute('src');
       img.classList.remove('loaded');
     }
+  }
+
+  /** A genre's own picture, else a collage of its biggest albums, else a plain
+   *  tile with its name. */
+  async #genreArt(node, g, same) {
+    const art = node.querySelector('.art');
+    const img = art.querySelector('img');
+    const w = this.artSize;
+    const h = this.artH;
+    const token = `genre|${g.key}|${w}x${h}`;
+    if (img.dataset.artToken === token) return;
+    img.dataset.artToken = token;
+    if (!same) {
+      img.removeAttribute('src');
+      img.classList.remove('loaded');
+    }
+    art.dataset.label = '';
+    const live = () => img.dataset.artToken === token;
+    let url = null;
+    const files = await genreFiles(g.key);
+    if (!live()) return;
+    if (files?.picture) url = await genrePictureUrl(files.picture, Math.max(w, h) * (window.devicePixelRatio || 1));
+    if (!url && g.collageRows?.length) {
+      const tracks = await view.tracks(g.collageRows);
+      if (!live()) return;
+      const handles = tracks.map((t) => t?.handle).filter(Boolean);
+      url = await collageUrl(handles, w, h);
+    }
+    if (!live()) return;
+    if (!url) {
+      img.removeAttribute('src');
+      img.classList.remove('loaded');
+      art.dataset.label = g.key;
+      return;
+    }
+    img.onload = () => live() && img.classList.add('loaded');
+    img.onerror = () => {
+      if (live()) art.dataset.label = g.key;
+    };
+    img.src = url;
   }
 
   #indexOf(e) {

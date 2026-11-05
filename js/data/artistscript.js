@@ -5,8 +5,9 @@
 
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
-import { exportArtists } from './artistexport.js';
+import { exportArtists, exportGenres } from './artistexport.js';
 import { refreshArtistInfo } from './artwork.js';
+import { forgetGenreInfo } from './genreinfo.js';
 import { logInfo } from '../core/log.js';
 
 /**
@@ -17,8 +18,10 @@ import { logInfo } from '../core/log.js';
 export async function runArtistScript(mode) {
   const script = String(store.get('artistScript') || '').trim().replace(/^"|"$/g, '');
   if (!/\.py$/i.test(script)) throw new Error('Set the location of fusion-artist-info.py first');
-  if (mode !== 'report') await exportArtists();
-  const args = [script, ...(mode === 'refresh' ? ['--refresh'] : mode === 'report' ? ['--report'] : []), '--pause'];
+  if (mode === 'genres') await exportGenres();
+  else if (mode !== 'report') await exportArtists();
+  const flags = { refresh: ['--refresh'], report: ['--report'], genres: ['--genres'], 'genres-refresh': ['--genres', '--refresh'] }[mode] || [];
+  const args = [script, ...flags, '--pause'];
   // The Python launcher ("py") comes with python.org's installer; else "python".
   let started = null;
   for (const executable of ['py', 'python']) {
@@ -41,6 +44,7 @@ function whenFinished(script) {
     clearInterval(timer);
     window.removeEventListener('focus', onFocus);
     refreshArtistInfo();
+    forgetGenreInfo();
   };
   const onFocus = () => setTimeout(check, 500);
   async function check() {

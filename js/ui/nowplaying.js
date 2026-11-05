@@ -161,7 +161,7 @@ export class NowPlaying {
     );
     this.listTitle.textContent = queue.length ? `Queue · ${queue.length}` : tracks.length || note ? `Up next${plName ? ` from ${plName}` : ''}` : '';
     const editable = pl && !pl.isLocked && !pl.isAutoplaylist;
-    queue.forEach((t, n) => this.list.append(this.#row(t, { kind: 'queue', index: n, number: n + 1, queue, onplay: () => playQueued(t) })));
+    queue.forEach((t, n) => this.list.append(this.#row(t, { kind: 'queue', index: n, number: n + 1, queue, onplay: () => playQueued(t, n) })));
     if (queue.length && (tracks.length || note)) this.list.append(el('h3.np-list-title.np-then', { text: `Then from ${plName || 'the playlist'}` }));
     if (note) this.list.append(el('div.np-note', { text: note }));
     tracks.forEach((t, n) => {
@@ -230,7 +230,17 @@ export class NowPlaying {
 }
 
 
-function playQueued(t) {
-  if (t.playlist != null && t.playlistItem != null) return call('playlist.playTrack', { playlist: t.playlist, index: t.playlistItem });
-  return call('playback.playPath', { path: t.handle });
+/**
+ * Double-click in the queue: play from that song on. The songs before it
+ * are skipped (taken off the queue); the ones after it stay queued.
+ */
+async function playQueued(t, n) {
+  try {
+    if (n > 0) await call('queue.remove', { indices: Array.from({ length: n }, (_, i) => i) });
+    await call('queue.playNow', { index: 0 });
+  } catch {
+    // Older host without queue.playNow: play the song itself.
+    if (t.playlist != null && t.playlistItem != null) return call('playlist.playTrack', { playlist: t.playlist, index: t.playlistItem });
+    return call('playback.playPath', { path: t.handle });
+  }
 }

@@ -25,6 +25,11 @@ export const SHORTCUTS = [
 ];
 
 export function mountKeyboard(app) {
+  // Focus rings show after keys that move focus, and go once the pointer is used.
+  const NAV = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+  document.addEventListener('keydown', (e) => NAV.has(e.key) && document.documentElement.setAttribute('data-keyboard', ''), true);
+  document.addEventListener('pointerdown', () => document.documentElement.removeAttribute('data-keyboard'), true);
+
   document.addEventListener('keydown', async (e) => {
     // Reload works from anywhere (even the search box), and falls back to a
     // plain page reload if foobar2000 doesn't answer.

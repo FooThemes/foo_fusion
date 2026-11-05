@@ -401,6 +401,13 @@ export async function installMock() {
       emit('playback:queueChanged', { count: 0 });
       return {};
     },
+    'queue.playNow': (p) => {
+      const [q] = queue.splice(p.index || 0, 1);
+      if (!q) throw Object.assign(new Error('empty queue'), { code: 'NOT_FOUND' });
+      emit('playback:queueChanged', { count: queue.length });
+      playAt(q.playlist, q.playlistItem);
+      return { playedIndex: p.index || 0, queueCount: queue.length };
+    },
     'queue.remove': (p) => {
       (p.indices || [p.index]).sort((a, b) => b - a).forEach((n) => queue.splice(n, 1));
       emit('playback:queueChanged', { count: queue.length });
@@ -516,8 +523,13 @@ export async function installMock() {
       items: ['File', 'Edit', 'View', 'Playback', 'Library', 'Help'].map((l) => ({ type: 'submenu', label: l, path: l, children: [{ type: 'command', label: `${l} command`, path: `${l}/${l} command`, enabled: true }] })),
     }),
     'menu.runMainMenuCommand': (p) => (console.info('[mock] main menu:', p.command), {}),
-    'menu.getContextMenu': () => ({ mode: 'selection', items: [{ type: 'command', label: 'Open containing folder', commandId: 1 }], targetKey: 'x' }),
-    'menu.runContextCommandById': () => ({}),
+    'menu.getContextMenu': () => ({ mode: 'selection', items: [{ type: 'command', label: 'Open containing folder', path: 'Open containing folder', commandId: 1 }], targetKey: 'x' }),
+    'menu.runContextCommandById': (p) => {
+      // As the real host: the two safety checks go together.
+      if (!!p.expectPath !== !!p.expectTarget) throw Object.assign(new Error('expectPath and expectTarget go together'), { code: 'INVALID_PARAMS' });
+      console.info('[mock] context command', p.id, p.expectPath || '');
+      return {};
+    },
   };
   let fullscreen = false;
   let waveTask = 0;

@@ -67,7 +67,7 @@
 
 /* Keyboard focus only; the open album is already marked by the pointer
    under it. */
-.tile:focus-visible .art {
+:root[data-keyboard] .tile:focus-visible .art {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
 }

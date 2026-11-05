@@ -89,12 +89,21 @@ export async function contextMenu(target, extra = []) {
               id: n.commandId,
               mode: res.mode,
               ...(target.handles ? { handles: target.handles } : {}),
-              expectTarget: res.targetKey,
+              ...expect(n, res),
             }),
         };
       });
   const fb = conv(res?.items);
   return showMenu(fb.length ? [...extra, '-', ...fb] : extra);
+}
+
+/**
+ * The safety check for running a menu command: the item's path and the
+ * tracks' key must both be given (foobar2000 refuses one without the
+ * other), so the command can't land on a different item or set of tracks.
+ */
+function expect(node, res) {
+  return node.path && res?.targetKey ? { expectPath: node.path, expectTarget: res.targetKey } : {};
 }
 
 /** Track handles for playlist rows (at most `max`, spread over the list). */
@@ -256,7 +265,7 @@ export async function runSelectionCommand(label) {
   };
   const cmd = find(res?.items);
   if (!cmd || cmd.commandId == null) return false;
-  await tryCall('menu.runContextCommandById', { id: cmd.commandId, mode: res.mode, expectTarget: res.targetKey });
+  await tryCall('menu.runContextCommandById', { id: cmd.commandId, mode: res.mode, ...expect(cmd, res) });
   return true;
 }
 

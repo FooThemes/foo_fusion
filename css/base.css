@@ -94,11 +94,19 @@ button {
   cursor: default;
 }
 
-button:focus-visible,
+/* Focus rings only while moving around with the keyboard (Tab, arrows…;
+   see keyboard.js). Chromium otherwise draws them after any key, Shift
+   included, around whatever was clicked last. */
 input:focus-visible,
-[tabindex]:focus-visible {
+:root[data-keyboard] button:focus-visible,
+:root[data-keyboard] [tabindex]:not([tabindex='-1']):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
 }
 
 input {

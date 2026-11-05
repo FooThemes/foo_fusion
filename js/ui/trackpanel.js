@@ -17,6 +17,7 @@ import { player } from '../data/player.js';
 import { bindArt, albumArtTypes, preloadArt, refreshArt } from '../data/artwork.js';
 import { showMenu, addToItems, trackContextMenu, handlesOf } from './menus.js';
 import { dropdown } from './dropdown.js';
+import { prefetchWave } from './waveform.js';
 import { RowSelector } from './rowselect.js';
 import { heartButton, refreshHearts } from './heart.js';
 import { draggableRows, selectionOr } from './dnd.js';
@@ -346,6 +347,8 @@ export class TrackPanel {
     }
     this.retries = 0;
     this.tracks = tracks;
+    // Likely to be played next: its first song's waveform, ready for then.
+    if (store.get('waveformSeekbar') && tracks[0]?.handle) setTimeout(() => this.group === group && prefetchWave(tracks[0].handle), 600);
     const discs = splitDiscs(this.rows, tracks);
     const fresh = this.discs.length !== discs.length;
     this.discs = discs;

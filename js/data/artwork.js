@@ -590,7 +590,10 @@ export function bindArt(img, path, cssSize, types = ['front'], { hold = false } 
       const instant = loadedUrls.has(disk);
       img.onload = () => {
         markLoaded(disk);
-        if (img.dataset.artToken === token) img.classList.add('loaded');
+        if (img.dataset.artToken === token) {
+          img.dataset.shown = token;
+          img.classList.add('loaded');
+        }
       };
       img.onerror = () => {
         // The copy is gone (cache cleared by hand?): forget it, load normally.
@@ -614,6 +617,7 @@ export function bindArt(img, path, cssSize, types = ['front'], { hold = false } 
     img.decoding = 'sync';
     img.classList.toggle('alpha', rawUrls.has(ready));
     img.src = ready;
+    img.dataset.shown = token;
     markLoaded(ready);
     img.classList.add('loaded', 'instant');
     return;

@@ -69,6 +69,19 @@ export class Grid {
     this.ro.observe(scroller);
 
     this.layer.addEventListener('click', (e) => this.#click(e));
+    // Hovering an artist or genre: read its folder (pictures, information)
+    // already, so its page opens with its header straight away.
+    let hoverTimer = 0;
+    this.layer.addEventListener('pointerover', (e) => {
+      if (this.kind !== 'artists' && this.kind !== 'genres') return;
+      const i = this.#indexOf(e);
+      clearTimeout(hoverTimer);
+      if (i < 0) return;
+      hoverTimer = setTimeout(() => {
+        const g = view.groups[i];
+        if (g) (this.kind === 'artists' ? this.hero : this.genreHero).warm(g.key, g.head?.handle);
+      }, 120);
+    });
     this.layer.addEventListener('dblclick', (e) => this.#dblclick(e));
     this.layer.addEventListener('contextmenu', (e) => this.#context(e));
     this.layer.addEventListener('keydown', (e) => this.#key(e));
@@ -139,9 +152,8 @@ export class Grid {
     }
     this.lastWidth = w;
     const round = this.kind === 'artists';
-    // Genres are wide (2:1), as in the original skin, unless set to square.
-    const wide = this.kind === 'genres' && store.get('genreTiles') !== 'square';
-    const min = round ? store.get('artistTileSize') : wide ? Math.round(store.get('tileSize') * 1.7) : store.get('tileSize');
+    const wide = false; // genre tiles were 2:1 once; square reads better
+    const min = round ? store.get('artistTileSize') : store.get('tileSize');
     const inner = w - MARGIN * 2;
     this.cols = Math.max(1, Math.floor(inner / (min + PAD * 2)));
     this.tileW = Math.floor(inner / this.cols);

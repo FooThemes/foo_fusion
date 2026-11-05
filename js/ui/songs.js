@@ -164,6 +164,16 @@ export class SongList {
       e.stopPropagation();
       e.preventDefault();
       const cell = handle.parentElement;
+      // A second press on the same grip soon after: back to the default width.
+      const now = performance.now();
+      if (this.lastGrip?.key === cell.dataset.col && now - this.lastGrip.at < 400) {
+        this.lastGrip = null;
+        const widths = { ...(store.get('songColumnWidths') || {}) };
+        delete widths[cell.dataset.col];
+        store.set('songColumnWidths', widths);
+        return;
+      }
+      this.lastGrip = { key: cell.dataset.col, at: now };
       drag = { key: cell.dataset.col, x: e.clientX, w: cell.getBoundingClientRect().width };
       this.headerRow.setPointerCapture(e.pointerId);
       this.headerRow.classList.add('resizing');
@@ -185,13 +195,7 @@ export class SongList {
     };
     this.headerRow.addEventListener('pointerup', end);
     this.headerRow.addEventListener('pointercancel', end);
-    this.headerRow.addEventListener('dblclick', (e) => {
-      const handle = e.target.closest('.col-resize');
-      if (!handle) return;
-      const widths = { ...(store.get('songColumnWidths') || {}) };
-      delete widths[handle.parentElement.dataset.col];
-      store.set('songColumnWidths', widths);
-    });
+
   }
 
   /** Right-click the header: tick the columns to show. */

@@ -141,10 +141,6 @@ export function mountSettings(root, app) {
       section('Tile sizes', [range('Albums', 'tileSize', 110, 260, 10), range('Artists', 'artistTileSize', 100, 240, 10)]),
       section('Genres', [
         toggle('Split genres at / and ,', 'splitGenres', 'Songs tagged “Pop/Rock” or “Pop, Rock” show under Pop and under Rock. “Singer/Songwriter” stays whole.'),
-        select('Genre tiles', 'genreTiles', [
-          ['wide', 'Wide', 'Twice as wide as tall, as in the original skin'],
-          ['square', 'Square', 'The same shape as album covers'],
-        ]),
       ]),
       section('Covers', [
         select('Animated GIF covers', 'gifCovers', [
@@ -167,7 +163,7 @@ export function mountSettings(root, app) {
         toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
       ]),
       section('Genre information', [
-        folderField('Genre information folder', 'genreInfoFolder', 'One folder per genre with genre.nfo and folder.jpg (a wide picture works best). The artist script fills it in with “Look up genres”; without a picture, genres show a strip of their album covers.', 'e.g. E:\\Music\\_Genres'),
+        folderField('Genre information folder', 'genreInfoFolder', 'One folder per genre with genre.nfo and folder.jpg (square). The artist script fills it in with “Look up genres”; without a picture, genres show four of their album covers.', 'e.g. E:\\Music\\_Genres'),
       ]),
       section('Artist information', [
         folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Artists not there are looked for in their own music folder, above their albums.'),

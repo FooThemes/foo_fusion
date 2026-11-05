@@ -10,6 +10,7 @@ import { player, ORDER_LABELS } from '../data/player.js';
 import { playlists } from '../data/playlists.js';
 import { showMenu, addToItems, renamePlaylist, deletePlaylist } from './menus.js';
 import { dropdown } from './dropdown.js';
+import { editArtist, editGenre } from './infoeditor.js';
 import { editAutoplaylist } from './autoplaylist.js';
 
 const TABS = [
@@ -54,9 +55,15 @@ export function mountHeader(root, app) {
       actions.append(textBtn('play', 'Play all', () => view.play(view.rowAt(0)), !has || view.total === 0));
       actions.append(textBtn('shuffle', 'Shuffle all', shuffleAll, !has));
       if (view.total) actions.append(textBtn('add', 'Add to', (e) => addAll(e), !has));
+      // An artist's or genre's page: edit its information and pictures.
+      if (view.drill) {
+        const d = view.drill;
+        if (d.kind === 'artists') actions.append(textBtn('edit', 'Edit artist', () => editArtist(d.key, view.groups.find((g) => g.head?.handle)?.head.handle)));
+        if (d.kind === 'genres') actions.append(textBtn('edit', 'Edit genre', () => editGenre(d.key)));
+      }
       // Collection and Favourites are Fusion's own: nothing to change there.
-      if (pl.isAutoplaylist && !playlists.isSpecial(pl)) actions.append(textBtn('autoplaylist', 'Properties', () => editAutoplaylist(pl)));
-      if (!playlists.isSpecial(pl)) {
+      else if (pl.isAutoplaylist && !playlists.isSpecial(pl)) actions.append(textBtn('autoplaylist', 'Properties', () => editAutoplaylist(pl)));
+      if (!playlists.isSpecial(pl) && !view.drill) {
         actions.append(textBtn('rename', 'Rename', () => renamePlaylist(pl)));
         actions.append(textBtn('delete', 'Delete', () => deletePlaylist(pl)));
       }

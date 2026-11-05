@@ -220,8 +220,8 @@ export function mountPlayerBar(root, app) {
     wave.progress(frac);
     seek.setAttribute('aria-valuenow', Math.round(frac * 100));
   }
-  // The next song's waveform, a few seconds in (in playlist order; with
-  // shuffle the next song isn't known).
+  // The next two songs' waveforms, straight after this one's (in playlist
+  // order; with shuffle the next song isn't known).
   let nextTimer = 0;
   function prefetchNext() {
     clearTimeout(nextTimer);
@@ -229,9 +229,9 @@ export function mountPlayerBar(root, app) {
     nextTimer = setTimeout(async () => {
       if (player.order !== 'default' && player.order !== 'repeat-playlist') return;
       if (player.playingPlaylist < 0 || player.playingIndex < 0) return;
-      const res = await tryCall('playlist.getTracksAt', { playlist: player.playingPlaylist, rows: [player.playingIndex + 1], fields: ['handle'] });
-      prefetchWave(res?.tracks?.[0]?.handle);
-    }, 4000);
+      const res = await tryCall('playlist.getTracksAt', { playlist: player.playingPlaylist, rows: [player.playingIndex + 1, player.playingIndex + 2], fields: ['handle'] });
+      prefetchWave(...(res?.tracks || []).map((t) => t?.handle));
+    }, 800);
   }
   let raf = 0;
   function tick() {

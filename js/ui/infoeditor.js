@@ -53,7 +53,7 @@ const GENRE = {
   file: 'genre.nfo',
   title: (name) => `Edit genre · ${name}`,
   images: [
-    { key: 'picture', base: 'folder', label: 'Picture', hint: 'Wide (2:1) works best; on the genre tile and page', shape: 'wide', also: ['genre', 'thumb', 'poster', 'cover'] },
+    { key: 'picture', base: 'folder', label: 'Picture', hint: 'Square; on the genre tile and page', shape: 'square', also: ['genre', 'thumb', 'poster', 'cover'] },
     { key: 'fanart', base: 'fanart', label: 'Background', hint: 'Wide; behind the genre page', shape: 'wide', also: ['backdrop', 'background'] },
   ],
   fields: [

@@ -42,15 +42,47 @@ class View extends Emitter {
   // "Loading…" page. The load then replaces them (usually with the same).
   #snapshots = new Map();
 
+  // foobar2000's group runs per playlist and patterns, kept until the
+  // playlist's songs change: an artist's or genre's page is cut from the runs
+  // the Artists / Genres tab already fetched (the same patterns), so opening
+  // one needs no pass over the whole library.
+  #contentVersion = 0;
+  #warmTimer = 0;
+  #runsCache = new Map();
+
+  async #groupRuns(pl, patterns) {
+    const key = [pl.guid, pl.trackCount, this.#contentVersion, ...patterns].join('|');
+    let p = this.#runsCache.get(key);
+    if (!p) {
+      p = tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns }).then((res) => (res ? res.runs || [] : null));
+      this.#runsCache.set(key, p);
+      p.then((r) => r || this.#runsCache.delete(key));
+      while (this.#runsCache.size > 8) this.#runsCache.delete(this.#runsCache.keys().next().value);
+    }
+    return p;
+  }
+
+  /** Fetch (in the background) what the Artists and Genres pages are cut from. */
+  warmGroupRuns() {
+    const pl = playlists.byName(COLLECTION);
+    if (!pl) return;
+    const albumKey = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
+    this.#groupRuns(pl, [TF.artistsMulti, albumKey]).then(() => this.#groupRuns(pl, [TF.genresMulti, albumKey]));
+  }
+
   #snapshotKey() {
     const pl = playlists.activePlaylist;
     return pl ? [pl.guid, pl.trackCount, this.mode, this.drill?.kind || '', this.drill?.key || '', this.filter, store.get('separateDiscs'), this.currentSortKey(), store.get('sortDescending')].join('|') : '';
   }
 
   async init() {
+    // The playback copy grows as playback gets near its ends (see #playSorted).
+    player.on('track', () => this.#extendPlayback());
+    player.on('order', (o) => SHUFFLED.has(o) && this.#extendPlayback(true));
     this.mode = store.get('view');
     const reload = debounce(() => this.load(), 120);
     const reloadIfActive = (d) => {
+      this.#contentVersion++; // rows moved or changed: cached runs are stale
       if (performance.now() < this.#ownSortUntil) return;
       if (!this.playlist || d.playlist == null || d.playlist === this.playlist.index) reload();
     };
@@ -66,6 +98,7 @@ class View extends Emitter {
       everything = false;
       // Our own heart clicks already updated the screen.
       if (!all && favourites.ownChange(handles)) return;
+      this.#contentVersion++;
       this.#trackCache.clear();
     this.#quickCache.clear();
       this.#sortCache = null;
@@ -410,9 +443,8 @@ class View extends Emitter {
     const kind = this.drill?.kind || this.mode;
     const parentKey = kind === 'genres' ? TF.genresMulti : TF.artistsMulti;
     const patterns = kind === 'albums' ? [albumKey] : [parentKey, albumKey];
-    const res = await tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns });
-    if (gen !== this.#generation) return;
-    const runs = res?.runs || [];
+    const runs = await this.#groupRuns(pl, patterns);
+    if (gen !== this.#generation || !runs) return;
 
     let groups;
     if (kind === 'albums') {
@@ -498,6 +530,9 @@ class View extends Emitter {
 
   #done(gen) {
     if (gen !== this.#generation) return;
+    // Albums shown: get the Artists/Genres runs ready in a quiet moment.
+    clearTimeout(this.#warmTimer);
+    if (this.mode === 'albums' && !this.drill && this.playlist?.name === COLLECTION) this.#warmTimer = setTimeout(() => this.warmGroupRuns(), 1500);
     this.loading = false;
     this.emit('loading', false);
     this.emit('change');
@@ -642,18 +677,18 @@ class View extends Emitter {
   }
 
   #playbackKey = null; // what the playback playlist currently holds
-  #playbackCount = 0; // its songs, once filled
-  #playbackFrom = 0; // rows[] index of its first song (while still filling)
-  #playbackBuild = null; // Promise of the fill in progress
+  #playbackFrom = 0; // rows[] index of its first song
+  #playbackTo = 0; // rows[] index after its last song
+  #playbackRows = null; // the list it was cut from
+  #playbackBusy = null; // Promise of an extension in progress
 
   /**
-   * Play from the songs view in the order shown: the rows are copied, in that
-   * order, to a hidden "Fusion playback" playlist (reused while the list
-   * hasn't changed) and played from there, so Next and the playback order
-   * modes follow the list on screen. Copying all of a big library takes
-   * foobar2000 seconds, so the clicked song and the next few hundred go in
-   * first and play at once; the rest follow in small steps (the songs before
-   * it last, at the top), so the window never freezes.
+   * Play from the songs view in the order shown. foobar2000 can only play
+   * playlists in their own order, so the songs around the clicked one (a few
+   * dozen before it, a few hundred after) are copied, in the order shown, to a
+   * hidden "Fusion playback" playlist and played from there; more are added
+   * as playback gets near either end. Only the shuffle orders need the whole
+   * list (to pick from all of it); it is then filled in the background.
    */
   async #playSorted(row) {
     const rows = this.rows;
@@ -662,14 +697,12 @@ class View extends Emitter {
     const key = `${this.playlist.guid}|${this.playlist.trackCount}|${this.currentSortKey()}|${store.get('sortDescending')}|${this.filter}`;
     const keep = this.playlist.guid;
     let pb = playlists.byName(PLAYBACK);
-    const ready = pb && this.#playbackKey === key && this.#playbackCount === rows.length;
-    if (ready || (pb && this.#playbackKey === key && this.#playbackBuild)) {
-      // Filled (or filling, with this song already in): play it from there.
-      if (!ready && (at < this.#playbackFrom || at >= this.#playbackFrom + this.#playbackLoaded)) await this.#playbackBuild;
+    if (pb && this.#playbackKey === key && at >= this.#playbackFrom && at < this.#playbackTo) {
       await call('playlist.playTrack', { playlistGuid: pb.guid, index: at - this.#playbackFrom });
     } else {
-      const first = rows.slice(at, at + 300);
-      const handles = await this.handlesFor(first);
+      const from = Math.max(0, at - 50);
+      const to = Math.min(rows.length, at + 300);
+      const handles = await this.handlesFor(rows.slice(from, to));
       if (!pb) {
         await call('playlist.create', { name: PLAYBACK, position: playlists.list.length });
         await playlists.refresh();
@@ -678,51 +711,59 @@ class View extends Emitter {
       } else await call('playlist.clear', { playlistGuid: pb.guid });
       await call('playlist.addHandles', { playlistGuid: pb.guid, handles });
       this.#playbackKey = key;
-      this.#playbackCount = 0;
-      this.#playbackFrom = at;
-      this.#playbackLoaded = handles.length;
-      await call('playlist.playTrack', { playlistGuid: pb.guid, index: 0 });
-      this.#playbackBuild = this.#fillPlayback(pb.guid, rows, at, key);
+      this.#playbackRows = rows;
+      this.#playbackFrom = from;
+      this.#playbackTo = from + handles.length;
+      await call('playlist.playTrack', { playlistGuid: pb.guid, index: at - from });
     }
+    if (SHUFFLED.has(player.order)) this.#extendPlayback(true);
     // Creating a playlist can activate it; keep the user where they are.
     if (playlists.activePlaylist?.guid !== keep) tryCall('playlist.setActive', { playlistGuid: keep });
   }
 
-  #playbackLoaded = 0;
-
-  async #fillPlayback(guid, rows, at, key) {
-    const t0 = performance.now();
-    const pause = () => new Promise((r) => setTimeout(r, 40));
+  /**
+   * Near an end of the copy (or with a shuffle order: everything): add the
+   * next songs after it and the ones before it, a few hundred at a time.
+   */
+  #extendPlayback(all = false) {
+    if (this.#playbackBusy || !this.#playbackKey) return this.#playbackBusy;
+    const pb = playlists.byName(PLAYBACK);
+    const rows = this.#playbackRows;
+    if (!pb || !rows || player.playingPlaylist !== pb.index) return null;
+    const key = this.#playbackKey;
     const stale = () => this.#playbackKey !== key;
-    try {
-      // The rest after the clicked song, then the ones before it (at the top).
-      for (let i = at + this.#playbackLoaded; i < rows.length; i += 1000) {
-        await pause();
-        if (stale()) return;
-        const handles = await this.handlesFor(rows.slice(i, Math.min(rows.length, i + 1000)));
-        if (stale()) return;
-        await call('playlist.addHandles', { playlistGuid: guid, handles });
-        this.#playbackLoaded += handles.length;
+    const job = (async () => {
+      const pause = () => new Promise((r) => setTimeout(r, 40));
+      try {
+        while (!stale()) {
+          const cur = this.#playbackFrom + Math.max(0, player.playingIndex);
+          const after = this.#playbackTo < rows.length && (all || this.#playbackTo - cur < 100);
+          const before = this.#playbackFrom > 0 && (all || cur - this.#playbackFrom < 20);
+          if (!after && !before) break;
+          if (after) {
+            const end = Math.min(rows.length, this.#playbackTo + (all ? 1000 : 300));
+            const handles = await this.handlesFor(rows.slice(this.#playbackTo, end));
+            if (stale()) return;
+            await call('playlist.addHandles', { playlistGuid: pb.guid, handles });
+            this.#playbackTo += handles.length;
+          } else {
+            const start = Math.max(0, this.#playbackFrom - (all ? 1000 : 100));
+            const handles = await this.handlesFor(rows.slice(start, this.#playbackFrom));
+            if (stale()) return;
+            await call('playlist.insertTracks', { playlistGuid: pb.guid, position: 0, handles });
+            this.#playbackFrom -= handles.length;
+          }
+          await pause();
+        }
+      } catch (e) {
+        if (!stale()) this.#playbackKey = null; // build it again next time
+        logInfo(`playback list: ${e.message}`);
       }
-      for (let end = at; end > 0; end -= 1000) {
-        await pause();
-        if (stale()) return;
-        const from = Math.max(0, end - 1000);
-        const handles = await this.handlesFor(rows.slice(from, end));
-        if (stale()) return;
-        await call('playlist.insertTracks', { playlistGuid: guid, position: 0, handles });
-        this.#playbackFrom = from;
-        this.#playbackLoaded += handles.length;
-      }
-      this.#playbackCount = rows.length;
-      logInfo(`playback list: ${rows.length} songs in ${Math.round(performance.now() - t0)} ms (in the background)`);
-    } catch (e) {
-      // Left part-filled: build it again next time.
-      if (!stale()) this.#playbackKey = null;
-      logInfo(`playback list failed: ${e.message}`);
-    } finally {
-      if (!stale()) this.#playbackBuild = null;
-    }
+    })();
+    // (Set after: a job with nothing to do finishes before this line.)
+    this.#playbackBusy = job;
+    job.finally(() => this.#playbackBusy === job && (this.#playbackBusy = null));
+    return job;
   }
 
   /** Is this playlist row of the current view the one playing? */
@@ -733,7 +774,7 @@ class View extends Emitter {
     // From the playback copy: the same song (rows there shift while it fills).
     if (pb && player.playingPlaylist === pb.index && this.#sortedView() && this.#playbackKey?.startsWith(this.playlist.guid + '|')) {
       const t = this.#trackCache.get(row);
-      return t && player.track ? t.handle === player.track.handle : this.rows[player.playingIndex + this.#playbackFrom] === row;
+      return t && player.track ? t.handle === player.track.handle : this.#playbackRows?.[player.playingIndex + this.#playbackFrom] === row;
     }
     return false;
   }
@@ -768,6 +809,7 @@ class View extends Emitter {
   }
 }
 
+const SHUFFLED = new Set(['random', 'shuffle-tracks', 'shuffle-albums', 'shuffle-folders']);
 const groupCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 export function firstRow(g) {

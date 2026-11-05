@@ -816,11 +816,11 @@
   height: 16px;
 }
 
-/* Genre page header: a wide picture (or album collage), library figures */
+/* Genre page header: a square picture (or album collage), library figures */
 .genre-hero .gh-picture {
-  width: 320px;
-  height: 160px;
-  border-radius: 6px;
+  width: 180px;
+  height: 180px;
+  border-radius: 4px;
 }
 
 .gh-stats {
@@ -839,8 +839,8 @@
 
 @media (max-width: 900px) {
   .genre-hero .gh-picture {
-    width: 200px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
   }
 }
 

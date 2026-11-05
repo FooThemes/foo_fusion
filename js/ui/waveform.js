@@ -88,12 +88,21 @@ async function fetchWave(h, onTask) {
   return data;
 }
 
-/** Get the next song's waveform ready while this one plays. */
-let prefetching = null;
-export function prefetchWave(h) {
-  if (!h || keep.has(h) || prefetching === h) return;
-  prefetching = h;
-  fetchWave(h).finally(() => prefetching === h && (prefetching = null));
+/** Get the next songs' waveforms ready while this one plays (one at a time). */
+const prefetchQueue = [];
+let prefetching = false;
+export function prefetchWave(...handles) {
+  for (const h of handles) if (h && !keep.has(h) && !prefetchQueue.includes(h)) prefetchQueue.push(h);
+  pump();
+}
+async function pump() {
+  if (prefetching) return;
+  prefetching = true;
+  while (prefetchQueue.length) {
+    const h = prefetchQueue.shift();
+    if (!keep.has(h)) await fetchWave(h).catch(() => null);
+  }
+  prefetching = false;
 }
 
 export function mountWaveform(seek) {

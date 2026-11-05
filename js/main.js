@@ -41,6 +41,8 @@ async function boot() {
 
   await Promise.all([player.init(), playlists.init()]);
   await view.init();
+  // Artists' and genres' pages are cut from these: fetch them while idle.
+  setTimeout(() => view.warmGroupRuns(), 4000);
 
   // Panels call each other through this object; members are filled in below.
   let content, settings, sidebar, plm;

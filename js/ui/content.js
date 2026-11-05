@@ -123,7 +123,6 @@ export function mountContent(root) {
   function settleJump(key, ret) {
     if (!jumpStarted) jumpStarted = performance.now();
     scroller.classList.add('jumping');
-    loading.hidden = false;
     clearTimeout(jumpTimer);
     jumpTimer = setTimeout(() => {
       if (pendingRestore !== key || lastKey !== key) return finishJump();
@@ -134,7 +133,7 @@ export function mountContent(root) {
       pendingRestore = null;
       view.returning = null;
       finishJump();
-    }, 250);
+    }, 120);
   }
   function finishJump() {
     jumpStarted = 0;
@@ -143,7 +142,7 @@ export function mountContent(root) {
   }
 
   function renderMessage() {
-    loading.hidden = !(scroller.classList.contains('jumping') || (view.loading && currentKind === 'grid' && !view.groups.length));
+    loading.hidden = !(view.loading && currentKind === 'grid' && !view.groups.length) || scroller.classList.contains('jumping');
     if (currentKind === 'nowplaying' || view.loading) {
       message.hidden = true;
       return;

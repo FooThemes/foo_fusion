@@ -1211,6 +1211,12 @@ body.pdragging * {
   aspect-ratio: 2 / 1;
 }
 
+.ie-pic.ie-square {
+  width: 180px;
+  height: 180px;
+  margin: 0 auto;
+}
+
 .ie-pic.ie-logo {
   aspect-ratio: 3 / 1;
   background: repeating-conic-gradient(color-mix(in srgb, var(--line) 60%, transparent) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
@@ -1492,4 +1498,25 @@ body.pdragging * {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--text2);
+}
+
+/* Tags: name above value (tag names are long; the panel is narrow). */
+.info-tags .info-table {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.info-tags .info-table dt {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  margin-top: 9px;
+  overflow-wrap: anywhere;
+}
+
+.info-tags .info-table dt:first-child {
+  margin-top: 0;
+}
+
+.info-tags .info-table dd {
+  line-height: 1.4;
 }

@@ -115,6 +115,7 @@ body.no-sidebar #playerbar {
 
 /* Waveform seek bar (Settings > Layout) */
 .wave-box {
+  --wave-at: 0%; /* the played part (set by waveform.js) */
   display: none;
   position: relative;
   width: 100%;
@@ -141,7 +142,6 @@ body.no-sidebar #playerbar {
   height: 100%;
 }
 .wave-front {
-  --wave-at: 0%;
   -webkit-mask-image: linear-gradient(to right, #000 calc(var(--wave-at) - 1.5px), transparent calc(var(--wave-at) + 1.5px));
   mask-image: linear-gradient(to right, #000 calc(var(--wave-at) - 1.5px), transparent calc(var(--wave-at) + 1.5px));
 }

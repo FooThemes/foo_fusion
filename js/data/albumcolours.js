@@ -45,7 +45,10 @@ async function extract(handle, img) {
   // The cover on screen is quickest, if the browser lets us read it.
   // Only use the <img> once it shows this album (not the previous one).
   const ours = () => img && (img.dataset.artToken || '').startsWith(handle + '|');
-  if (ours() && !(img.complete && img.naturalWidth)) {
+  // (While the previous album's cover is still showing, the new one isn't
+  // loaded yet: "shown" says which cover the pixels are.)
+  const showing = () => ours() && img.dataset.shown === img.dataset.artToken && img.complete && img.naturalWidth;
+  if (ours() && !showing()) {
     await new Promise((resolve) => {
       const done = () => (img.removeEventListener('load', done), img.removeEventListener('error', done), resolve());
       img.addEventListener('load', done);
@@ -53,7 +56,7 @@ async function extract(handle, img) {
       setTimeout(done, 2500);
     });
   }
-  if (ours() && img.complete && img.naturalWidth) pixels = read(img);
+  if (showing()) pixels = read(img);
   if (!pixels) {
     for (const type of ['front', 'disc']) {
       // The album art manager (finds folder covers as well as embedded ones).

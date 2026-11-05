@@ -17,8 +17,8 @@ import { editGenre } from './infoeditor.js';
 
 const GAP = 24;
 const statsCache = new Map(); // genre|songs -> { seconds, artists, top } // between the header and the first row of albums
-const PIC_W = 320;
-const PIC_H = 160;
+const PIC_W = 180;
+const PIC_H = 180;
 
 export class GenreHero {
   constructor(grid) {
@@ -60,6 +60,13 @@ export class GenreHero {
       this.key = null;
       this.show(name);
     });
+  }
+
+  /** Read a genre's files and pictures ahead of opening its page. */
+  async warm(name) {
+    const files = await genreFiles(name);
+    genreDetails(name);
+    if (files) preload([[files.picture, PIC_W * 2], [files.fanart || files.picture, 1600]], 5000);
   }
 
   /** Called whenever the genre page's albums change (heads arriving too). */
@@ -107,7 +114,6 @@ export class GenreHero {
     const link = (label, url) => el('button.ah-link', { title: url, onclick: () => tryCall('shell.openExternal', { url }) }, label, icon('link'));
     if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
     if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/genre/${info.musicbrainz}`));
-    this.links.append(el('button.ah-link', { title: 'Edit the genre’s information and pictures', onclick: () => editGenre(this.name) }, 'Edit', icon('edit')));
     // Pictures: the genre's own, else the collage (behind the header too).
     this.node.classList.toggle('has-fanart', !!(back || collage));
     if (files?.picture) {

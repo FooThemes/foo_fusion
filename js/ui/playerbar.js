@@ -1,6 +1,6 @@
 // Bottom bar: now-playing art and text, seek bar, transport, volume, menu.
 
-import { setVersioned, versionText } from './titles.js';
+import { setVersioned } from './titles.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import { el, formatTime, clamp } from '../core/util.js';
 import { icon, setIcon } from '../core/icons.js';
@@ -24,7 +24,20 @@ export function mountPlayerBar(root, app) {
   const artist = el('div.pb-artist.mq-box', null, artistText);
   const heart = heartButton('', '');
   heart.classList.add('pb-heart');
-  const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist), heart);
+  const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist));
+  // The title opens the song's album, the artist their page (both from the Collection).
+  titleText.addEventListener('click', async () => {
+    const t = player.track;
+    const key = t && (await view.albumKeyOf(t.handle));
+    if (key) view.goTo('albums', key);
+  });
+  artistText.addEventListener('click', async () => {
+    const t = player.track;
+    if (!t) return;
+    const v = await trackVersions(t);
+    const name = artistPage(t, v);
+    if (name) view.goTo('artists', name);
+  });
 
   const elapsed = el('span.pb-time');
   const length = el('span.pb-time');
@@ -41,7 +54,7 @@ export function mountPlayerBar(root, app) {
   const volBtn = el('button.btn-icon', { title: 'Volume', onclick: toggleVolume }, icon('volume'));
   // The original's "…" opened the settings panel; right-click keeps the menu.
   const more = el('button.btn-icon', { title: 'Settings (right-click for the menu)', onclick: () => app.toggleSettings(), oncontextmenu: (e) => (e.preventDefault(), mainMenu()) }, icon('more'));
-  const controls = el('div.pb-controls', null, orderBtn, prev, play, next, volBtn, more);
+  const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, volBtn, more);
 
   const volFill = el('div.vol-fill');
   const volTrack = el('div.vol-track', null, volFill);
@@ -115,7 +128,7 @@ export function mountPlayerBar(root, app) {
     if (player.track !== t) return;
     root.classList.toggle('idle', !on);
     const tip = setVersioned(titleText, on ? t.title || t.path.split(/[\\/]/).pop() : '', v?.title, 'titles');
-    artistText.textContent = on ? versionText(t.artist, v?.artist, 'artists') : '';
+    setVersioned(artistText, on ? t.artist : '', on ? v?.artist : null, 'artists');
     tipText = on ? [t.title, t.artist, t.album].filter(Boolean).join('\n') + (tip ? `\n\n${tip}` : '') : '';
     requestAnimationFrame(() => [title, artist].forEach(marquee));
     heart.dataset.handle = on ? t.handle : '';
@@ -310,4 +323,16 @@ export function mountPlayerBar(root, app) {
   renderVolume();
   renderOrder();
   startTicking();
+}
+
+/**
+ * Whose page the play bar's artist opens: the song's artist, or the album
+ * artist when the song has several ("A feat. B", "A & B"). Original names
+ * (not "宇多田ヒカル (Hikaru Utada)"), as the Artists tab lists them.
+ */
+function artistPage(t, v) {
+  const artist = v?.artist?.orig || t.artist || '';
+  const several = /\s(feat\.?|ft\.?|featuring|with|x|vs\.?)\s|\s&\s|[,;]|、/i.test(artist);
+  if (!several) return artist;
+  return v?.albumArtist?.orig || t.albumArtist || (t.artists && t.artists[0]) || artist;
 }

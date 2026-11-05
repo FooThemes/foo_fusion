@@ -112,8 +112,8 @@ export function trackVersions(track) {
       track,
       promise: tryCall('titleformat.evalFields', {
         path: track.handle,
-        fields: { t: versionsTF('title'), a: versionsTF('artist'), l: versionsTF('album') },
-      }).then((r) => (r ? { title: parseVersions(r.t), artist: parseVersions(r.a), album: parseVersions(r.l) } : null)),
+        fields: { t: versionsTF('title'), a: versionsTF('artist'), l: versionsTF('album'), aa: versionsTF('albumartist') },
+      }).then((r) => (r ? { title: parseVersions(r.t), artist: parseVersions(r.a), album: parseVersions(r.l), albumArtist: parseVersions(r.aa) } : null)),
     };
   }
   return last.promise;

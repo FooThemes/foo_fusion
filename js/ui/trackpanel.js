@@ -206,6 +206,20 @@ export class TrackPanel {
     this.title.title = pick.tip;
   }
 
+  /**
+   * Only some of the album's songs here (an artist's page, Favourites, a
+   * search): offer the whole album, from the Collection.
+   */
+  async #offerFullAlbum(group) {
+    if (view.isFullCollection) return;
+    const total = (await view.albumTotals()).get(group.key.toLowerCase()) || 0;
+    if (group !== this.group || total <= this.rows.length) return;
+    this.buttons.querySelector('.tp-full')?.remove();
+    this.buttons.prepend(
+      el('button.tp-full', { title: `Open the whole album (${plural(total, 'song')}) in the Collection`, onclick: () => view.goTo('albums', group.key) }, icon('collection'), el('span', { text: `Full album · ${total}` })),
+    );
+  }
+
   refreshHead(group) {
     if (!group || group !== this.group) return;
     const head = group.head;
@@ -221,12 +235,17 @@ export class TrackPanel {
     // With versions, the link shows the lead one and opens the original
     // (the name the Artists tab lists, from the untouched ARTISTS tag).
     const whoV = head?.versions?.albumArtist;
-    if (who) parts.push(link('artists', whoV?.orig || who, versionText(who, whoV, 'artists')));
+    if (who) {
+      const a = link('artists', whoV?.orig || who, versionText(who, whoV, 'artists'));
+      setVersioned(a, who, whoV, 'artists'); // the lead name, then the others dimmed
+      parts.push(a);
+    }
     if (head?.date || head?.year) parts.push(head.date || head.year);
     for (const g of splitValues(head?.genre || '')) parts.push(link('genres', g));
     for (const t of [discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null]) if (t) parts.push(t);
     clear(this.meta);
     parts.forEach((p, i) => this.meta.append(...(i ? [' · '] : []), p));
+    this.#offerFullAlbum(group);
     this.#renderCover();
     const rows = () => this.visibleRows();
     clear(this.buttons).append(

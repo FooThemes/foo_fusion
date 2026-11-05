@@ -1,7 +1,7 @@
 // "Now playing": large artwork and details for the playing track, plus the
 // playback queue (or, when the queue is empty, what plays next).
 
-import { setTitle, setVersioned, versionText } from './titles.js';
+import { setTitle, setVersioned } from './titles.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { dragSource, dropTarget } from './dnd.js';
@@ -64,7 +64,7 @@ export class NowPlaying {
     this.empty.hidden = !!active;
     this.wrap.classList.toggle('idle', !active);
     this.title.title = setVersioned(this.title, active ? t.title || t.path.split(/[\\/]/).pop() : '', v?.title, 'titles');
-    this.artist.textContent = active ? versionText(t.artist, v?.artist, 'artists') : '';
+    setVersioned(this.artist, active ? t.artist : '', active ? v?.artist : null, 'artists');
     this.album.textContent = active ? [versionText(t.album, v?.album, 'albums'), (t.date || '').slice(0, 4)].filter(Boolean).join(' · ') : '';
     this.tech.textContent = active ? [t.codec, t.bitrate ? `${t.bitrate} kbps` : '', t.sampleRate ? `${(t.sampleRate / 1000).toFixed(1)} kHz` : '', t.duration ? formatTime(t.duration) : ''].filter(Boolean).join(' · ') : '';
     this.renderList();

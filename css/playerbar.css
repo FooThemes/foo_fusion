@@ -12,7 +12,7 @@
 
 body.side-collapsed #playerbar,
 body.no-sidebar #playerbar {
-  grid-template-columns: 250px minmax(0, 1fr) auto;
+  grid-template-columns: 300px minmax(0, 1fr) auto;
 }
 
 .pb-now {
@@ -50,6 +50,17 @@ body.no-sidebar #playerbar {
   font-size: 12px;
   color: var(--bar-text2);
   margin-top: 2px;
+}
+
+/* The title opens the album, the artist their page. */
+.pb-title .mq,
+.pb-artist .mq {
+  cursor: pointer;
+}
+
+.pb-title .mq:hover,
+.pb-artist .mq:hover {
+  text-decoration: underline;
 }
 
 .pb-seek {

@@ -143,6 +143,71 @@ class View extends Emitter {
     return promise;
   }
 
+  /**
+   * Show an album (opened), an artist's or a genre's page from the
+   * Collection, from anywhere: another playlist, Favourites, a search, Now
+   * playing. `key` is an album key (see albumKeyOf) or an artist/genre name.
+   */
+  async goTo(kind, key) {
+    let pl = playlists.byName(COLLECTION);
+    if (!pl) {
+      await playlists.ensureCollection(false);
+      pl = playlists.byName(COLLECTION);
+    }
+    if (!pl || !key) return;
+    // Switching playlists resets the page (see the 'active' handler), so
+    // switch first and set the page after.
+    if (playlists.activePlaylist?.guid !== pl.guid) {
+      await new Promise((resolve) => {
+        const off = playlists.on('active', () => (off?.(), resolve()));
+        playlists.activate(pl.index);
+        setTimeout(resolve, 1500);
+      });
+    }
+    if (this.filter) {
+      this.filter = '';
+      this.emit('filter', '');
+    }
+    this.backTo = null;
+    store.set('view', kind);
+    this.mode = kind;
+    if (kind === 'albums') {
+      this.drill = null;
+      this.returning = { expandedKey: key }; // the grid opens it once loaded
+    } else this.drill = { kind, key, label: key };
+    this.emit('mode', kind);
+    this.#blank();
+    this.load();
+  }
+
+  /** The album key (as tiles use) of a track, for goTo('albums', …). */
+  async albumKeyOf(handle) {
+    const res = await tryCall('titleformat.evalFields', { path: handle, fields: { k: store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey } });
+    return res?.k || null;
+  }
+
+  /** Songs per album in the Collection (album key -> count), cached for a few minutes. */
+  albumTotals() {
+    const pattern = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
+    const c = libraryCache['albums:' + pattern];
+    if (c && Date.now() - c.at < 5 * 60 * 1000) return c.promise;
+    const pl = playlists.byName(COLLECTION);
+    const promise = !pl
+      ? Promise.resolve(new Map())
+      : tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns: [pattern] }).then((res) => {
+          const totals = new Map();
+          for (const r of res?.runs || []) totals.set(r.key.toLowerCase(), (totals.get(r.key.toLowerCase()) || 0) + r.count);
+          return totals;
+        });
+    libraryCache['albums:' + pattern] = { at: Date.now(), promise };
+    return promise;
+  }
+
+  /** Is this the whole Collection, unfiltered (where every album is complete)? */
+  get isFullCollection() {
+    return this.playlist?.name === COLLECTION && !this.filter && !this.drill && this.mode === 'albums';
+  }
+
   /** Jump to one artist's or genre's albums (from the expanded album's links). */
   showValue(kind, key, fromGroup) {
     this.backTo = { mode: this.mode, drill: this.drill, expandedKey: fromGroup?.key };
@@ -459,7 +524,7 @@ class View extends Emitter {
           playlist: this.playlist.index,
           rows: missing.slice(i, i + 500),
           fields: TRACK_FIELDS,
-          formats: { n: TF.trackNumber, ds: TF.discSubtitle, m: MOOD_TF, vt: versionsTF('title'), va: versionsTF('artist'), vl: versionsTF('album'), vd: versionsTF('discsubtitle') },
+          formats: { n: TF.trackNumber, ds: TF.discSubtitle, m: MOOD_TF, vt: versionsTF('title'), va: versionsTF('artist'), vl: versionsTF('album'), vd: versionsTF('discsubtitle'), ar: TF.artistsMulti, gn: TF.genre },
         });
         if (gen !== this.#generation) return rows.map(() => null);
         res?.tracks.forEach((t) => this.#trackCache.set(t.index, t));

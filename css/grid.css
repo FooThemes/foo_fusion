@@ -787,3 +787,27 @@
   overflow: hidden;
   clip-path: inset(50%);
 }
+
+/* "Full album" (when only some of the album's songs are shown). */
+.tp-full {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  border: 1px solid color-mix(in srgb, var(--list-text) 35%, transparent);
+  color: var(--list-text);
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+.tp-full:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tp-full .icon {
+  width: 16px;
+  height: 16px;
+}

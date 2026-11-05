@@ -77,7 +77,9 @@ export function setTitle(node, text) {
  */
 export function setVersioned(node, text, versions, kind) {
   const pick = pickVersion(versions, kind);
-  setTitle(node, pick ? pick.base : text);
+  // Names have no edition tags to dim.
+  if (kind === 'artists') node.textContent = pick ? pick.base : text;
+  else setTitle(node, pick ? pick.base : text);
   if (pick?.other) {
     const alt = document.createElement('span');
     alt.className = 'alt-version';

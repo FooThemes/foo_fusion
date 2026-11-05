@@ -5,7 +5,7 @@ import { setVersioned, versionText } from './titles.js';
 import { parseVersions } from '../data/versions.js';
 import { el, rafThrottle, formatTime, debounce } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { view } from '../data/view.js';
+import { view, splitValues } from '../data/view.js';
 import { player } from '../data/player.js';
 import { trackContextMenu } from './menus.js';
 import { RowSelector } from './rowselect.js';
@@ -53,7 +53,7 @@ export class SongList {
       if (!node) return;
       e.preventDefault();
       const r = Number(node.dataset.row);
-      trackContextMenu(view.selection.has(r) ? [...view.selection].sort((a, b) => a - b) : [r]);
+      trackContextMenu(view.selection.has(r) ? [...view.selection].sort((a, b) => a - b) : [r], goToItems(view.cachedTrack(r)));
     });
     this.loadVisible = debounce(() => this.#fetchVisible(), 40);
     draggableRows(this.sizer, (e) => {
@@ -123,8 +123,8 @@ export class SongList {
     const c = node.children;
     const f = t?.formats || {};
     const tip = setVersioned(c[1], t ? t.title || t.handle.split('\\').pop() : '', parseVersions(f.vt), 'titles');
-    c[2].textContent = t ? versionText(t.artist || '', parseVersions(f.va), 'artists') : '';
-    c[3].textContent = t ? versionText(t.album || '', parseVersions(f.vl), 'albums') : '';
+    setVersioned(c[2], t?.artist || '', t ? parseVersions(f.va) : null, 'artists');
+    setVersioned(c[3], t?.album || '', t ? parseVersions(f.vl) : null, 'albums');
     c[4].textContent = t ? (t.date || '').slice(0, 4) : '';
     c[5].textContent = t?.genre || '';
     if (t) {
@@ -188,4 +188,20 @@ export class SongList {
     const h = this.scroller.clientHeight;
     if (y < this.scroller.scrollTop || y > this.scroller.scrollTop + h - ROW_H * 2) this.scroller.scrollTop = y - h / 3;
   }
+}
+
+/** "Go to album / artist / genre" for the song that was right-clicked. */
+function goToItems(t) {
+  if (!t) return [];
+  const f = t.formats || {};
+  // Every artist and genre on the song, by the names the Artists and Genres
+  // tabs list (ARTISTS when tagged, else the album artist or artist).
+  const artists = splitValues(f.ar || t.artist || '');
+  const genres = splitValues(f.gn || t.genre || '');
+  const items = [{ label: 'Go to album', run: async () => view.goTo('albums', await view.albumKeyOf(t.handle)) }];
+  if (artists.length === 1) items.push({ label: 'Go to artist', run: () => view.goTo('artists', artists[0]) });
+  else if (artists.length) items.push({ label: 'Go to artist', submenu: artists.map((a) => ({ label: a, run: () => view.goTo('artists', a) })) });
+  if (genres.length === 1) items.push({ label: 'Go to genre', run: () => view.goTo('genres', genres[0]) });
+  else if (genres.length) items.push({ label: 'Go to genre', submenu: genres.map((g) => ({ label: g, run: () => view.goTo('genres', g) })) });
+  return items;
 }

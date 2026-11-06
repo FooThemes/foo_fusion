@@ -64,42 +64,80 @@ async function make(handles, w, h) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
-  // Cards: 2×2 (four covers), two side by side (two or three covers),
-  // or one in the middle.
-  const pad = Math.round(Math.min(W, H) * 0.07);
+  // Cards: 2×2 (four covers), two on top and one below (three), two side by
+  // side (two), or one in the middle. Each is turned a little, at random but
+  // the same every time for these albums (it's seeded by them).
+  const pad = Math.round(Math.min(W, H) * 0.08);
   const gap = Math.round(Math.min(W, H) * 0.055);
-  const n = images.length >= 4 ? 4 : images.length >= 2 ? 2 : 1;
-  const card = n === 1 ? Math.round(Math.min(W, H) * 0.72) : Math.round((Math.min(W, H) - pad * 2 - gap) / 2);
-  const total = n === 1 ? card : card * 2 + gap;
-  const x0 = Math.round((W - total) / 2);
-  const y0 = n === 2 ? Math.round((H - card) / 2) : Math.round((H - total) / 2);
+  const n = Math.min(4, images.length);
+  const card = n === 1 ? Math.round(Math.min(W, H) * 0.7) : Math.round((Math.min(W, H) - pad * 2 - gap) / 2);
+  const span = card * 2 + gap;
+  const x0 = Math.round((W - span) / 2);
+  const y0 = Math.round((H - span) / 2);
+  const spots =
+    n === 1
+      ? [[(W - card) / 2, (H - card) / 2]]
+      : n === 2
+        ? [
+            [x0, (H - card) / 2],
+            [x0 + card + gap, (H - card) / 2],
+          ]
+        : n === 3
+          ? [
+              [x0, y0],
+              [x0 + card + gap, y0],
+              [(W - card) / 2, y0 + card + gap],
+            ]
+          : [
+              [x0, y0],
+              [x0 + card + gap, y0],
+              [x0, y0 + card + gap],
+              [x0 + card + gap, y0 + card + gap],
+            ];
+  const rand = seeded(handles.slice(0, n).join('|'));
   const radius = Math.max(2, Math.round(card * 0.035));
   images.slice(0, n).forEach((im, i) => {
-    const x = x0 + (i % 2) * (card + gap);
-    const y = y0 + (n === 4 ? Math.floor(i / 2) * (card + gap) : 0);
+    const [x, y] = spots[i];
+    // Up to about 7° either way.
+    const turn = ((rand() * 2 - 1) * 7 * Math.PI) / 180;
+    ctx.save();
+    ctx.translate(x + card / 2, y + card / 2);
+    ctx.rotate(turn);
+    ctx.translate(-card / 2, -card / 2);
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.55)';
     ctx.shadowBlur = Math.round(card * 0.08);
     ctx.shadowOffsetY = Math.round(card * 0.025);
-    roundRect(ctx, x, y, card, card, radius);
+    roundRect(ctx, 0, 0, card, card, radius);
     ctx.fillStyle = '#222';
     ctx.fill();
     ctx.restore();
-    ctx.save();
-    roundRect(ctx, x, y, card, card, radius);
+    roundRect(ctx, 0, 0, card, card, radius);
     ctx.clip();
     // Cover the card, cropping the longer side.
     const r = Math.max(card / im.naturalWidth, card / im.naturalHeight);
     const sw = card / r;
     const sh = card / r;
-    ctx.drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, x, y, card, card);
-    // A hairline edge, as on the cards in a physical crate.
+    ctx.drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, 0, 0, card, card);
+    // A hairline edge, as on records in a crate.
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.lineWidth = Math.max(1, dpr);
     ctx.stroke();
     ctx.restore();
   });
   return URL.createObjectURL(await canvas.convertToBlob({ type: 'image/webp', quality: 0.88 }));
+}
+
+/** A small random-number generator seeded by a string (same string, same numbers). */
+function seeded(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
 }
 
 function roundRect(ctx, x, y, w, h, r) {

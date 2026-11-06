@@ -76,14 +76,15 @@ genres_folder = _Genres
 genre_list =
 ; Melodigging's genre pack (given by its owner for this): the folder of genre
 ; folders (each with genre.nfo and poster.webp), and the CSV of artwork
-; styles. Its descriptions, moods and influences go into genre.nfo, and its
-; mosaic and geometric pictures become the genre's picture (folder.webp);
-; the album-collage ones are left out (Fusion draws its own from your albums).
+; styles. Its descriptions, moods and influences go into genre.nfo; its
+; pictures only if melodigging_use names their styles (Fusion draws its own
+; collage from your albums otherwise).
 melodigging_folder =
 melodigging_styles =
-; Which of its artwork styles to use, comma separated (mosaic, geometric-tile,
-; album-collage). Pictures of other styles copied before are taken back.
-melodigging_use = mosaic
+; Which of its artwork styles to use as pictures, comma separated (mosaic,
+; geometric-tile, album-collage), or none. Pictures of other styles copied
+; before are taken back.
+melodigging_use = none
 """
 
 
@@ -926,7 +927,7 @@ def genres(cfg, args):
     mel = melodigging_index(cfg)
     if mel:
         note(f'Melodigging: {len(set(id(v) for v in mel.values()))} genres in {cfg["melodigging_folder"]}')
-    use = {s.strip() for s in (cfg.get('melodigging_use') or 'mosaic').split(',') if s.strip()}
+    use = {s.strip() for s in (cfg.get('melodigging_use') or 'none').split(',') if s.strip() and s.strip().lower() != 'none'}
     pictures = 0
     for name in names:
         m = mel.get(genre_key(name))

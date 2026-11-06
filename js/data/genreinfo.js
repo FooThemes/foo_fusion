@@ -44,6 +44,14 @@ export function genreFiles(name) {
             const pick = (names) => names.map((n) => images.find((im) => base(im.name) === n)).find(Boolean) || null;
             const out = { dir, picture: pick(PICTURE), fanart: pick(FANART), hasNfo: !!nfo?.exists };
             return out.picture || out.fanart || out.hasNfo ? out : null;
+          })
+          // A WebP picture (Melodigging's) foobar2000 may not list as an image.
+          .then(async (out) => {
+            if (out?.picture || !dir) return out;
+            const webp = `${dir}\\folder.webp`;
+            const has = await tryCall('file.exists', { path: webp });
+            if (!has?.exists) return out;
+            return { ...(out || { dir, fanart: null, hasNfo: false }), picture: { name: 'folder.webp', path: webp } };
           }),
     );
   }
@@ -89,5 +97,12 @@ function parseGenreNfo(xml) {
     aliases: all('alias'),
     parents: all('parent'),
     subgenres: all('subgenre'),
+    // From Melodigging's genre pack.
+    melodigging: one('melodigging'),
+    category: one('category'),
+    subcategory: one('subcategory'),
+    period: one('period'),
+    moods: all('mood'),
+    influences: all('influence'),
   };
 }

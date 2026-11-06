@@ -102,7 +102,12 @@ export class GenreHero {
     this.node.hidden = false;
     this.#renderStats(sig, true);
     // "genre of popular music · United States, United Kingdom · since 1950"
-    const parts = [info?.summary && info.summary[0].toUpperCase() + info.summary.slice(1), info?.origins?.length && info.origins.join(', '), /^\d{4}/.test(info?.since || '') && `since ${info.since.slice(0, 4)}`].filter(Boolean);
+    const parts = [
+      info?.summary ? info.summary[0].toUpperCase() + info.summary.slice(1) : info?.subcategory,
+      info?.origins?.length && info.origins.join(', '),
+      info?.period ? `${info.period}` : /^\d{4}/.test(info?.since || '') && `since ${info.since.slice(0, 4)}`,
+      info?.moods?.length && info.moods.slice(0, 4).join(', '),
+    ].filter(Boolean);
     this.meta.textContent = parts.join(' · ');
     this.meta.hidden = !parts.length;
     this.title.title = info?.aliases?.length ? `Also known as ${info.aliases.join(', ')}` : '';
@@ -114,6 +119,7 @@ export class GenreHero {
     const link = (label, url) => el('button.ah-link', { title: url, onclick: () => tryCall('shell.openExternal', { url }) }, label, icon('link'));
     if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
     if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/genre/${info.musicbrainz}`));
+    if (/^[\w-]+$/.test(info?.melodigging || '')) this.links.append(link('Melodigging', `https://www.melodigging.com/genre/${info.melodigging}`));
     // Pictures: the genre's own, else the collage (behind the header too).
     this.node.classList.toggle('has-fanart', !!(back || collage));
     if (files?.picture) {
@@ -174,6 +180,7 @@ export class GenreHero {
     const groups = [
       ['Part of', info?.parents || []],
       ['Includes', info?.subgenres || []],
+      ['Influenced by', info?.influences || []],
     ].filter(([, list]) => list.length);
     this.assoc.hidden = !groups.length;
     if (!groups.length) return;

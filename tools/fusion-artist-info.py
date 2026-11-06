@@ -74,6 +74,15 @@ biography = wikipedia, audiodb
 genres_folder = _Genres
 ; The genre list Fusion exports; empty: fusion-genres.json beside artist_list.
 genre_list =
+; Melodigging's genre pack (given by its owner for this): the folder of genre
+; folders (each with genre.nfo and poster.webp), and the CSV of artwork
+; styles. Its descriptions, moods and influences go into genre.nfo, and its
+; mosaic and geometric pictures become the genre's picture (folder.webp);
+; the album-collage ones are left out (Fusion draws its own from your albums).
+melodigging_folder =
+melodigging_styles =
+; Which of its artwork styles to use, comma separated.
+melodigging_use = mosaic, geometric-tile
 """
 
 
@@ -86,7 +95,7 @@ def load_settings():
     cp = configparser.ConfigParser()
     cp.read(SETTINGS, encoding='utf-8')
     s = cp['fusion-artist-info']
-    cfg = {k: s.get(k, '').strip() for k in ['music_root', 'artists_folder', 'artist_list', 'fanart_api_key', 'audiodb_key', 'contact', 'language', 'biography', 'genres_folder', 'genre_list']}
+    cfg = {k: s.get(k, '').strip() for k in ['music_root', 'artists_folder', 'artist_list', 'fanart_api_key', 'audiodb_key', 'contact', 'language', 'biography', 'genres_folder', 'genre_list', 'melodigging_folder', 'melodigging_styles', 'melodigging_use']}
     if not cfg['genre_list'] and cfg['artist_list']:
         cfg['genre_list'] = os.path.join(os.path.dirname(cfg['artist_list']), 'fusion-genres.json')
     return cfg
@@ -746,7 +755,11 @@ def wikidata_genres(web, keys, by_name=False):
             values = ' '.join(f'"{k}"' for k in chunk)
             match = f'VALUES ?key {{ {values} }}\n  ?item wdt:P8052 ?key .'
         q = urllib.parse.urlencode({'query': SPARQL % match, 'format': 'json'})
-        res = web.get(f'https://query.wikidata.org/sparql?{q}') or {}
+        try:
+            res = web.get(f'https://query.wikidata.org/sparql?{q}') or {}
+        except Exception as e:  # Wikidata down or rate-limiting: carry on without it
+            print(f'!  Wikidata: {e}')
+            res = {}
         for row in res.get('results', {}).get('bindings', []):
             v = {k: x['value'] for k, x in row.items()}
             split = lambda k: [x for x in v.get(k, '').split('|') if x]
@@ -773,7 +786,11 @@ def wikipedia_intros(web, urls, lang='en'):
     names = list(titles)
     for i in range(0, len(names), 20):
         q = urllib.parse.urlencode({'action': 'query', 'prop': 'extracts|info', 'inprop': 'url', 'exintro': 1, 'explaintext': 1, 'exlimit': 20, 'format': 'json', 'titles': '|'.join(names[i:i + 20])})
-        res = (web.get(f'https://{lang}.wikipedia.org/w/api.php?{q}') or {}).get('query', {})
+        try:
+            res = (web.get(f'https://{lang}.wikipedia.org/w/api.php?{q}') or {}).get('query', {})
+        except Exception as e:
+            print(f'!  Wikipedia: {e}')
+            res = {}
         # Titles the API normalised ("J-pop" stays, "j-pop" -> "J-pop").
         fixed = {n['to']: n['from'] for n in res.get('normalized', [])}
         for page in res.get('pages', {}).values():
@@ -796,9 +813,59 @@ def family_names(pairs, names_by_id):
     return sorted(out.values(), key=str.casefold)
 
 
-def build_genre_nfo(name, mbid, wd, intro, names_by_id=None):
+def melodigging_index(cfg):
+    """Melodigging's genre pack, if set up: genre key -> {slug, dir, style, title,
+    description, category, subcategory, location, period, moods, influences}."""
+    folder = cfg.get('melodigging_folder') or ''
+    if not folder or not os.path.isdir(folder):
+        return {}
+    import csv
+    import xml.etree.ElementTree as ET
+    styles = {}
+    csv_path = cfg.get('melodigging_styles') or ''
+    if not csv_path:
+        # Beside the folder, by default (any .csv there with a slug column).
+        parent = os.path.dirname(os.path.abspath(folder))
+        csv_path = next((os.path.join(parent, f) for f in os.listdir(parent) if f.lower().endswith('.csv')), '')
+    if csv_path and os.path.exists(csv_path):
+        with open(csv_path, encoding='utf-8-sig', newline='') as f:
+            for row in csv.DictReader(f):
+                styles[(row.get('slug') or '').strip()] = (row.get('artwork_style') or '').strip()
+    out = {}
+    for slug in os.listdir(folder):
+        d = os.path.join(folder, slug)
+        nfo = os.path.join(d, 'genre.nfo')
+        if not os.path.isfile(nfo):
+            continue
+        try:
+            root = ET.parse(nfo).getroot()
+        except ET.ParseError:
+            continue
+        text = lambda tag: ' '.join((root.findtext(tag) or '').split())
+        desc = '\n'.join(line.strip() for line in (root.findtext('description') or '').strip().splitlines() if line.strip())
+        info = {
+            'slug': slug,
+            'dir': d,
+            'style': styles.get(slug, ''),
+            'title': text('title'),
+            'description': desc,
+            'category': text('category'),
+            'subcategory': text('subcategory'),
+            'location': text('location'),
+            'period': text('period'),
+            'moods': [' '.join((m.text or '').split()) for m in root.iter('mood') if (m.text or '').strip()],
+            'influences': [' '.join((g.text or '').split()) for g in root.findall('influencedby/genre') if (g.text or '').strip()],
+        }
+        for key in {genre_key(slug.replace('-', ' ')), genre_key(info['title'])}:
+            if key:
+                out.setdefault(key, info)
+    return out
+
+
+def build_genre_nfo(name, mbid, wd, intro, names_by_id=None, mel=None):
     tags = []
     names_by_id = names_by_id or {}
+    mel = mel or {}
 
     def add(tag, value):
         if value:
@@ -808,9 +875,20 @@ def build_genre_nfo(name, mbid, wd, intro, names_by_id=None):
     add('musicBrainzGenreID', mbid)
     add('wikidata', wd.get('wikidata'))
     add('summary', wd.get('summary') and wd['summary'][:1].upper() + wd['summary'][1:])
-    add('description', intro[0] if intro else '')
+    # Melodigging's description first (written as one); else Wikipedia's intro.
+    add('description', mel.get('description') or (intro[0] if intro else ''))
     add('wikipedia', (intro[1] if intro else '') or wd.get('wikipedia'))
-    for o in wd.get('origins', []):
+    if mel:
+        add('melodigging', mel['slug'])
+        add('category', mel.get('category'))
+        add('subcategory', mel.get('subcategory'))
+        add('period', mel.get('period'))
+        for m in mel.get('moods', []):
+            add('mood', m)
+        for g in mel.get('influences', []):
+            add('influence', g)
+    origins = wd.get('origins', []) or ([mel['location']] if mel.get('location') else [])
+    for o in origins:
         add('origin', o)
     add('since', wd.get('since'))
     for a in sorted(set(wd.get('aliases', [])), key=str.casefold)[:12]:
@@ -844,6 +922,15 @@ def genres(cfg, args):
     note(f'--- {len(names)} genres' + (' (dry run)' if args.dry_run else ''))
     index = mb_genre_index(web)
     names_by_id = {gid: n for n, gid in index.values()}
+    mel = melodigging_index(cfg)
+    if mel:
+        note(f'Melodigging: {len(set(id(v) for v in mel.values()))} genres in {cfg["melodigging_folder"]}')
+    use = {s.strip() for s in (cfg.get('melodigging_use') or 'mosaic, geometric-tile').split(',') if s.strip()}
+    pictures = 0
+    for name in names:
+        m = mel.get(genre_key(name))
+        if m and not args.dry_run:
+            pictures += melodigging_picture(os.path.join(root, safe_folder_name(name)), m, use, args.refresh, note, name)
     todo, unknown, kept = {}, [], 0
     for name in names:
         hit = index.get(genre_key(name))
@@ -853,12 +940,16 @@ def genres(cfg, args):
             kept += 1
             continue
         if not hit:
+            # Not on MusicBrainz, but Melodigging has it: from that alone.
+            if genre_key(name) in mel:
+                todo[name] = ('mel:' + name, nfo, mine)
+                continue
             unknown.append(name)
             continue
         todo[name] = (hit[1], nfo, mine)
         if args.limit and len(todo) >= args.limit:
             break
-    wd = wikidata_genres(web, sorted({m for m, _, _ in todo.values() if m}))
+    wd = wikidata_genres(web, sorted({m for m, _, _ in todo.values() if m and not m.startswith('mel:')}))
     # Not MusicBrainz genres ("video game music"): Wikidata by name.
     if unknown:
         by_name = wikidata_genres(web, sorted({n.lower() for n in unknown}), by_name=True)
@@ -874,7 +965,7 @@ def genres(cfg, args):
     written = 0
     for name, (mbid, nfo, mine) in todo.items():
         d = wd.get(mbid, {})
-        fresh = build_genre_nfo(name, None if mbid.startswith('name:') else mbid, d, intros.get(d.get('wikipedia', '')), names_by_id)
+        fresh = build_genre_nfo(name, None if mbid.startswith(('name:', 'mel:')) else mbid, d, intros.get(d.get('wikipedia', '')), names_by_id, mel.get(genre_key(name)))
         if args.dry_run:
             note(f'+  {name}: would write genre.nfo')
             continue
@@ -889,7 +980,32 @@ def genres(cfg, args):
         written += 1
     for name in unknown:
         note(f'?  {name}: not found on MusicBrainz or Wikidata')
+    if mel:
+        note(f'Melodigging: {pictures} pictures added')
     note(f'--- {written} new, {kept} skipped, {len(unknown)} not found, 0 failed')
+
+
+PICTURE_NAMES = ('folder', 'genre', 'thumb', 'poster', 'cover')
+
+
+def melodigging_picture(folder, m, use, refresh, note, name):
+    """Copy Melodigging's picture for a genre (mosaic / geometric styles only)
+    as folder.webp, unless the genre already has a picture of its own."""
+    src = os.path.join(m['dir'], 'poster.webp')
+    if m.get('style') not in use or not os.path.isfile(src):
+        return 0
+    dest = os.path.join(folder, 'folder.webp')
+    if os.path.isdir(folder):
+        own = [f for f in os.listdir(folder) if os.path.splitext(f)[0].lower() in PICTURE_NAMES and os.path.splitext(f)[1].lower() in IMAGE_EXTS and f.lower() != 'folder.webp']
+        if own:
+            return 0  # the user's own picture stays
+        if os.path.exists(dest) and not refresh:
+            return 0
+    os.makedirs(folder, exist_ok=True)
+    import shutil
+    shutil.copyfile(src, dest)
+    note(f'+  {name}: picture ({m["style"]}) from Melodigging')
+    return 1
 
 
 def save_state(state):

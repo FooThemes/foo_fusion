@@ -81,8 +81,9 @@ genre_list =
 ; the album-collage ones are left out (Fusion draws its own from your albums).
 melodigging_folder =
 melodigging_styles =
-; Which of its artwork styles to use, comma separated.
-melodigging_use = mosaic, geometric-tile
+; Which of its artwork styles to use, comma separated (mosaic, geometric-tile,
+; album-collage). Pictures of other styles copied before are taken back.
+melodigging_use = mosaic
 """
 
 
@@ -925,7 +926,7 @@ def genres(cfg, args):
     mel = melodigging_index(cfg)
     if mel:
         note(f'Melodigging: {len(set(id(v) for v in mel.values()))} genres in {cfg["melodigging_folder"]}')
-    use = {s.strip() for s in (cfg.get('melodigging_use') or 'mosaic, geometric-tile').split(',') if s.strip()}
+    use = {s.strip() for s in (cfg.get('melodigging_use') or 'mosaic').split(',') if s.strip()}
     pictures = 0
     for name in names:
         m = mel.get(genre_key(name))
@@ -992,9 +993,14 @@ def melodigging_picture(folder, m, use, refresh, note, name):
     """Copy Melodigging's picture for a genre (mosaic / geometric styles only)
     as folder.webp, unless the genre already has a picture of its own."""
     src = os.path.join(m['dir'], 'poster.webp')
-    if m.get('style') not in use or not os.path.isfile(src):
-        return 0
     dest = os.path.join(folder, 'folder.webp')
+    if m.get('style') not in use or not os.path.isfile(src):
+        # A style no longer wanted: take back the copy made earlier (only if
+        # it's still exactly Melodigging's file, so nothing of yours goes).
+        if os.path.isfile(src) and os.path.isfile(dest) and same_file(src, dest):
+            os.remove(dest)
+            note(f'-  {name}: Melodigging picture removed ({m.get("style") or "no style"} not in melodigging_use)')
+        return 0
     if os.path.isdir(folder):
         own = [f for f in os.listdir(folder) if os.path.splitext(f)[0].lower() in PICTURE_NAMES and os.path.splitext(f)[1].lower() in IMAGE_EXTS and f.lower() != 'folder.webp']
         if own:
@@ -1006,6 +1012,13 @@ def melodigging_picture(folder, m, use, refresh, note, name):
     shutil.copyfile(src, dest)
     note(f'+  {name}: picture ({m["style"]}) from Melodigging')
     return 1
+
+
+def same_file(a, b):
+    if os.path.getsize(a) != os.path.getsize(b):
+        return False
+    with open(a, 'rb') as fa, open(b, 'rb') as fb:
+        return fa.read() == fb.read()
 
 
 def save_state(state):

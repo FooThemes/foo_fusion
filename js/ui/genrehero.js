@@ -10,7 +10,7 @@ import { tryCall } from '../core/bridge.js';
 import { genreFiles, genreDetails, forgetGenreInfo } from '../data/genreinfo.js';
 import { pictureUrl } from '../data/artistinfo.js';
 import { collageUrl } from './collage.js';
-import { showMenu } from './menus.js';
+import { showMenu, refreshAlbums } from './menus.js';
 import { view } from '../data/view.js';
 import { genreCase, preload } from './artisthero.js';
 import { editGenre } from './infoeditor.js';
@@ -50,7 +50,7 @@ export class GenreHero {
       e.preventDefault();
       showMenu([
         { label: 'Edit genre information…', run: () => editGenre(this.name) },
-        { label: 'Refresh genre information', run: () => forgetGenreInfo() },
+        { label: 'Refresh genre information', run: () => (forgetGenreInfo(), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
       ]);
     });
     window.addEventListener('fusion:genrerefresh', () => {

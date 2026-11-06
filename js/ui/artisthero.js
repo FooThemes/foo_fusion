@@ -10,7 +10,7 @@ import { artistFiles, artistDetails, pictureUrl } from '../data/artistinfo.js';
 import { pickVersion, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { refreshArtist } from '../data/artwork.js';
-import { showMenu } from './menus.js';
+import { showMenu, refreshAlbums } from './menus.js';
 import { view } from '../data/view.js';
 import { editArtist } from './infoeditor.js';
 
@@ -47,7 +47,7 @@ export class ArtistHero {
       e.preventDefault();
       showMenu([
         { label: 'Edit artist information…', run: () => editArtist(this.name, this.handle) },
-        { label: 'Refresh artist information', run: () => refreshArtist(this.name, this.handle ? [this.handle] : []) },
+        { label: 'Refresh artist information', run: () => (refreshArtist(this.name, this.handle ? [this.handle] : []), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
       ]);
     });
     store.subscribe((k) => {

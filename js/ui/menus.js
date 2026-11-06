@@ -10,6 +10,7 @@ import { editAutoplaylist } from './autoplaylist.js';
 import { folders } from '../data/folders.js';
 import * as store from '../core/store.js';
 import { player } from '../data/player.js';
+import { refreshArt } from '../data/artwork.js';
 
 /** Show a native menu built from [{ id, label, checked, enabled, submenu, run }]. */
 export async function showMenu(items) {
@@ -283,6 +284,36 @@ export async function runSelectionCommand(label) {
   if (!cmd || cmd.commandId == null) return false;
   await tryCall('menu.runContextCommandById', { id: cmd.commandId, mode: res.mode, ...expect(cmd, res) });
   return true;
+}
+
+/** Run a foobar2000 context-menu command (by its label) on these songs. */
+export async function runHandlesCommand(label, handles) {
+  if (!handles?.length) return false;
+  const res = await tryCall('menu.getContextMenu', { mode: 'handles', handles, withAvailability: false, i18n: false });
+  const want = label.toLowerCase();
+  const find = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.type === 'command' && clean(n.label).toLowerCase() === want) return n;
+      const hit = n.children && find(n.children);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const cmd = find(res?.items);
+  if (!cmd || cmd.commandId == null) return false;
+  await tryCall('menu.runContextCommandById', { id: cmd.commandId, mode: res.mode, handles, ...expect(cmd, res) });
+  return true;
+}
+
+/**
+ * Refresh albums: foobar2000 re-reads their tags from the files ("Reload
+ * info"), and their covers are looked up again.
+ */
+export async function refreshAlbums(rows) {
+  const handles = await handlesOf(rows);
+  if (!handles.length) return;
+  await runHandlesCommand('Reload info', handles);
+  refreshArt(handles);
 }
 
 export function runMainMenu(path) {

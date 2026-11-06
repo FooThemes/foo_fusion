@@ -15,7 +15,7 @@ import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt, albumArtTypes, preloadArt, refreshArt } from '../data/artwork.js';
-import { showMenu, addToItems, trackContextMenu, handlesOf } from './menus.js';
+import { showMenu, addToItems, trackContextMenu, handlesOf, refreshAlbums } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { prefetchWave } from './waveform.js';
 import { RowSelector } from './rowselect.js';
@@ -284,7 +284,7 @@ export class TrackPanel {
   }
 
   #refreshItems(rows) {
-    return [{ label: 'Refresh artwork', run: async () => refreshArt(await handlesOf(rows)) }];
+    return [{ label: 'Refresh album', run: () => refreshAlbums(rows) }];
   }
 
   #renderCover() {

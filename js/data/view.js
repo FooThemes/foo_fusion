@@ -48,6 +48,7 @@ class View extends Emitter {
   // one needs no pass over the whole library.
   #contentVersion = 0;
   #warmTimer = 0;
+  #trackCacheKey = '';
   #runsCache = new Map();
 
   async #groupRuns(pl, patterns) {
@@ -67,7 +68,11 @@ class View extends Emitter {
     const pl = playlists.byName(COLLECTION);
     if (!pl) return;
     const albumKey = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
-    this.#groupRuns(pl, [TF.artistsMulti, albumKey]).then(() => this.#groupRuns(pl, [TF.genresMulti, albumKey]));
+    const songsSort = SORTS[store.get('sort').songs || 'title'] || SORTS.title;
+    this.#groupRuns(pl, [TF.artistsMulti, albumKey])
+      .then(() => this.#groupRuns(pl, [TF.genresMulti, albumKey]))
+      // The Songs tab's order too (it's sorted here, from runs of its key).
+      .then(() => pl.isLocked && songsSort && this.#sortedRows(pl, songsSort.pattern, false));
   }
 
   #snapshotKey() {
@@ -118,8 +123,16 @@ class View extends Emitter {
       this.backTo = null;
       this.filter = '';
       this.emit('filter', '');
-      // Another playlist: the old one stays up until the new one is ready
-      // (a few dozen ms), which reads as an instant switch.
+      // Another playlist: shown at once as it was last time (when it was),
+      // else the old one stays up until the new one is ready.
+      const snap = this.mode !== 'songs' && this.mode !== 'nowplaying' ? this.#snapshots.get(this.#snapshotKey()) : null;
+      if (snap) {
+        this.playlist = pl;
+        this.groups = snap.groups;
+        this.rows = null;
+        this.total = snap.total;
+        this.emit('change');
+      }
       this.load();
     });
     store.subscribe((key) => {
@@ -323,7 +336,7 @@ class View extends Emitter {
    */
   async #sortedRows(pl, pattern, desc) {
     const c = this.#sortCache;
-    let rows = c && c.guid === pl.guid && c.count === pl.trackCount && c.pattern === pattern ? c.rows : null;
+    let rows = c && c.guid === pl.guid && c.count === pl.trackCount && c.version === this.#contentVersion && c.pattern === pattern ? c.rows : null;
     if (!rows) {
       const res = await tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns: [pattern] });
       if (!res) return null;
@@ -331,7 +344,7 @@ class View extends Emitter {
       const runs = res.runs.slice().sort((a, b) => collator.compare(a.key, b.key) || a.start - b.start);
       rows = [];
       for (const r of runs) for (let i = 0; i < r.count; i++) rows.push(r.start + i);
-      this.#sortCache = { guid: pl.guid, count: pl.trackCount, pattern, rows };
+      this.#sortCache = { guid: pl.guid, count: pl.trackCount, version: this.#contentVersion, pattern, rows };
     }
     return desc ? rows.slice().reverse() : rows;
   }
@@ -344,8 +357,14 @@ class View extends Emitter {
     await playlists.refresh();
     const pl = playlists.activePlaylist;
     this.playlist = pl;
-    this.#trackCache.clear();
-    this.#quickCache.clear();
+    // Songs read before stay valid while the playlist's rows are unchanged
+    // (switching tabs and back needs no new reads).
+    const tk = `${pl?.guid}|${pl?.trackCount}|${this.#contentVersion}`;
+    if (tk !== this.#trackCacheKey) {
+      this.#trackCacheKey = tk;
+      this.#trackCache.clear();
+      this.#quickCache.clear();
+    }
 
     if (!pl) {
       this.groups = [];
@@ -424,6 +443,11 @@ class View extends Emitter {
         if (sorted) {
           const keep = matched && new Set(matched);
           this.rows = keep ? sorted.filter((r) => keep.has(r)) : sorted;
+          // Searching: the best matches first (see rankScore).
+          if (this.filter && this.rows.length <= 8000) {
+            this.rows = await this.#rankRows(pl, this.rows, ['%title%', '%artist%', '%album%', '%album artist%']);
+            if (gen !== this.#generation) return;
+          }
           this.total = this.rows.length;
           await this.syncSelection(false);
           return this.#done(gen);
@@ -458,6 +482,12 @@ class View extends Emitter {
       groups = groupByValues(runs, kind, kind === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST, kind === 'artists' && store.get('hidePlaceholderArtists') ? isPlaceholderArtist : null);
     }
     if (matched) groups = intersect(groups, matched);
+    // Searching: albums, artists and genres that match best come first
+    // ("Ado": Ado, Adolf, Adolescent, then Fluorescent Adolescent).
+    if (this.filter && groups.length > 1) {
+      groups = await this.#rankGroups(pl, groups, kind);
+      if (gen !== this.#generation) return;
+    }
     if (clientGroups && groups.length > 1) {
       groups = await this.#sortGroups(pl, groups, pattern, desc);
       if (gen !== this.#generation) return;
@@ -486,9 +516,44 @@ class View extends Emitter {
     this.#snapshots.set(snapKey, { groups, total: this.total });
     if (this.#snapshots.size > 16) this.#snapshots.delete(this.#snapshots.keys().next().value);
     await this.syncSelection(false);
+    // An artist's or genre's page: its first albums' covers and titles before
+    // it's shown (no page of blank placeholders first).
+    if (this.drill && groups.slice(0, HEAD_CHUNK).some((g) => !g.head)) {
+      await this.#loadHeads(gen, 1);
+      if (gen !== this.#generation) return;
+    }
     this.#done(gen);
     this.#loadHeads(gen);
   });
+
+  /** Groups by how well they match the search (ties keep their order). */
+  async #rankGroups(pl, groups, kind) {
+    const q = this.filter.trim().toLowerCase();
+    let texts;
+    if (kind === 'artists' || kind === 'genres') texts = groups.map((g) => [g.key]);
+    else {
+      texts = [];
+      for (let i = 0; i < groups.length; i += 1000) {
+        const chunk = groups.slice(i, i + 1000);
+        const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows: chunk.map((g) => firstRow(g)), fields: ['handle'], formats: { b: '[%album%]', a: TF.albumArtist } });
+        chunk.forEach((g, n) => texts.push([res?.tracks?.[n]?.formats?.b || '', res?.tracks?.[n]?.formats?.a || '']));
+      }
+    }
+    return rankBy(groups, texts, q);
+  }
+
+  /** Rows by how well their title / artist / album match the search. */
+  async #rankRows(pl, rows, fields) {
+    const q = this.filter.trim().toLowerCase();
+    const texts = [];
+    const formats = Object.fromEntries(fields.map((f, i) => ['f' + i, `[${f}]`]));
+    for (let i = 0; i < rows.length; i += 2000) {
+      const chunk = rows.slice(i, i + 2000);
+      const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows: chunk, fields: ['handle'], formats });
+      chunk.forEach((r, n) => texts.push(fields.map((f, k) => res?.tracks?.[n]?.formats?.['f' + k] || '')));
+    }
+    return rankBy(rows, texts, q);
+  }
 
   /** Groups in the order of a sort pattern (evaluated on each one's first song). */
   async #sortGroups(pl, groups, pattern, desc) {
@@ -539,10 +604,10 @@ class View extends Emitter {
   }
 
   /** Fetch display text + art path for each group's first row, in chunks. */
-  async #loadHeads(gen) {
+  async #loadHeads(gen, chunks = Infinity) {
     const title = store.get('separateDiscs') ? TF.albumDiscTitle : TF.albumTitle;
     const formats = { t: title, a: TF.albumArtist, y: TF.year, g: TF.genre, d: TF.date, b: TF.albumRaw, av: versionsTF('album'), aav: versionsTF('albumartist') };
-    for (let i = 0; i < this.groups.length; i += HEAD_CHUNK) {
+    for (let i = 0, n = 0; i < this.groups.length && n < chunks; i += HEAD_CHUNK, n++) {
       const chunk = this.groups.slice(i, i + HEAD_CHUNK);
       const res = await tryCall('playlist.getTracksAt', {
         playlist: this.playlist.index,
@@ -807,6 +872,36 @@ class View extends Emitter {
     if (handles.length) await call('playlist.addHandles', { playlist: targetIndex, handles });
     return handles.length;
   }
+}
+
+/**
+ * How well a text matches the search: the whole of it (Ado) beats its start
+ * (Adolf, then the longer Adolescent), which beats a later word's start
+ * (Fluorescent Adolescent), which beats a match inside a word.
+ */
+export function rankScore(text, q) {
+  const t = (text || '').toLowerCase().normalize('NFKC');
+  if (!t || !q) return 0;
+  if (t === q) return 1000;
+  const lenPenalty = Math.min(99, t.length - q.length);
+  if (t.startsWith(q)) return 800 - lenPenalty;
+  const at = t.indexOf(q);
+  if (at < 0) {
+    // Several words: each one found counts.
+    const words = q.split(/\s+/).filter(Boolean);
+    if (words.length < 2) return 0;
+    return Math.max(0, ...words.map((w) => rankScore(text, w))) / 4;
+  }
+  const wordStart = at > 0 && /[\s\-_.,:;/(&'"!?[]/.test(t[at - 1]);
+  return (wordStart ? 600 : 300) - lenPenalty - Math.min(99, at);
+}
+
+function rankBy(items, texts, q) {
+  q = q.normalize('NFKC');
+  return items
+    .map((it, i) => [it, Math.max(...texts[i].map((x) => rankScore(x, q))), i])
+    .sort((a, b) => b[1] - a[1] || a[2] - b[2])
+    .map(([it]) => it);
 }
 
 const SHUFFLED = new Set(['random', 'shuffle-tracks', 'shuffle-albums', 'shuffle-folders']);

@@ -17,7 +17,7 @@ import { bindArt, albumArtTypes, warmArt, refreshArt, refreshArtist } from '../d
 import { ArtistHero } from './artisthero.js';
 import { GenreHero } from './genrehero.js';
 import { musicArtistFolder } from '../data/artistinfo.js';
-import { trackContextMenu, handlesOf } from './menus.js';
+import { trackContextMenu, handlesOf, refreshAlbums } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 import { genreFiles, forgetGenreInfo } from '../data/genreinfo.js';
 import { editArtist, editGenre } from './infoeditor.js';
@@ -257,12 +257,24 @@ export class Grid {
    *  the other: hiding puts the albums back at the top). */
   #showHero() {
     const kind = view.drill?.kind;
+    let shown;
     if (kind === 'genres') {
       this.hero.show(null);
-      this.genreHero.show(view.drill.key);
+      shown = this.genreHero.show(view.drill.key);
     } else {
       this.genreHero.show(null);
-      this.hero.show(kind === 'artists' ? view.drill.key : null, this.#artistTrack());
+      shown = this.hero.show(kind === 'artists' ? view.drill.key : null, this.#artistTrack());
+    }
+    // A new artist's or genre's page: its albums appear with its header, not
+    // under the previous one's for a moment (at most a short wait).
+    const page = view.drill ? `${view.drill.kind}|${view.drill.key}` : '';
+    if (page && page !== this.heroPage && view.groups.length) {
+      this.heroPage = page;
+      this.layer.classList.add('await-hero');
+      Promise.race([shown, new Promise((r) => setTimeout(r, 200))]).finally(() => this.heroPage === page && this.layer.classList.remove('await-hero'));
+    } else if (!page) {
+      this.heroPage = '';
+      this.layer.classList.remove('await-hero');
     }
   }
 
@@ -489,11 +501,12 @@ export class Grid {
     if (this.kind === 'artists') {
       return [
         { label: 'Edit artist information…', run: () => editArtist(g.key, g.head?.handle) },
-        { label: 'Refresh artist information', run: async () => refreshArtist(g.key, [g.head?.handle, ...(await handlesOf(rows, 50))].filter(Boolean)) },
+        // The artist's own folder, and their albums' tags and covers too.
+        { label: 'Refresh artist information', run: async () => (refreshArtist(g.key, [g.head?.handle, ...(await handlesOf(rows, 50))].filter(Boolean)), refreshAlbums(rows)) },
       ];
     }
-    if (this.kind === 'genres') return [{ label: 'Edit genre information…', run: () => editGenre(g.key) }, { label: 'Refresh artwork', run: () => forgetGenreInfo() }];
-    return [{ label: 'Refresh artwork', run: async () => refreshArt(await handlesOf(rows)) }];
+    if (this.kind === 'genres') return [{ label: 'Edit genre information…', run: () => editGenre(g.key) }, { label: 'Refresh genre information', run: () => (forgetGenreInfo(), refreshAlbums(rows)) }];
+    return [{ label: 'Refresh album', run: () => refreshAlbums(rows) }];
   }
 
   #key(e) {

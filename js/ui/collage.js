@@ -98,8 +98,8 @@ async function make(handles, w, h) {
   const radius = Math.max(2, Math.round(card * 0.035));
   images.slice(0, n).forEach((im, i) => {
     const [x, y] = spots[i];
-    // Up to about 7° either way.
-    const turn = ((rand() * 2 - 1) * 7 * Math.PI) / 180;
+    // Up to 4° either way.
+    const turn = ((rand() * 2 - 1) * 4 * Math.PI) / 180;
     ctx.save();
     ctx.translate(x + card / 2, y + card / 2);
     ctx.rotate(turn);

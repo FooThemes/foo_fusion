@@ -247,7 +247,7 @@ async function edit(kind, name, dir, refresh) {
       if (!target) continue;
       const ok = change.source
         ? await tryCall('file.copy', { source: change.source, destination: target, overwrite: true })
-        : await tryCall('file.write', { path: target, content: change.bytes, encoding: 'base64', atomic: true });
+        : await tryCall('file.write', { path: target, content: 'base64:' + change.bytes, encoding: 'binary', atomic: true });
       if (!ok) throw new Error(`Couldn't save the ${slot.label.toLowerCase()} in ${dir}`);
     }
     return true;

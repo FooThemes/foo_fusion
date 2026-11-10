@@ -37,7 +37,7 @@ function remember(handle, data) {
 
 // Waveforms are also kept on disk (1 KB each, in the art cache folder), so a
 // song heard before shows its waveform at once, even after a restart.
-const waveName = (handle) => `${hash(handle).toString(36)}${hash(handle + '#').toString(36)}.wf`;
+const waveName = (handle) => `${hash(handle).toString(36)}${hash(handle + '#').toString(36)}.wave`;
 
 async function fromDisk(handle) {
   const c = cacheFolder();
@@ -58,7 +58,7 @@ function toDisk(handle, data) {
   if (!c) return;
   let bin = '';
   for (const v of data) bin += String.fromCharCode(Math.max(0, Math.min(255, Math.round(v * 255))));
-  tryCall('file.write', { path: `${c.path}\\waves\\${waveName(handle)}`, content: btoa(bin), encoding: 'base64' });
+  tryCall('file.write', { path: `${c.path}\\waves\\${waveName(handle)}`, content: 'base64:' + btoa(bin), encoding: 'binary' });
 }
 
 /** The waveform for a track: memory, disk, else foobar2000 decodes it. */

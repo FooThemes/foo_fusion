@@ -119,6 +119,8 @@ export class GenreHero {
     const link = (label, url) => el('button.ah-link', { title: url, onclick: () => tryCall('shell.openExternal', { url }) }, label, icon('link'));
     if (/^https?:\/\//.test(info?.wikipedia || '')) this.links.append(link('Wikipedia', info.wikipedia));
     if (/^[0-9a-f-]{36}$/i.test(info?.musicbrainz || '')) this.links.append(link('MusicBrainz', `https://musicbrainz.org/genre/${info.musicbrainz}`));
+    if (/^https:\/\/(?:www\.)?discogs\.com\/(?:genre|style)\/./.test(info?.discogs || '')) this.links.append(link('Discogs', info.discogs));
+    if (/^https:\/\/(?:www\.)?rateyourmusic\.com\/genre\/./.test(info?.rateyourmusic || '')) this.links.append(link('RYM', info.rateyourmusic));
     if (/^[\w-]+$/.test(info?.melodigging || '')) this.links.append(link('Melodigging', `https://www.melodigging.com/genre/${info.melodigging}`));
     // Pictures: the genre's own, else the collage (behind the header too).
     this.node.classList.toggle('has-fanart', !!(back || collage));

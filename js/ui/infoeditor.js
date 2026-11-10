@@ -65,6 +65,8 @@ const GENRE = {
     { tag: 'subgenre', label: 'Includes', type: 'list' },
     { tag: 'wikipedia', label: 'Wikipedia', placeholder: 'https://en.wikipedia.org/wiki/…' },
     { tag: 'musicBrainzGenreID', label: 'MusicBrainz ID', mono: true },
+    { tag: 'discogs', label: 'Discogs', placeholder: 'https://www.discogs.com/style/…' },
+    { tag: 'rateyourmusic', label: 'RYM', placeholder: 'https://rateyourmusic.com/genre/…' },
     { tag: 'description', label: 'Description', type: 'text' },
   ],
 };

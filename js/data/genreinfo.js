@@ -92,6 +92,8 @@ function parseGenreNfo(xml) {
     description: one('description').replace(/\[\s*(?:\d+|[a-z]|citation needed|note \d+)\s*\]/gi, ''),
     wikipedia: one('wikipedia'),
     musicbrainz: one('musicBrainzGenreID'),
+    discogs: one('discogs'),
+    rateyourmusic: one('rateyourmusic'),
     origins: all('origin'),
     since: one('since'),
     aliases: all('alias'),

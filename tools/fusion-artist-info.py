@@ -858,9 +858,52 @@ def melodigging_index(cfg):
             'moods': [' '.join((m.text or '').split()) for m in root.iter('mood') if (m.text or '').strip()],
             'influences': [' '.join((g.text or '').split()) for g in root.findall('influencedby/genre') if (g.text or '').strip()],
         }
+        info['links'] = melodigging_links(root, [slug.replace('-', ' '), info['title']])
         for key in {genre_key(slug.replace('-', ' ')), genre_key(info['title'])}:
             if key:
                 out.setdefault(key, info)
+    return out
+
+
+DISCOGS_GENRES = {'blues', 'brass-military', 'childrens', 'classical', 'electronic', 'folk-world-country',
+                  'funk-soul', 'hip-hop', 'jazz', 'latin', 'non-music', 'pop', 'reggae', 'rock', 'stage-screen'}
+
+
+def melodigging_links(root, names):
+    """The pack's <source> links, minus the generic ones it uses when it has
+    no page for the genre (a site's home page, "List of music genres", a
+    parent genre's article). {wikipedia, musicbrainz (ID), discogs, rateyourmusic}."""
+    import unicodedata
+
+    def plain(text):
+        text = unicodedata.normalize('NFKD', urllib.parse.unquote(text)).encode('ascii', 'ignore').decode()
+        text = re.sub(r'\((?:music|genre|music genre|musical genre|band|style)\)', '', text, flags=re.I)
+        text = re.sub(r'(?:_|\s)+music$', '', text.strip(), flags=re.I)
+        return genre_key(text.replace('_', ' '))
+
+    wanted = {plain(n) for n in names if n}
+    out = {}
+    for src in root.iter('source'):
+        site = (src.get('name') or '').casefold()
+        url = (src.text or '').strip()
+        parts = urllib.parse.urlsplit(url)
+        path = [urllib.parse.unquote(p) for p in parts.path.split('/') if p]
+        if site == 'wikipedia' and len(path) == 2 and path[0] == 'wiki':
+            title = path[1]
+            # Only the genre's own article (or a section about it).
+            if re.match(r'(?:Lists?_of|Outline_of|Music_genre|Main_Page)', title, re.I):
+                continue
+            if parts.fragment or plain(title) in wanted:
+                out['wikipedia'] = url
+        elif site in ('mb', 'musicbrainz') and len(path) == 2 and path[0] == 'genre' and re.fullmatch(r'[0-9a-f-]{36}', path[1]):
+            out['musicbrainz'] = path[1]
+        elif site == 'discogs' and len(path) == 2 and path[0] in ('genre', 'style'):
+            # Discogs has 15 genres; everything else is a style page.
+            kind = 'genre' if path[1].casefold() in DISCOGS_GENRES else 'style'
+            out['discogs'] = f'https://www.discogs.com/{kind}/{path[1]}'
+        elif site in ('rym', 'rateyourmusic') and len(path) == 2 and path[0] == 'genre':
+            out['rateyourmusic'] = url
+        # Spotify: only ever its home page in the pack.
     return out
 
 
@@ -874,12 +917,15 @@ def build_genre_nfo(name, mbid, wd, intro, names_by_id=None, mel=None):
             tags.append(f'    <{tag}>{escape(str(value))}</{tag}>')
 
     add('name', name)
-    add('musicBrainzGenreID', mbid)
+    links = mel.get('links', {})
+    add('musicBrainzGenreID', mbid or links.get('musicbrainz'))
     add('wikidata', wd.get('wikidata'))
     add('summary', wd.get('summary') and wd['summary'][:1].upper() + wd['summary'][1:])
     # Melodigging's description first (written as one); else Wikipedia's intro.
     add('description', mel.get('description') or (intro[0] if intro else ''))
-    add('wikipedia', (intro[1] if intro else '') or wd.get('wikipedia'))
+    add('wikipedia', (intro[1] if intro else '') or wd.get('wikipedia') or links.get('wikipedia'))
+    add('discogs', links.get('discogs'))
+    add('rateyourmusic', links.get('rateyourmusic'))
     if mel:
         add('melodigging', mel['slug'])
         add('category', mel.get('category'))

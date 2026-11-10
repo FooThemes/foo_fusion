@@ -493,7 +493,11 @@ export class Grid {
     e.preventDefault();
     const g = view.groups[i];
     const rows = view.groupRows(g);
-    trackContextMenu(rows, this.#refreshItems(g, rows));
+    // The tile keeps its hover look while the menu is open (the menu takes
+    // the mouse), and the album's songs aren't selected.
+    const tile = e.target.closest('.tile');
+    tile?.classList.add('menu-open');
+    Promise.resolve(trackContextMenu(rows, this.#refreshItems(g, rows), { select: false })).finally(() => tile?.classList.remove('menu-open'));
   }
 
   /** "Refresh artwork" for an album or genre; artist information for an artist. */
@@ -506,7 +510,7 @@ export class Grid {
       ];
     }
     if (this.kind === 'genres') return [{ label: 'Edit genre information…', run: () => editGenre(g.key) }, { label: 'Refresh genre information', run: () => (forgetGenreInfo(), refreshAlbums(rows)) }];
-    return [{ label: 'Refresh album', run: () => refreshAlbums(rows) }];
+    return [{ label: 'Refresh album information', run: () => refreshAlbums(rows) }];
   }
 
   #key(e) {

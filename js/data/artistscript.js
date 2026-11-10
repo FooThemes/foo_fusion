@@ -18,10 +18,14 @@ import { logInfo } from '../core/log.js';
 export async function runArtistScript(mode) {
   const script = String(store.get('artistScript') || '').trim().replace(/^"|"$/g, '');
   if (!/\.py$/i.test(script)) throw new Error('Set the location of fusion-artist-info.py first');
-  if (mode === 'genres') await exportGenres();
+  if (mode === 'genres' || mode === 'genres-refresh') await exportGenres();
   else if (mode !== 'report') await exportArtists();
   const flags = { refresh: ['--refresh'], report: ['--report'], genres: ['--genres'], 'genres-refresh': ['--genres', '--refresh'] }[mode] || [];
-  const args = [script, ...flags, '--pause'];
+  // Fusion's information folders are where the script writes (whatever its
+  // settings file says), so the two always agree.
+  const folder = (key) => String(store.get(key) || '').trim();
+  const where = [...(folder('artistInfoFolder') ? ['--artists-folder', folder('artistInfoFolder')] : []), ...(folder('genreInfoFolder') ? ['--genres-folder', folder('genreInfoFolder')] : [])];
+  const args = [script, ...flags, ...where, '--pause'];
   // The Python launcher ("py") comes with python.org's installer; else "python".
   let started = null;
   for (const executable of ['py', 'python']) {

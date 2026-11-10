@@ -355,6 +355,33 @@ function dialog(title, body, buttons) {
   });
 }
 
+/**
+ * Ask for a folder or file path: a text box with a Browse button (the
+ * system's own picker). Resolves with the path, or null when cancelled.
+ */
+export function promptPath(title, hint, { value = '', placeholder = '', folder = true, filter = null, okLabel = 'OK' } = {}) {
+  const input = el('input.dialog-input', { type: 'text', value, placeholder, spellcheck: false });
+  const browse = el('button.btn-text.dialog-browse', {
+    type: 'button',
+    text: 'Browse…',
+    onclick: async () => {
+      const start = input.value.trim().replace(/^"|"$/g, '');
+      const res = folder
+        ? await tryCall('dialog.openFolder', { title, defaultPath: start })
+        : await tryCall('dialog.openFile', { title, defaultPath: start.replace(/[\\/][^\\/]*$/, ''), ...(filter ? { filters: [filter] } : {}) });
+      const picked = folder ? res?.folderPath : res?.filePaths?.[0] || res?.filePath;
+      if (picked) input.value = picked;
+      input.focus();
+    },
+  });
+  const body = el('div', null, hint ? el('p', { text: hint }) : null, el('div.dialog-path', null, input, browse));
+  return dialog(title, body, (close) => {
+    const done = () => close(input.value.trim().replace(/^"|"$/g, '') || null);
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && done());
+    return [el('button.btn-primary', { text: okLabel, onclick: done }), el('button.btn-text', { text: 'Cancel', onclick: () => close(null) })];
+  });
+}
+
 export function promptText(title, value = '', hint = '') {
   const input = el('input.dialog-input', { type: 'text', value, spellcheck: false });
   input.addEventListener('focus', () => input.select(), { once: true });

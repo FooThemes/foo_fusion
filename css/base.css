@@ -210,7 +210,7 @@ input {
 /* Layout */
 #app {
   display: grid;
-  grid-template-columns: var(--sidebar-w) 0 minmax(0, 1fr) auto;
+  grid-template-columns: var(--sidebar-w) 0 minmax(0, 1fr) var(--info-w, 0px);
   grid-template-rows: minmax(0, 1fr) var(--bar-h);
   height: 100vh;
 }
@@ -244,7 +244,12 @@ input {
 #info-panel {
   grid-row: 1;
   grid-column: 4;
-  width: 350px;
+  min-width: 0;
+}
+
+/* The track info panel slides in and out (its column's width). */
+body.info-open {
+  --info-w: 350px;
 }
 
 #playerbar {
@@ -253,7 +258,7 @@ input {
 }
 
 body.no-sidebar #app {
-  grid-template-columns: 0 0 minmax(0, 1fr) auto;
+  grid-template-columns: 0 0 minmax(0, 1fr) var(--info-w, 0px);
 }
 
 /* The left panel slides open and shut (collapsing, hiding, showing). */

@@ -180,13 +180,36 @@ function showDialog(opts) {
       back.remove();
       resolve(v);
     };
-    const ok = () => {
+    // A wrong query stays red (and says why) until it's changed.
+    const queryError = el('div.ap-error', { hidden: true });
+    const bad = (msg) => {
+      query.classList.add('invalid');
+      queryError.textContent = msg;
+      queryError.hidden = false;
+      query.focus();
+    };
+    query.addEventListener('input', () => {
+      query.classList.remove('invalid');
+      queryError.hidden = true;
+    });
+    let checking = false;
+    const ok = async () => {
       if (mode === 'playlist') return close({ kind: 'playlist', name: name.value.trim() });
       const q = query.value.trim();
-      if (!q) {
-        query.focus();
-        query.classList.add('invalid');
-        return;
+      if (!q) return bad('Enter a query.');
+      if (checking) return;
+      // foobar2000's own parser decides (Fusion doesn't guess at the syntax).
+      if (!managed) {
+        checking = true;
+        try {
+          await call('library.query', { query: q, limit: 0, fields: ['handle'] });
+        } catch (e) {
+          if (e.code === 'INVALID_PARAMS') {
+            checking = false;
+            return bad(/SORT\s+BY/i.test(q) ? 'Put the sort order in the Sort pattern box, not "SORT BY" in the query.' : "foobar2000 can't read this query. Check the brackets, quotes and keywords (? for help).");
+          }
+        }
+        checking = false;
       }
       close({ kind: 'auto', name: name.value.trim(), query: q, sort: sort.value.trim(), keepSorted: forced.checked });
     };
@@ -231,6 +254,7 @@ function showDialog(opts) {
       'div.ap-auto',
       null,
       field('Query pattern', query, 'query'),
+      queryError,
       field('Sort pattern', sort, 'sort'),
       el('label.ap-check', null, forced, el('span', { text: 'Force-sorted' }), el('span.ap-hint', { text: 'keeps the sort order as songs are added; the playlist can’t be reordered by hand' })),
     );

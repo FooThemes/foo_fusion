@@ -4,7 +4,7 @@
 import { el, clear, formatTime, debounce } from '../core/util.js';
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
-import { view } from '../data/view.js';
+import { view, splitValues } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt } from '../data/artwork.js';
 import { icon } from '../core/icons.js';
@@ -17,8 +17,9 @@ export function mountInfoPanel(root) {
   const tags = el('div.info-tags', { hidden: true });
   const empty = el('p.info-empty', { text: 'Select a song, or play one, to see its properties.' });
   const close = el('button.btn-icon.info-close', { title: 'Close the track info panel', 'aria-label': 'Close', onclick: () => store.set('infoPanel', false) }, icon('close'));
-  // Details (a summary) / Tags (every tag in the file, ReplayGain, technical info).
-  let tab = 'details';
+  // Details (a summary) / Tags (every tag in the file, ReplayGain) /
+  // Technical (the file and its audio).
+  let tab = store.get('infoTab') || 'details';
   const tabBtn = (key, label) =>
     el('button.info-tab', {
       text: label,
@@ -26,11 +27,13 @@ export function mountInfoPanel(root) {
       dataset: { tab: key },
       onclick: () => {
         tab = key;
+        store.set('infoTab', key);
         render();
       },
     });
-  const tabs = el('div.info-tabs', { role: 'tablist' }, tabBtn('details', 'Details'), tabBtn('tags', 'Tags'));
-  root.append(close, el('div.info-scroll', null, art, heading, tabs, table, tags, empty));
+  const tabs = el('div.info-tabs', { role: 'tablist' }, tabBtn('details', 'Details'), tabBtn('tags', 'Tags'), tabBtn('technical', 'Technical'));
+  const tech = el('div.info-tags', { hidden: true });
+  root.append(close, el('div.info-scroll', null, art, heading, tabs, table, tags, tech, empty));
 
   const render = debounce(async () => {
     if (root.hidden) return;
@@ -51,39 +54,88 @@ export function mountInfoPanel(root) {
     for (const b of tabs.children) b.classList.toggle('on', b.dataset.tab === tab);
     table.hidden = tab !== 'details';
     tags.hidden = tab !== 'tags';
+    tech.hidden = tab !== 'technical';
+    if (!t) {
+      clear(heading);
+      clear(table);
+      clear(tags);
+      clear(tech);
+      shownFor = null;
+      return;
+    }
+    if (tab === 'tags') renderTags(t);
+    if (tab === 'technical') renderTechnical(t);
+    bindArt(img, t.handle, 350, ['front']);
+    if (shownFor === t.handle + source) return;
+    shownFor = t.handle + source;
+    // Every value of the tags that can link to a page (one call), and the
+    // names the Collection has, so only those become links.
+    const [multi, artists, genres] = await Promise.all([
+      tryCall('titleformat.evalFields', {
+        path: t.handle,
+        fields: { artist: "$meta_sep(artist,'|||')", albumArtist: "$meta_sep(album artist,'|||')", genre: "$meta_sep(genre,'|||')", performer: "$meta_sep(performer,'|||')", composer: "$meta_sep(composer,'|||')" },
+      }),
+      view.libraryValues('artists'),
+      view.libraryValues('genres'),
+    ]);
+    if (shownFor !== t.handle + source) return;
+    const m = multi || {};
+    const values = (key, fallback) => (m[key] ? splitValues(m[key], key === 'genre' ? 'genres' : '') : fallback ? [fallback] : []);
+    // Names as links when the Collection has them; the rest as text.
+    const links = (list, kind) => {
+      const known = kind === 'genres' ? genres : artists;
+      const out = el('span');
+      list.forEach((v, i) => {
+        if (i) out.append(kind === 'genres' ? ', ' : '; ');
+        const name = known?.get(v.toLowerCase());
+        out.append(name ? el('button.info-link', { text: v, title: kind === 'genres' ? `Show ${name} albums` : `Show ${name}`, onclick: () => view.goTo(kind, name) }) : v);
+      });
+      return out;
+    };
     clear(heading);
     clear(table);
-    if (!t) return clear(tags);
-    if (tab === 'tags') renderTags(t);
-    bindArt(img, t.handle, 350, ['front']);
-    heading.append(el('div.info-source', { text: source }), el('div.info-title', { text: t.title || '' }), el('div.info-artist', { text: t.artist || '' }));
+    const artistLine = el('div.info-artist');
+    const artistValues = values('artist', t.artist);
+    if (artistValues.length) artistLine.append(links(artistValues, 'artists'));
+    heading.append(el('div.info-source', { text: source }), el('div.info-title', { text: t.title || '' }), artistLine);
+    const album = t.album
+      ? el('button.info-link', {
+          text: t.album,
+          title: `Open ${t.album} in the Collection`,
+          onclick: async () => view.goTo('albums', await view.albumKeyOf(t.handle)),
+        })
+      : null;
     const rows = [
-      ['Album', t.album],
-      ['Album artist', t.albumArtist],
+      ['Album', album],
+      ['Album artist', values('albumArtist', t.albumArtist).length ? links(values('albumArtist', t.albumArtist), 'artists') : null],
       ['Year', t.date],
-      ['Genre', t.genre],
+      ['Genre', values('genre', t.genre).length ? links(values('genre', t.genre), 'genres') : null],
+      ['Performer', values('performer').length ? links(values('performer'), 'artists') : null],
+      ['Composer', values('composer', t.composer).length ? links(values('composer', t.composer), 'artists') : null],
       ['Track', t.trackNumber ? String(t.trackNumber) + (t.discNumber ? ` (disc ${t.discNumber})` : '') : ''],
-      ['Composer', t.composer],
       ['Length', t.duration ? formatTime(t.duration) : ''],
-      ['Codec', t.codec],
-      ['Bitrate', t.bitrate ? `${t.bitrate} kbps` : ''],
-      ['Sample rate', t.sampleRate ? `${t.sampleRate.toLocaleString()} Hz` : ''],
-      ['Channels', t.channels ? String(t.channels) : ''],
-      ['File size', t.fileSize > 0 ? `${(t.fileSize / 1048576).toFixed(1)} MB` : ''],
       ['Play count', t.playCount != null ? String(t.playCount) : ''],
       ['Last played', t.lastPlayed],
       ['Added', t.added],
       ['Rating', t.rating ? '★'.repeat(t.rating) : ''],
       ['Comment', t.comment],
-      ['Path', t.absolutePath || t.path],
     ];
     for (const [k, v] of rows) {
       if (!v) continue;
-      table.append(el('dt', { text: k }), el('dd', { text: v, title: v }));
+      table.append(el('dt', { text: k }), typeof v === 'string' ? el('dd', { text: v, title: v }) : el('dd', null, v));
     }
   }, 80);
+  let shownFor = null;
 
-  // Every tag of the file, then ReplayGain and the technical details.
+  const section = (box, title, pairs) => {
+    const list = pairs.filter(([, v]) => v != null && String(v).trim() !== '' && v !== '?');
+    if (!list.length) return;
+    const dl = el('dl.info-table');
+    for (const [k, v] of list) dl.append(el('dt', { text: k }), el('dd', { text: String(v), title: String(v) }));
+    box.append(...(title ? [el('h3.info-section', { text: title })] : []), dl);
+  };
+
+  // Every tag of the file, then ReplayGain.
   let tagsFor = null;
   async function renderTags(t) {
     const key = t.handle;
@@ -98,6 +150,32 @@ export function mountInfoPanel(root) {
           tp: '%replaygain_track_peak%',
           ag: '%replaygain_album_gain%',
           ap: '%replaygain_album_peak%',
+        },
+      }),
+    ]);
+    if (tagsFor !== key) return;
+    clear(tags);
+    section(tags, 'Tags', tagPairs(meta));
+    const f = rg || {};
+    section(tags, 'ReplayGain', [
+      ['Track gain', f.tg],
+      ['Track peak', f.tp],
+      ['Album gain', f.ag],
+      ['Album peak', f.ap],
+    ]);
+    if (!f.tg && !f.ag) tags.append(el('p.info-note', { text: 'No ReplayGain information. foobar2000 can scan for it (right-click > ReplayGain > Scan).' }));
+  }
+
+  // The file and its audio.
+  let techFor = null;
+  async function renderTechnical(t) {
+    const key = t.handle;
+    if (techFor === key && tech.childElementCount) return;
+    techFor = key;
+    const f =
+      (await tryCall('titleformat.evalFields', {
+        path: t.handle,
+        fields: {
           codec: '%codec%',
           profile: '[%codec_profile%]',
           bits: '[%__bitspersample%]',
@@ -112,48 +190,43 @@ export function mountInfoPanel(root) {
           mod: '[%last_modified%]',
           embedded: '[%__embedded_art%]',
         },
-      }),
-    ]);
-    if (tagsFor !== key) return;
-    clear(tags);
-    const section = (title, pairs) => {
-      const list = pairs.filter(([, v]) => v != null && String(v).trim() !== '' && v !== '?');
-      if (!list.length) return;
-      const dl = el('dl.info-table');
-      for (const [k, v] of list) dl.append(el('dt', { text: k }), el('dd', { text: String(v), title: String(v) }));
-      tags.append(el('h3.info-section', { text: title }), dl);
-    };
-    section('Tags', tagPairs(meta));
-    const f = rg || {};
-    section('ReplayGain', [
-      ['Track gain', f.tg],
-      ['Track peak', f.tp],
-      ['Album gain', f.ag],
-      ['Album peak', f.ap],
-    ]);
-    if (!f.tg && !f.ag) tags.append(el('p.info-note', { text: 'No ReplayGain information. foobar2000 can scan for it (right-click > ReplayGain > Scan).' }));
-    section('Technical', [
-      ['Codec', [f.codec, f.profile].filter(Boolean).join(' · ')],
+      })) || {};
+    if (techFor !== key) return;
+    clear(tech);
+    section(tech, '', [
+      ['Codec', [f.codec || t.codec, f.profile].filter(Boolean).join(' · ')],
       ['Encoding', f.enc],
       ['Bit depth', f.bits && `${f.bits} bits`],
-      ['Bitrate', f.br && `${f.br} kbps`],
+      ['Bitrate', (f.br || t.bitrate) && `${f.br || t.bitrate} kbps`],
       ['Sample rate', f.sr && `${Number(f.sr).toLocaleString()} Hz`],
       ['Channels', f.ch],
       ['Length', f.len + (f.samples ? ` (${Number(f.samples).toLocaleString()} samples)` : '')],
       ['Tool', f.tool],
       ['Embedded art', f.embedded],
-      ['File size', f.size],
+      ['File size', f.size || (t.fileSize > 0 ? `${(t.fileSize / 1048576).toFixed(1)} MB` : '')],
       ['Last modified', f.mod],
+      ['Path', t.absolutePath || t.path],
     ]);
   }
 
+  // Slides in and out: the column's width animates (see base.css), and the
+  // panel is hidden once it has shut.
+  let hideTimer = 0;
   function apply() {
-    root.hidden = !store.get('infoPanel');
+    const on = !!store.get('infoPanel');
+    clearTimeout(hideTimer);
+    if (on) {
+      root.hidden = false;
+      requestAnimationFrame(() => document.body.classList.add('info-open'));
+    } else {
+      document.body.classList.remove('info-open');
+      hideTimer = setTimeout(() => (root.hidden = true), document.body.classList.contains('animate-layout') ? 260 : 0);
+    }
     render();
   }
 
   view.on('selection', render);
-  view.on('change', render);
+  view.on('change', () => ((shownFor = tagsFor = techFor = null), render()));
   player.on('track', render);
   store.subscribe((k) => k === 'infoPanel' && apply());
   apply();

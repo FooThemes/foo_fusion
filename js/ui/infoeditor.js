@@ -11,6 +11,7 @@
 
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
+import { dropdown } from './dropdown.js';
 import { tryCall } from '../core/bridge.js';
 import { toast } from './toast.js';
 import { artistFiles, artistFolder, musicArtistFolder, pictureUrl } from '../data/artistinfo.js';
@@ -107,7 +108,26 @@ async function edit(kind, name, dir, refresh) {
     if (f.type === 'select') {
       const cur = current[0] || '';
       const opts = f.options.includes(cur) ? f.options : [...f.options, cur];
-      input = el('select.set-select.ie-input', null, opts.map((o) => el('option', { value: o, text: o || '—', selected: o === cur })));
+      // Fusion's themed drop-down; .value and 'change' work as on a <select>.
+      const btn = el('button.set-select.ie-input', { type: 'button' }, el('span', { text: cur || '—' }), icon('chevronDown'));
+      let value = cur;
+      Object.defineProperty(btn, 'value', { get: () => value });
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        dropdown(
+          btn,
+          opts.map((o) => ({
+            label: o || '—',
+            checked: o === value,
+            run: () => {
+              value = o;
+              btn.firstChild.textContent = o || '—';
+              btn.dispatchEvent(new Event('change'));
+            },
+          })),
+        );
+      });
+      input = btn;
     } else if (f.type === 'text') {
       input = el('textarea.dialog-input.ie-text', { spellcheck: true, rows: 7 });
       input.value = current.join('\n\n');

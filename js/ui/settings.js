@@ -5,11 +5,12 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { ACCENTS } from '../core/store.js';
 import { tryCall, on } from '../core/bridge.js';
-import { runMainMenu, confirmDialog, showMenu, foobarMenuItems } from './menus.js';
+import { runMainMenu, confirmDialog, showMenu, foobarMenuItems, promptPath } from './menus.js';
+import { dropdown } from './dropdown.js';
 import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
 import { forgetGenreInfo } from '../data/genreinfo.js';
-import { exportArtists } from '../data/artistexport.js';
+import { exportArtists, exportGenres } from '../data/artistexport.js';
 import { runArtistScript } from '../data/artistscript.js';
 import { toast } from './toast.js';
 import { VERSION } from '../version.js';
@@ -50,7 +51,7 @@ export function mountSettings(root, app) {
     'pointerdown',
     (e) => {
       if (!panel.classList.contains('open') || panel.contains(e.target)) return;
-      if (e.target.closest?.('[data-settings-toggle], .dialog-back, .mock-menu')) return;
+      if (e.target.closest?.('[data-settings-toggle], .dialog-back, .mock-menu, .dd-layer')) return;
       app.toggleSettings(false);
     },
     true,
@@ -72,6 +73,7 @@ export function mountSettings(root, app) {
     ['look', 'Look'],
     ['library', 'Library'],
     ['artists', 'Artists'],
+    ['genres', 'Genres'],
     ['languages', 'Languages'],
     ['more', 'More'],
   ];
@@ -139,9 +141,6 @@ export function mountSettings(root, app) {
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
       ]),
       section('Tile sizes', [range('Albums', 'tileSize', 110, 260, 10), range('Artists', 'artistTileSize', 100, 240, 10)]),
-      section('Genres', [
-        toggle('Split genres at / and ,', 'splitGenres', 'Songs tagged “Pop/Rock” or “Pop, Rock” show under Pop and under Rock. “Singer/Songwriter” stays whole.'),
-      ]),
       section('Covers', [
         select('Animated GIF covers', 'gifCovers', [
           ['large', 'Large covers only', 'The open album and Now Playing animate; tiles show a still frame (much lighter with big GIFs)'],
@@ -162,9 +161,6 @@ export function mountSettings(root, app) {
         ]),
         toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
       ]),
-      section('Genre information', [
-        folderField('Genre information folder', 'genreInfoFolder', 'One folder per genre with genre.nfo and folder.jpg (square). The artist script fills it in with “Look up genres”; without a picture, genres show four of their album covers.', 'e.g. E:\\Music\\_Genres'),
-      ]),
       section('Artist information', [
         folderField('Artist information folder', 'artistInfoFolder', 'One folder per artist with artist.nfo, artist.jpg and fanart.jpg (Kodi layout). Artists not there are looked for in their own music folder, above their albums.'),
         link('refresh', 'Refresh artwork and artist information', () => {
@@ -173,16 +169,33 @@ export function mountSettings(root, app) {
         }),
       ]),
       section('Artist information script', [
-        pathField('Script', 'artistScript', 'Where fusion-artist-info.py is (its settings file sits beside it). Needs Python.', 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py'),
+        scriptField(),
         link('person', 'Look up new artists', () => startScript('new', 'Looking up new artists in a console window…')),
         link('refresh', 'Refresh all artists', () => startScript('refresh', 'Refreshing all artists in a console window (this takes a while)…')),
-        link('tag', 'Look up genres', () => startScript('genres', 'Looking up genres in a console window…')),
-        link('refresh', 'Refresh all genres', () => startScript('genres-refresh', 'Refreshing all genres in a console window…')),
         link('info', 'Show report', () => startScript('report', '')),
         link('person', 'Export artist list…', async () => {
           try {
             const r = await exportArtists();
             toast(`Exported ${r.count} artists (${r.withId} with MusicBrainz IDs) to ${r.path}`, 8000);
+          } catch (err) {
+            toast(`Export failed: ${err.message}`);
+          }
+        }),
+      ]),
+    ],
+    genres: () => [
+      section('Genres', [genreSplitField()]),
+      section('Genre information', [
+        folderField('Genre information folder', 'genreInfoFolder', 'One folder per genre with genre.nfo and folder.jpg (square). The artist script fills it in with “Look up new genres”; without a picture, genres show four of their album covers.', 'e.g. E:\\Music\\_Genres'),
+      ]),
+      section('Genre information script', [
+        scriptField(),
+        link('tag', 'Look up new genres', () => startScript('genres', 'Looking up new genres in a console window…')),
+        link('refresh', 'Refresh all genres', () => startScript('genres-refresh', 'Refreshing all genres in a console window…')),
+        link('tag', 'Export genre list…', async () => {
+          try {
+            const r = await exportGenres();
+            toast(`Exported ${r.count} genres to ${r.path}`, 8000);
           } catch (err) {
             toast(`Export failed: ${err.message}`);
           }
@@ -210,7 +223,29 @@ export function mountSettings(root, app) {
     ],
   };
 
+  // Before the script runs: where it is, and where it writes (the folder
+  // these pages show), asked for when they're not set yet.
   async function startScript(mode, message) {
+    const genres = mode.startsWith('genres');
+    if (!/\.py$/i.test(String(store.get('artistScript') || '').trim().replace(/^"|"$/g, ''))) {
+      const path = await promptPath('Where is the artist script?', 'Fusion runs fusion-artist-info.py (in Fusion’s tools folder) with Python. Its settings file sits beside it.', {
+        folder: false,
+        placeholder: 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py',
+        filter: { name: 'Python script', extensions: ['py'] },
+      });
+      if (!path) return;
+      store.set('artistScript', path);
+    }
+    const key = genres ? 'genreInfoFolder' : 'artistInfoFolder';
+    if (mode !== 'report' && !String(store.get(key) || '').trim()) {
+      const path = await promptPath(
+        genres ? 'Choose a genre information folder' : 'Choose an artist information folder',
+        genres ? 'The script writes a folder for each genre here (genre.nfo and its picture), and Fusion reads them from here.' : 'The script writes a folder here for each artist who doesn’t have their own music folder, and Fusion reads them from here.',
+        { placeholder: genres ? 'e.g. E:\\Music\\_Genres' : 'e.g. E:\\Music\\_Artists', okLabel: 'Use this folder' },
+      );
+      if (!path) return;
+      setFolder(key, path);
+    }
     try {
       await runArtistScript(mode);
       if (message) toast(message, 6000);
@@ -219,10 +254,44 @@ export function mountSettings(root, app) {
     }
   }
 
-  function pathField(label, key, hint, placeholder) {
+  function scriptField() {
+    return pathField('Script', 'artistScript', 'Where fusion-artist-info.py is (its settings file sits beside it). Needs Python.', 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py', { folder: false, filter: { name: 'Python script', extensions: ['py'] } });
+  }
+
+  // A path box with a Browse button (the system's picker).
+  function pathField(label, key, hint, placeholder, { folder = true, filter = null, onSet = (v) => store.set(key, v) } = {}) {
     const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder, spellcheck: false, 'aria-label': label });
-    input.addEventListener('change', () => store.set(key, input.value.trim().replace(/^"|"$/g, '')));
-    return el('label.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), input);
+    input.addEventListener('change', () => onSet(input.value.trim().replace(/^"|"$/g, '')));
+    const browse = el('button.set-mini.set-browse', {
+      type: 'button',
+      text: 'Browse…',
+      onclick: async (e) => {
+        e.preventDefault();
+        const start = input.value.trim().replace(/^"|"$/g, '');
+        const res = folder
+          ? await tryCall('dialog.openFolder', { title: label, defaultPath: start })
+          : await tryCall('dialog.openFile', { title: label, defaultPath: start.replace(/[\\/][^\\/]*$/, ''), ...(filter ? { filters: [filter] } : {}) });
+        const picked = folder ? res?.folderPath : res?.filePaths?.[0] || res?.filePath;
+        if (picked) onSet(picked);
+      },
+    });
+    return el('div.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), el('div.set-path-row', null, input, browse));
+  }
+
+  // Characters that separate genres within one tag.
+  function genreSplitField() {
+    const input = el('input.set-hex.set-split', { type: 'text', value: store.get('genreSplit') ?? ';', spellcheck: false, maxLength: 12, 'aria-label': 'Split genres at' });
+    input.addEventListener('change', () => store.set('genreSplit', [...new Set(input.value.replace(/\s+/g, ''))].join(' ')));
+    return el(
+      'div.set-folder',
+      null,
+      el(
+        'div.set-split-line',
+        null,
+        el('span.set-label', null, el('span', { text: 'Split genres at' }), el('small', { text: 'Characters that separate genres within one tag. With “; , /”, “Pop/Rock” shows under Pop and under Rock (“Singer/Songwriter” stays whole).' })),
+        input,
+      ),
+    );
   }
 
   // Fusion's version, and foobar2000's and its WebView2 component's.
@@ -259,28 +328,35 @@ export function mountSettings(root, app) {
     );
   }
 
-  function miniSelect(label, key, options) {
-    const sel = el(
-      'select.set-select',
-      { 'aria-label': label, onchange: () => store.set(key, sel.value) },
-      options.map(([value, text]) => el('option', { value, text, selected: store.get(key) === value })),
+  // Fusion's drop-down (themed like Sort by), in place of a <select>.
+  function selectButton(label, key, options) {
+    const cur = options.find(([v]) => v === store.get(key)) || options[0];
+    const btn = el(
+      'button.set-select',
+      {
+        type: 'button',
+        'aria-label': label,
+        'aria-haspopup': 'menu',
+        onclick: () => dropdown(btn, options.map(([value, text]) => ({ label: text, checked: store.get(key) === value, run: () => store.set(key, value) })), { align: 'right' }),
+      },
+      el('span', { text: cur[1] }),
+      icon('chevronDown'),
     );
-    return el('label.set-mini-select', null, el('small', { text: label }), sel);
+    return btn;
+  }
+
+  function miniSelect(label, key, options) {
+    return el('div.set-mini-select', null, el('small', { text: label }), selectButton(label, key, options));
   }
 
   // A choice of three or more: one row with a drop-down, and the chosen
   // option's explanation under it.
   function select(label, key, options) {
     const cur = options.find(([v]) => v === store.get(key));
-    const sel = el(
-      'select.set-select',
-      { 'aria-label': label, onchange: () => store.set(key, sel.value) },
-      options.map(([value, text]) => el('option', { value, text, selected: store.get(key) === value })),
-    );
     return el(
       'div.set-select-row',
       null,
-      el('div.set-select-line', null, el('span', { text: label }), sel),
+      el('div.set-select-line', null, el('span', { text: label }), selectButton(label, key, options)),
       cur?.[2] ? el('small.set-select-hint', { text: cur[2] }) : null,
     );
   }
@@ -300,15 +376,15 @@ export function mountSettings(root, app) {
     return el('label.set-toggle', null, el('span', { text: label }), input, el('span.switch'));
   }
 
+  function setFolder(key, value) {
+    store.set(key, value);
+    forgetArtistInfo();
+    forgetGenreInfo();
+    app.reload?.();
+  }
+
   function folderField(label, key, hint, placeholder = 'e.g. E:\\Music\\_Artists') {
-    const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder, spellcheck: false, 'aria-label': label });
-    input.addEventListener('change', () => {
-      store.set(key, input.value.trim());
-      forgetArtistInfo();
-      forgetGenreInfo();
-      app.reload?.();
-    });
-    return el('label.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), input);
+    return pathField(label, key, hint, placeholder, { onSet: (v) => setFolder(key, v) });
   }
 
   // Edition-tag words as removable chips, with a box to add more.

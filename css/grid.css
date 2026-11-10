@@ -47,7 +47,8 @@
   z-index: -1;
 }
 
-.tile:hover::before {
+.tile:hover::before,
+.tile.menu-open::before {
   opacity: 1;
 }
 
@@ -101,7 +102,8 @@
   margin-left: 2px;
 }
 
-.tile:hover .tile-play {
+.tile:hover .tile-play,
+.tile.menu-open .tile-play {
   opacity: 1;
   transform: none;
 }
@@ -134,7 +136,8 @@
   transform: translate(50%, 50%) scale(0.9);
 }
 
-.tile:hover .art.round .tile-play {
+.tile:hover .art.round .tile-play,
+.tile.menu-open .art.round .tile-play {
   transform: translate(50%, 50%);
 }
 

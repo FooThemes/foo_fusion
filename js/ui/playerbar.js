@@ -159,7 +159,15 @@ export function mountPlayerBar(root, app) {
   document.getElementById('sidebar').append(bigBox);
   // Slides open and shut (its height) instead of popping in and out.
   let bigTimer = 0;
-  function showBig(on) {
+  // Changing track stops playback for a moment ("stopped", then the next
+  // song): closing waits a little, so it stays open between songs.
+  let shutTimer = 0;
+  function showBig(on, wait = false) {
+    clearTimeout(shutTimer);
+    if (!on && wait && !bigBox.hidden && !bigBox.classList.contains('shut')) {
+      shutTimer = setTimeout(() => shutBig(), 700);
+      return;
+    }
     if (on === !bigBox.classList.contains('shut') && !bigBox.hidden) return;
     clearTimeout(bigTimer);
     if (on) {
@@ -167,19 +175,37 @@ export function mountPlayerBar(root, app) {
       bigBox.hidden = false;
       void bigBox.offsetHeight; // start from shut
       bigBox.classList.remove('shut');
-    } else if (!bigBox.hidden) {
-      bigBox.classList.add('shut');
-      bigTimer = setTimeout(() => (bigBox.hidden = true), 260);
-    }
+    } else shutBig();
+  }
+  function shutBig() {
+    if (bigBox.hidden) return;
+    bigBox.classList.add('shut');
+    clearTimeout(bigTimer);
+    bigTimer = setTimeout(() => (bigBox.hidden = true), 260);
   }
   function updateBigArt(url) {
-    showBig(!!store.get('largeNowPlayingArt') && player.active && !store.get('sidebarCollapsed'));
-    bigArt.classList.remove('loaded');
+    const wanted = !!store.get('largeNowPlayingArt') && !store.get('sidebarCollapsed');
+    const on = wanted && player.active;
+    showBig(on, wanted);
     if (url) {
-      bigArt.onload = () => bigArt.classList.add('loaded');
-      bigArt.src = url;
-      bigArt.classList.toggle('alpha', isRawUrl(url));
-    } else bigArt.removeAttribute('src');
+      // The old cover stays until the new one is ready (no blank in between).
+      const next = new Image();
+      next.onload = () => {
+        if (bigArt.dataset.want !== url) return;
+        bigArt.src = url;
+        bigArt.classList.toggle('alpha', isRawUrl(url));
+        bigArt.classList.add('loaded');
+      };
+      bigArt.dataset.want = url;
+      next.src = url;
+    } else if (!on) {
+      // Nothing playing: the picture goes once the panel has shut.
+      bigArt.dataset.want = '';
+    } else {
+      bigArt.dataset.want = '';
+      bigArt.classList.remove('loaded');
+      bigArt.removeAttribute('src');
+    }
   }
 
   function renderState() {
@@ -316,7 +342,9 @@ export function mountPlayerBar(root, app) {
     orderBtn.title = `Playback order: ${ORDER_LABELS[o]}`;
   }
   function orderMenu(e) {
-    dropdown(e.currentTarget, Object.entries(ORDER_LABELS).map(([k, label]) => ({ label, checked: player.order === k, run: () => player.setOrder(k) })), { align: 'right' });
+    // Default | repeats | Random | shuffles.
+    const items = Object.entries(ORDER_LABELS).flatMap(([k, label]) => [...(k === 'repeat-playlist' || k === 'random' || k === 'shuffle-tracks' ? ['-'] : []), { label, checked: player.order === k, run: () => player.setOrder(k) }]);
+    dropdown(e.currentTarget, items, { align: 'right' });
   }
 
   // --- main menu (replaces the hidden foobar2000 menu bar) -----------------

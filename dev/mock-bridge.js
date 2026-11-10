@@ -127,6 +127,12 @@ function tfEval(pattern, t) {
     [TF.trackNumber]: () => String(t.trackNumber).padStart(2, '0'),
   };
   if (map[pattern]) return map[pattern]();
+  // Every value of one tag: "$meta_sep(genre,'|||')".
+  const ms = pattern.match(/^\$meta_sep\(([^,]+),'\|\|\|'\)$/);
+  if (ms) {
+    const v = { artist: t.artist, 'album artist': t.albumArtist, genre: t.genre, composer: t.composer, performer: t.performer ?? (t.trackNumber <= 2 ? 'Ado; Somebody Else' : '') }[ms[1]];
+    return (v || '').split(/;\s*/).filter(Boolean).join('|||');
+  }
   // Language versions: "[%title_orig%]|||[%title_en%]|||[%title_rom%]".
   const ver = pattern.match(/^\[%(\w+)_orig%\]\|\|\|/);
   if (ver) {
@@ -209,6 +215,8 @@ export async function installMock() {
   const err = (code, error) => Object.assign(new Error(error), { mockCode: code });
   const cur = () => (pb.pl >= 0 ? pls[pb.pl]?.items[pb.idx] : null);
   const playAt = (pi, idx) => {
+    // Like foobar2000: changing song stops for a moment first.
+    if (pb.state !== 'stopped') emit('playback:stopped', { reason: 'starting_another' });
     pb.pl = pi;
     pb.idx = idx;
     pb.pos = 0;
@@ -242,6 +250,11 @@ export async function installMock() {
       pls.push(mkPl(p.name || 'New playlist', []));
       emit('playlist:created', { index: pls.length - 1, guid: pls.at(-1).guid, name: pls.at(-1).name });
       return { index: pls.length - 1, guid: pls.at(-1).guid };
+    },
+    'library.query': (p) => {
+      const q = p.query || '';
+      if (/SORT\s+BY/i.test(q) || (q.match(/\(/g) || []).length !== (q.match(/\)/g) || []).length || (q.match(/"/g) || []).length % 2) throw Object.assign(new Error('bad query'), { mockCode: 'INVALID_PARAMS' });
+      return { tracks: [], total: 3 };
     },
     'playlist.createAutoplaylist': (p) => {
       const items = p.query.includes('Like it') ? lib.filter((t) => t.mood === 'Like it') : [...lib];

@@ -390,7 +390,12 @@
 }
 
 .info-scroll {
-  height: 100%;
+  /* Pinned to the right edge, so it slides in with the panel's edge. */
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 350px;
   overflow-y: auto;
   padding: 46px 24px 30px;
 }
@@ -435,6 +440,21 @@
 .info-table dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.info-link {
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.info-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .info-empty {
@@ -737,8 +757,16 @@
   font-size: 13px;
 }
 
-.dialog-input.invalid {
+.dialog-input.invalid,
+.dialog-input.invalid:focus {
   border-color: #c42b1c;
+}
+
+.ap-error {
+  margin: -6px 0 10px;
+  padding-left: 118px;
+  color: #c42b1c;
+  font-size: 12px;
 }
 
 .dialog-input:disabled {
@@ -994,6 +1022,42 @@ body.pdragging * {
   font-family: var(--font);
 }
 
+.set-path-row {
+  display: flex;
+  gap: 6px;
+}
+
+.set-browse {
+  flex: none;
+  height: 32px;
+}
+
+.set-split-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.set-split-line .set-label {
+  flex: 1;
+}
+
+.set-split {
+  flex: none;
+  width: 80px;
+  text-align: center;
+}
+
+/* A path in a dialog: the box and a Browse button. */
+.dialog-path {
+  display: flex;
+  gap: 8px;
+}
+
+.dialog-browse {
+  flex: none;
+}
+
 /* A short explanation at the top of a settings section. */
 .set-note {
   margin: 0 0 6px;
@@ -1005,14 +1069,15 @@ body.pdragging * {
 /* Settings pages: tabs under the heading. */
 .set-tabs {
   display: flex;
-  gap: 2px;
-  padding: 0 20px;
+  justify-content: space-between;
+  gap: 0;
+  padding: 0 16px;
   border-bottom: 1px solid var(--line);
   flex: none;
 }
 
 .set-tab {
-  padding: 8px 7px 7px;
+  padding: 8px 4px 7px;
   font-size: 13px;
   color: var(--text2);
   border-bottom: 2px solid transparent;
@@ -1045,23 +1110,41 @@ body.pdragging * {
 }
 
 .set-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   height: 28px;
-  padding: 0 6px;
+  padding: 0 6px 0 10px;
   background: var(--hover);
   color: var(--text);
   border: 1px solid var(--line);
   font: inherit;
   font-size: 13px;
   min-width: 120px;
+  text-align: left;
+}
+
+.set-select > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-select .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--text2);
+}
+
+.set-select:hover,
+.set-select.dd-open {
+  border-color: var(--text2);
 }
 
 .set-select:focus-visible {
   outline: 2px solid var(--accent);
-}
-
-.set-select option {
-  background: var(--panel-bg);
-  color: var(--text);
 }
 
 .set-select-hint {

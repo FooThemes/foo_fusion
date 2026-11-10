@@ -488,6 +488,8 @@ def main():
     ap.add_argument('--limit', type=int, default=0, help='stop after this many artists')
     ap.add_argument('--report', action='store_true', help="list artists that weren't found, failed, were skipped or have no picture (also saved to fusion-artist-info-report.txt)")
     ap.add_argument('--genres', action='store_true', help='genre information instead: genre.nfo files in genres_folder (with --refresh: rewrite or fill in existing ones)')
+    ap.add_argument('--artists-folder', help='folder for artists without their own music folder (overrides artists_folder; Fusion passes its Artist information folder)')
+    ap.add_argument('--genres-folder', help='folder for genre information (overrides genres_folder; Fusion passes its Genre information folder)')
     ap.add_argument('--pause', action='store_true', help='wait for Enter before closing (for runs started from Fusion)')
     args = ap.parse_args()
     try:
@@ -502,6 +504,12 @@ def main():
 
 def run(args):
     cfg = load_settings()
+    # Absolute folders from Fusion win over the settings file's subfolders
+    # (os.path.join keeps an absolute second part as it is).
+    if args.artists_folder:
+        cfg['artists_folder'] = os.path.abspath(args.artists_folder)
+    if args.genres_folder:
+        cfg['genres_folder'] = os.path.abspath(args.genres_folder)
     for k in ('music_root', 'artist_list'):
         if not cfg[k] or not os.path.exists(cfg[k]):
             sys.exit(f'Settings: {k} = "{cfg[k]}" not found. Edit {SETTINGS}.')

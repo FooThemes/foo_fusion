@@ -67,6 +67,7 @@ const DEFAULTS = {
   listArtLeft: true,
   largeNowPlayingArt: false,
   infoPanel: false,
+  infoTab: 'details',
   selectionBar: true,
   smoothScroll: true,
   waveformSeekbar: false,
@@ -89,7 +90,7 @@ const DEFAULTS = {
   songColumns: null, // Songs view columns in order (null: the defaults, see songs.js)
   songColumnWidths: {}, // Songs view column -> width in px (sized by hand)
   genreInfoFolder: '', // one folder per genre: genre.nfo, folder.jpg, fanart.jpg
-  splitGenres: true, // "Pop/Rock" and "Pop, Rock" are two genres
+  genreSplit: ';', // characters that separate genres in one tag ("; , /": "Pop/Rock" is two)
   genreTiles: 'wide', // genre tiles: 'wide' (2:1, as the original) or 'square'
   artistScript: '', // path of tools/fusion-artist-info.py, to run it from Settings > Artists
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…

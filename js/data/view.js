@@ -136,8 +136,8 @@ class View extends Emitter {
       this.load();
     });
     store.subscribe((key) => {
-      if (key === 'splitGenres') delete libraryCache.genres;
-      if (key === 'separateDiscs' || (key === 'hidePlaceholderArtists' && this.mode === 'artists') || (key === 'splitGenres' && this.mode === 'genres')) this.load();
+      if (key === 'genreSplit') delete libraryCache.genres;
+      if (key === 'separateDiscs' || (key === 'hidePlaceholderArtists' && this.mode === 'artists') || (key === 'genreSplit' && this.mode === 'genres')) this.load();
     });
   }
 
@@ -937,7 +937,7 @@ const SEP = '|||';
 export function splitValues(key, kind = '') {
   const out = [];
   const seen = new Set();
-  const genres = kind === 'genres' && store.get('splitGenres');
+  const genres = kind === 'genres';
   for (const part of key.split(SEP)) {
     for (const v of genres ? splitGenreText(part) : part.split(';')) {
       const t = v.trim();
@@ -971,10 +971,13 @@ function mergeRuns(runs) {
  *  have a slash of their own ("Singer/Songwriter") and stay whole. */
 // Discogs's "Folk, World, & Country" is one genre, commas and all.
 const WHOLE_GENRES = /\b(singer\s*\/\s*song-?writer|r\s*\/\s*b|d\s*\/\s*b|c\s*\/\s*w|folk\s*,\s*world\s*,?\s*(?:&|and)\s*country)\b/gi;
-export function splitGenreText(text) {
+export function splitGenreText(text, chars = store.get('genreSplit')) {
+  const seps = [...new Set(String(chars ?? ';').replace(/\s+/g, ''))];
+  if (!seps.length) return [text];
   const kept = [];
   const masked = text.replace(WHOLE_GENRES, (m) => `\u0000${kept.push(m) - 1}\u0000`);
-  const parts = masked.split(/\s*[;,/]\s*/).map((v) => v.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[i]));
+  const at = new RegExp(`\\s*[${seps.map((c) => c.replace(/[\\\]^-]/g, '\\$&')).join('')}]\\s*`);
+  const parts = masked.split(at).map((v) => v.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[i]));
   // "Rock, Pop, & Soul": the list's last item is "Soul", not "& Soul".
   return parts.map((p) => p.replace(/^(?:&|and\b)\s*/i, ''));
 }

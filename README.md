@@ -68,8 +68,10 @@ new.
 
 1. Install foo_ui_webview2: **File → Preferences → Components → Install…**,
    pick the `.fb2k-component` file, then restart foobar2000.
-2. Copy this repository's `index.html`, `css` and `js` into
-   `<foobar2000 profile>\webview-ui\fusion\`.
+2. Download `fusion-<version>.zip` from the
+   [Releases](../../releases) page and extract its `fusion` folder into
+   `<foobar2000 profile>\webview-ui\`, so you have
+   `<foobar2000 profile>\webview-ui\fusion\index.html`.
    - Portable install: `<foobar2000 folder>\profile\webview-ui\fusion\`
    - Standard install: `%APPDATA%\foobar2000-v2\webview-ui\fusion\`
 3. **Preferences → Display → Default User Interface**: choose **WebView2 UI**.
@@ -92,6 +94,9 @@ To update Fusion itself, replace the files in `webview-ui\fusion\`, then press
 `index.html` carries a content hash (written by `dev/tools/stamp.py`), so
 WebView2 never mixes cached old files with new ones. To update
 foo_ui_webview2, install the new `.fb2k-component` in the usual way.
+
+The artist/genre information script and the Picard plugins are in
+`fusion-tools-<version>.zip` on the same page.
 
 ## Troubleshooting
 
@@ -125,6 +130,20 @@ python dev/tools/extract-api.py <foo_ui_webview2>/docs/vitepress/api > dev/api-p
 
 For live reloading inside foobar2000, point the component's development-server
 setting at your local server.
+
+## Releasing
+
+Set the version in `js/version.js`, commit, then tag and push it:
+
+```
+git tag v3.0.0
+git push origin v3.0.0
+```
+
+The Release workflow (`.github/workflows/release.yml`) builds the two zips
+with `python dev/tools/release.py` and publishes them as a GitHub release. A
+tag with a `-` (`v3.0.0-beta.2`) is marked pre-release. To build the zips
+locally instead, run the same script; they go into `dist/`.
 
 ## Credits and licence
 

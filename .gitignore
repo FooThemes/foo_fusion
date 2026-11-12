@@ -6,3 +6,6 @@ tools/*.state.json
 tools/*.log
 
 tools/picard/dist/
+__pycache__/
+*.pyc
+dist/

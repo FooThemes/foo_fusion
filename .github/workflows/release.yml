@@ -1,0 +1,28 @@
+# Push a tag like v3.0.0 (or v3.0.0-beta.2) and this builds the downloads and
+# publishes them as a GitHub release. Tags with a "-" are marked pre-release.
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check the tag matches js/version.js
+        run: |
+          v=$(sed -n "s/.*VERSION = '\(.*\)'.*/\1/p" js/version.js)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME but js/version.js says $v"; exit 1; }
+      - name: Build
+        run: python dev/tools/release.py
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "Fusion ${GITHUB_REF_NAME#v}" --generate-notes $pre

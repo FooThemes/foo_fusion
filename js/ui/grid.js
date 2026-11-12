@@ -13,7 +13,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes, warmArt, refreshArtist } from '../data/artwork.js';
+import { bindArt, albumArtTypes, warmArt, refreshArtist, keepDecoded } from '../data/artwork.js';
 import { ArtistHero } from './artisthero.js';
 import { GenreHero } from './genrehero.js';
 import { musicArtistFolder, onPictureRevoked } from '../data/artistinfo.js';
@@ -470,6 +470,9 @@ export class Grid {
     }
     if (!live()) return;
     genreTiles.set(token, url);
+    // Decoded and kept: a new grid (coming back from Songs or Folders) shows
+    // it the same frame, not the placeholder first.
+    keepDecoded(url);
     if (!url) {
       img.removeAttribute('src');
       img.classList.remove('loaded');

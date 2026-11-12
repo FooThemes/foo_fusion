@@ -183,6 +183,8 @@ function opaqueBounds(ctx, w, h) {
  * crops transparent margins (logos often come with lots of them, which
  * throws them out of line with the text below).
  */
+// Scaled pictures kept for reuse; the least recently used are freed past this.
+const PICTURE_LIMIT = 2000;
 const pictures = new Map(); // path|size|trim -> Promise<blob URL | null>
 
 export function pictureUrl(file, px, { trim = false } = {}) {
@@ -199,7 +201,9 @@ export function pictureUrl(file, px, { trim = false } = {}) {
   p = makePictureUrl(file, px, trim);
   pictures.set(key, p);
   p.then((u) => u || pictures.delete(key));
-  while (pictures.size > 300) {
+  // Room for every artist and genre tile at once (they're small), so going
+  // from Artists to Genres never pushes the other's pictures out.
+  while (pictures.size > PICTURE_LIMIT) {
     const [old, gone] = pictures.entries().next().value;
     pictures.delete(old);
     release(gone);

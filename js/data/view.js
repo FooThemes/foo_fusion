@@ -174,14 +174,6 @@ class View extends Emitter {
   }
 
   openDrill(group) {
-    // A folder: one level down (Back goes up a level).
-    if (group.folder) {
-      this.drill = { kind: 'folders', key: group.folder.path, label: group.folder.name, up: this.drill };
-      this.backTo = null;
-      this.#blank();
-      this.load();
-      return;
-    }
     this.drill = { kind: this.mode, key: group.key, label: group.key };
     this.backTo = null;
     this.#blank();
@@ -301,15 +293,6 @@ class View extends Emitter {
       this.load();
       return;
     }
-    // In a folder: up one level, with the folder we were in open... in view.
-    if (this.drill?.kind === 'folders') {
-      const was = this.drill;
-      this.drill = was.up || null;
-      this.returning = { scrollToKey: 'dir:' + was.key.toLowerCase() };
-      this.#blank();
-      this.load();
-      return;
-    }
     this.drill = null;
     this.#blank();
     this.load();
@@ -338,7 +321,7 @@ class View extends Emitter {
 
   currentSortKey() {
     const mode = this.mode === 'nowplaying' ? 'albums' : this.mode;
-    return store.get('sort')[mode] || (mode === 'folders' ? 'path' : undefined);
+    return store.get('sort')[mode];
   }
 
   /** Re-read the active playlist and regroup it. */
@@ -401,14 +384,14 @@ class View extends Emitter {
     // Artist and genre tiles are listed alphabetically whatever the playlist
     // order, so switching to those tabs never re-sorts (re-sorting a library
     // autoplaylist means foobar2000 rebuilds it, which takes a while).
-    const valueView = ((this.mode === 'artists' || this.mode === 'genres') && !this.drill) || this.mode === 'folders';
+    const valueView = (this.mode === 'artists' || this.mode === 'genres') && !this.drill;
     // Songs in an autoplaylist are sorted here instead (see #sortedRows), so
     // going between Songs and Albums doesn't rebuild the library either.
     const clientSongs = this.mode === 'songs' && pl.isLocked;
     // An artist's or genre's page of an autoplaylist (the Collection) puts its
     // few albums in order itself, instead of having foobar2000 rebuild the
     // whole library in another order (and back again for the Albums tab).
-    const clientGroups = !!this.drill && pl.isLocked && this.drill.kind !== 'folders';
+    const clientGroups = !!this.drill && pl.isLocked;
     const wantSort = !clientSongs && !clientGroups && (opts.sort || (!valueView && store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp));
     this.reversed = false;
     if (wantSort && pl.trackCount > 0 && this.canSort(pl)) {
@@ -483,15 +466,12 @@ class View extends Emitter {
     const albumKey = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
     const kind = this.drill?.kind || this.mode;
     const parentKey = kind === 'genres' ? TF.genresMulti : TF.artistsMulti;
-    const patterns = kind === 'albums' ? [albumKey] : kind === 'folders' ? [TF.dirKey, albumKey] : [parentKey, albumKey];
+    const patterns = kind === 'albums' ? [albumKey] : [parentKey, albumKey];
     const runs = await this.#groupRuns(pl, patterns);
     if (gen !== this.#generation || !runs) return;
 
     let groups;
-    if (kind === 'folders') {
-      groups = folderGroups(runs, this.drill?.key);
-      this.folderRoot = groups.root;
-    } else if (kind === 'albums') {
+    if (kind === 'albums') {
       groups = mergeRuns(runs.map((r) => ({ key: r.key, start: r.start, count: r.count })));
     } else if (this.drill) {
       // Albums of one artist/genre: the album runs inside every run that lists it.
@@ -513,7 +493,7 @@ class View extends Emitter {
       if (gen !== this.#generation) return;
     }
     // Artist/genre tiles are alphabetical, so "descending" flips them directly.
-    const valueTiles = (kind !== 'albums' && !this.drill) || kind === 'folders';
+    const valueTiles = kind !== 'albums' && !this.drill;
     if (valueTiles ? store.get('sortDescending') : this.reversed) groups.reverse();
     // Keep what we already know about each group (title, art path), so tiles
     // that only moved don't blank out until the heads are fetched again.
@@ -971,73 +951,6 @@ export function splitValues(key, kind = '') {
 }
 
 /** Merge runs with the same key (case-insensitive) into one group each. */
-/**
- * The Folders view: what's in one folder (`at`, else the folder all the
- * songs share). Subfolders that have folders of their own are folder tiles
- * (opened like an artist's page); folders of songs only, and the songs
- * directly in `at`, show as their albums (opened like any album).
- */
-function folderGroups(runs, at) {
-  const parts = (p) => p.split('\\').filter(Boolean);
-  const lower = (p) => p.toLowerCase();
-  // The shared root: the deepest folder every song is under.
-  let root = null;
-  for (const r of runs) {
-    const ps = parts(r.key);
-    if (!root) root = ps;
-    else {
-      let n = 0;
-      while (n < root.length && n < ps.length && lower(root[n]) === lower(ps[n])) n++;
-      root = root.slice(0, n);
-    }
-  }
-  root = root || [];
-  // A root that is itself a folder of songs only: show it from its parent.
-  const here = at ? parts(at) : root;
-  const depth = here.length;
-  const hereKey = lower(here.join('\\'));
-  const children = new Map(); // lower name -> { name, path, runs, deeper }
-  const direct = [];
-  for (const r of runs) {
-    const ps = parts(r.key);
-    if (ps.length < depth || lower(ps.slice(0, depth).join('\\')) !== hereKey) continue;
-    if (ps.length === depth) {
-      direct.push(r);
-      continue;
-    }
-    const k = lower(ps[depth]);
-    let c = children.get(k);
-    if (!c) children.set(k, (c = { name: ps[depth], path: ps.slice(0, depth + 1).join('\\'), runs: [], deeper: false }));
-    c.runs.push(r);
-    if (ps.length > depth + 1) c.deeper = true;
-  }
-  const byName = (a, b) => groupCollator.compare(a.name, b.name);
-  const out = [];
-  const albumsOf = (list) => mergeRuns(list.flatMap((r) => (r.sub?.length ? r.sub : [{ key: r.key, start: r.start, count: r.count }])));
-  const leaf = [];
-  for (const c of [...children.values()].sort(byName)) {
-    // A folder of one album (disc folders CD1 and CD2 included) is that
-    // album's tile; disc folders of an album make one tile too.
-    if (!c.deeper || albumsOf(c.runs).length === 1) {
-      leaf.push(...c.runs);
-      continue;
-    }
-    const all = mergeRuns(c.runs.map((r) => ({ key: 'dir:' + lower(c.path), start: r.start, count: r.count })))[0];
-    const albums = albumsOf(c.runs);
-    const folders = new Set(c.runs.map((r) => lower(parts(r.key)[depth + 1] || '')).filter(Boolean));
-    out.push({
-      ...all,
-      key: 'dir:' + lower(c.path),
-      folder: { name: c.name, path: c.path, folders: folders.size },
-      albumCount: albums.length,
-      collageRows: albums.sort((a, b) => b.count - a.count).slice(0, 4).map((a) => firstRow(a)),
-    });
-  }
-  out.push(...albumsOf([...leaf, ...direct]));
-  out.root = root.join('\\');
-  return out;
-}
-
 function mergeRuns(runs) {
   const map = new Map();
   for (const r of runs) {

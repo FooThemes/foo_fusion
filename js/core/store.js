@@ -38,7 +38,6 @@ export const VIEW_SORTS = {
   albums: ['album', 'artist', 'year', 'genre', 'added'],
   artists: ['artist'],
   genres: ['genre'],
-  folders: ['path'],
   songs: ['title', 'artist', 'album', 'year', 'genre', 'length', 'added', 'path'],
 };
 
@@ -53,7 +52,7 @@ const DEFAULTS = {
   dark: false,
   accent: '#107C10',
   view: 'albums', // albums | artists | genres | songs
-  sort: { albums: 'album', artists: 'artist', genres: 'genre', songs: 'title', folders: 'path' },
+  sort: { albums: 'album', artists: 'artist', genres: 'genre', songs: 'title' },
   sortDescending: false,
   sidebarWidth: 250,
   sidebarCollapsed: false, // icons only

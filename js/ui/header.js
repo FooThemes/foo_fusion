@@ -17,7 +17,6 @@ const TABS = [
   ['albums', 'Albums'],
   ['artists', 'Artists'],
   ['genres', 'Genres'],
-  ['folders', 'Folders'],
   ['songs', 'Songs'],
 ];
 
@@ -44,8 +43,6 @@ export function mountHeader(root, app) {
     back.hidden = !view.drill || np;
     showSide.hidden = !store.get('sidebarHidden');
     title.textContent = np ? 'Now playing' : view.drill ? view.drill.label : view.filter ? `Results for "${view.filter}"` : pl?.name || 'No playlist';
-    // In a folder: where it is, on hover.
-    title.title = view.drill?.kind === 'folders' ? view.drill.key : '';
 
     clear(actions);
     if (np) {
@@ -81,8 +78,7 @@ export function mountHeader(root, app) {
     const sortKey = view.currentSortKey();
     clear(sortBtn).append(el('span.sort-label', { text: 'Sort by ' }), el('span.sort-value', { text: (SORTS[sortKey]?.label || 'Album').toLowerCase() }), icon('chevronDown'));
     const sortable = view.canSort();
-    const sortsFor = view.mode === 'folders' ? 'folders' : view.drill ? 'albums' : view.mode;
-    sortBtn.disabled = VIEW_SORTS[sortsFor]?.length < 2 || !sortable;
+    sortBtn.disabled = VIEW_SORTS[view.drill ? 'albums' : view.mode]?.length < 2 || !sortable;
     sortBtn.title = sortable ? '' : 'This autoplaylist keeps its own order. Change it in the autoplaylist settings.';
     dirBtn.disabled = !view.playlist;
     const desc = store.get('sortDescending');
@@ -96,10 +92,6 @@ export function mountHeader(root, app) {
     if (view.loading && !view.groups.length && view.mode !== 'songs') return 'Loading…';
     const n = view.groups.length;
     if (view.mode === 'songs') return view.total ? plural(view.total, 'song') : 'empty';
-    if (view.mode === 'folders') {
-      const f = view.groups.filter((g) => g.folder).length;
-      return [f ? plural(f, 'folder') : '', n - f ? plural(n - f, 'album') : ''].filter(Boolean).join(' · ');
-    }
     if (view.drill || view.mode === 'albums') return n ? plural(n, 'album') : '';
     if (view.mode === 'artists') return n ? plural(n, 'artist') : '';
     if (view.mode === 'genres') return n ? plural(n, 'genre') : '';
@@ -107,7 +99,7 @@ export function mountHeader(root, app) {
   }
 
   function sortMenu(e) {
-    const keys = VIEW_SORTS[view.mode === 'folders' ? 'folders' : view.drill ? 'albums' : view.mode] || [];
+    const keys = VIEW_SORTS[view.drill ? 'albums' : view.mode] || [];
     const cur = view.currentSortKey();
     dropdown(e.currentTarget, keys.map((k) => ({ label: SORTS[k].label, checked: k === cur, run: () => view.setSort(k) })));
   }

@@ -93,6 +93,32 @@ export class Grid {
     scroller.addEventListener('scroll', this.onScroll, { passive: true, signal });
     this.ro = new ResizeObserver(rafThrottle(() => this.layout()));
     this.ro.observe(scroller);
+    // The side panels slide open and shut (the info panel, the sidebar): the
+    // tiles stay as they are while the width animates, then move once to
+    // their new places, instead of reflowing on every frame of the slide.
+    const app = document.getElementById('app');
+    if (app) {
+      const sliding = (e) => e.target === app && e.propertyName === 'grid-template-columns';
+      let safety = 0;
+      const settle = (e) => {
+        if ((e && !sliding(e)) || !this.sliding) return;
+        clearTimeout(safety);
+        this.sliding = false;
+        this.#settle();
+      };
+      app.addEventListener(
+        'transitionrun',
+        (e) => {
+          if (!sliding(e)) return;
+          this.sliding = true;
+          clearTimeout(safety);
+          safety = setTimeout(() => settle(null), 600); // in case no end event comes
+        },
+        { signal },
+      );
+      app.addEventListener('transitionend', settle, { signal });
+      app.addEventListener('transitioncancel', settle, { signal });
+    }
 
     this.layer.addEventListener('click', (e) => this.#click(e));
     // Hovering an artist or genre: read its folder (pictures, information)
@@ -171,6 +197,7 @@ export class Grid {
   layout() {
     const w = this.scroller.clientWidth;
     if (!w) return;
+    if (this.sliding && this.rowCount != null) return; // see #settle
     // Keep the open album (or the first visible tile) where it was on screen
     // while the columns reflow, instead of jumping to wherever its row lands.
     const hadLayout = this.rowCount != null && this.lastWidth;
@@ -204,6 +231,27 @@ export class Grid {
     for (const [i, node] of this.tiles) this.#place(node, i);
     this.render();
     this.#warm();
+  }
+
+  /** After a panel slide: lay out once, tiles gliding from where they were on
+   *  screen to their new places (new ones fade in). */
+  #settle() {
+    const at = (node) => /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(node.style.transform)?.slice(1).map(Number);
+    const before = new Map();
+    for (const [i, node] of this.tiles) before.set(node, { i, pos: at(node) });
+    const scroll = this.scroller.scrollTop;
+    this.layout();
+    if (store.get('animations') === false) return;
+    const moved = this.scroller.scrollTop - scroll; // the layout keeps the top row in view
+    for (const [i, node] of this.tiles) {
+      const was = before.get(node);
+      const pos = at(node);
+      if (was && was.i === i && was.pos && pos) {
+        const [x0, y0] = was.pos;
+        if (x0 === pos[0] && y0 + moved === pos[1]) continue;
+        node.animate([{ transform: `translate(${x0}px, ${y0 + moved}px)` }, { transform: node.style.transform }], { duration: 260, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+      } else node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
+    }
   }
 
   /** Height the open album takes in the grid, including the gap below it. */

@@ -173,10 +173,14 @@ function coverSvg(seed, label) {
 
 export async function installMock() {
   const params = await fetch(new URL('./api-params.json', import.meta.url)).then((r) => r.json());
-  const lib = buildLibrary();
-  // MusicBrainz placeholder credits (hidden from Artists by default).
-  lib[3].artistsTag = ['[dialogue]'];
-  lib[5].artistsTag = [lib[5].artist, '[unknown]'];
+  // A page can bring its own library (window.__mockTracks: tracks, or a promise of them).
+  const own = window.__mockTracks ? await window.__mockTracks : null;
+  const lib = own || buildLibrary();
+  if (!own) {
+    // MusicBrainz placeholder credits (hidden from Artists by default).
+    lib[3].artistsTag = ['[dialogue]'];
+    lib[5].artistsTag = [lib[5].artist, '[unknown]'];
+  }
   const listeners = new Map();
   const emit = (event, data) => setTimeout(() => (listeners.get(event) || []).forEach((fn) => fn(data)), 0);
   let config = {};
@@ -635,6 +639,11 @@ Second paragraph.</description><wikipedia>https://en.wikipedia.org/wiki/Rock_mus
       if (unknown.length) {
         console.error(`[mock] ${method}: undeclared params`, unknown);
         return { success: false, code: 'INVALID_PARAMS', error: `Unknown parameter(s): ${unknown.join(', ')}` };
+      }
+      // A page may stand in for some answers (e.g. nicer pictures for a demo).
+      if (window.__mockOverride) {
+        const r = await window.__mockOverride(method, p, () => api[method]?.(p));
+        if (r !== undefined) return { success: true, ...r };
       }
       if (!api[method]) {
         console.warn(`[mock] ${method} not emulated`);

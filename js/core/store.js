@@ -98,6 +98,7 @@ const DEFAULTS = {
   genreSplit: ';', // characters that separate genres in one tag ("; , /": "Pop/Rock" is two)
   genreTiles: 'wide', // genre tiles: 'wide' (2:1, as the original) or 'square'
   artistScript: '', // path of tools/fusion-artist-info.py, to run it from Settings > Artists
+  exportFolder: '', // where the artist and genre lists are exported; empty: beside the script (else the profile)
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…
   dimEditionTags: true, // grey out '(Single)', '(Deluxe Edition)'… at the end of titles
   dimWords: 'Single, EP, Deluxe, Edition, Remaster, Remastered, Live, Bonus, Expanded, Anniversary, Reissue, Demo, Acoustic, Instrumental, Mono, Version, Remix, Radio Edit',

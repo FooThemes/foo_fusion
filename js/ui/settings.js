@@ -178,6 +178,7 @@ export function mountSettings(root, app) {
         link('person', 'Look up new artists', () => startScript('new', 'Looking up new artists in a console window…')),
         link('refresh', 'Refresh all artists', () => startScript('refresh', 'Refreshing all artists in a console window (this takes a while)…')),
         link('info', 'Show report', () => startScript('report', '')),
+        exportFolderField(),
         link('person', 'Export artist list…', async () => {
           try {
             const r = await exportArtists();
@@ -197,6 +198,7 @@ export function mountSettings(root, app) {
         scriptField(),
         link('tag', 'Look up new genres', () => startScript('genres', 'Looking up new genres in a console window…')),
         link('refresh', 'Refresh all genres', () => startScript('genres-refresh', 'Refreshing all genres in a console window…')),
+        exportFolderField(),
         link('tag', 'Export genre list…', async () => {
           try {
             const r = await exportGenres();
@@ -281,6 +283,12 @@ export function mountSettings(root, app) {
       },
     });
     return el('div.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), el('div.set-path-row', null, input, browse));
+  }
+
+  // Where "Export artist list" and "Export genre list" write (and where the
+  // script is told to read them from).
+  function exportFolderField() {
+    return pathField('Export folder', 'exportFolder', 'Where the artist and genre lists are saved for the script. Empty: beside the script, or the foobar2000 profile folder if the script isn’t set.', 'Beside the script', { onSet: (v) => (store.set('exportFolder', v), render()) });
   }
 
   // Characters that separate genres within one tag.

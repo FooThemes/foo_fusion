@@ -1,13 +1,14 @@
 // Export the library's artists (the same names as Fusion's Artists tab, so
 // featured artists are included) with their MusicBrainz IDs where the tags
 // have them, for tools/fusion-artist-info.py to fetch artist information.
-// Written to fusion-artists.json in the foobar2000 profile folder (themes may
-// only write inside the profile).
+// Written to fusion-artists.json in the export folder (Settings), else beside
+// the script, else in the foobar2000 profile folder.
 
 import { tryCall } from '../core/bridge.js';
 import { TF } from './patterns.js';
 import { playlists, COLLECTION } from './playlists.js';
 import { splitValues } from './view.js';
+import * as store from '../core/store.js';
 
 const SEP = '|||';
 // MBIDs from the tag that matches where the names came from (ARTISTS, else
@@ -41,9 +42,7 @@ export async function exportArtists() {
   const list = [...artists.values()]
     .map((a) => ({ name: a.name, songs: a.songs, mbid: [...a.ids].sort((x, y) => y[1] - x[1])[0]?.[0] || null }))
     .sort((x, y) => x.name.localeCompare(y.name));
-  const prof = await tryCall('misc.getProfilePath');
-  const dir = (prof?.path || prof?.value || '').replace(/[\\/]$/, '');
-  const path = `${dir}\\fusion-artists.json`;
+  const path = await exportPath('fusion-artists.json');
   const ok = await tryCall('file.write', { path, content: JSON.stringify({ exported: new Date().toISOString(), artists: list }, null, 1), atomic: true });
   if (!ok) throw new Error("Couldn't write " + path);
   return { path, count: list.length, withId: list.filter((a) => a.mbid).length };
@@ -52,7 +51,7 @@ export async function exportArtists() {
 /**
  * The library's genres (as the Genres tab lists them, with song counts), for
  * tools/fusion-artist-info.py --genres. Written to fusion-genres.json beside
- * fusion-artists.json in the profile folder.
+ * fusion-artists.json.
  */
 export async function exportGenres() {
   const pl = playlists.byName(COLLECTION) || playlists.activePlaylist;
@@ -73,10 +72,23 @@ export async function exportGenres() {
     }
   }
   const list = [...genres.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const prof = await tryCall('misc.getProfilePath');
-  const dir = (prof?.path || prof?.value || '').replace(/[\\/]$/, '');
-  const path = `${dir}\\fusion-genres.json`;
+  const path = await exportPath('fusion-genres.json');
   const ok = await tryCall('file.write', { path, content: JSON.stringify({ exported: new Date().toISOString(), genres: list }, null, 1), atomic: true });
   if (!ok) throw new Error("Couldn't write " + path);
   return { path, count: list.length };
+}
+
+/** Where the lists go: the export folder, else beside the script, else the profile. */
+export async function exportDir() {
+  const clean = (v) => String(v || '').trim().replace(/^"|"$/g, '').replace(/[\\/]+$/, '');
+  const chosen = clean(store.get('exportFolder'));
+  if (chosen) return chosen;
+  const script = clean(store.get('artistScript'));
+  if (/\.py$/i.test(script) && /[\\/]/.test(script)) return script.replace(/[\\/][^\\/]*$/, '');
+  const prof = await tryCall('misc.getProfilePath');
+  return clean(prof?.path || prof?.value);
+}
+
+export async function exportPath(name) {
+  return `${await exportDir()}\\${name}`;
 }

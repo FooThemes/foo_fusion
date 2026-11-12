@@ -56,8 +56,9 @@ DEFAULT_SETTINGS = """[fusion-artist-info]
 music_root = E:\\Music
 ; Artists without their own folder go into this subfolder of music_root.
 artists_folder = _Artists
-; The list Fusion exports (Settings > Export artist list), in foobar2000's profile.
-artist_list = C:\\path\\to\\foobar2000\\profile\\fusion-artists.json
+; The list Fusion exports (Settings > Export artist list). Not needed when Fusion
+; runs the script (it says where the list is); beside this script by default.
+artist_list = fusion-artists.json
 ; Your fanart.tv personal API key (https://fanart.tv/get-an-api-key/). Leave
 ; empty to use TheAudioDB's pictures only.
 fanart_api_key =
@@ -92,12 +93,16 @@ def load_settings():
     if not os.path.exists(SETTINGS):
         with open(SETTINGS, 'w', encoding='utf-8') as f:
             f.write(DEFAULT_SETTINGS)
-        print(f'Made {SETTINGS}.\nFill in music_root, artist_list, contact (and fanart_api_key), then run again.')
+        print(f'Made {SETTINGS}.\nFill in music_root and contact (and fanart_api_key), then run again.')
         sys.exit(1)
     cp = configparser.ConfigParser()
     cp.read(SETTINGS, encoding='utf-8')
     s = cp['fusion-artist-info']
     cfg = {k: s.get(k, '').strip() for k in ['music_root', 'artists_folder', 'artist_list', 'fanart_api_key', 'audiodb_key', 'contact', 'language', 'biography', 'genres_folder', 'genre_list', 'melodigging_folder', 'melodigging_styles', 'melodigging_use']}
+    # Relative list paths are beside this script.
+    for k in ('artist_list', 'genre_list'):
+        if cfg[k] and not os.path.isabs(cfg[k]):
+            cfg[k] = os.path.join(HERE, cfg[k])
     if not cfg['genre_list'] and cfg['artist_list']:
         cfg['genre_list'] = os.path.join(os.path.dirname(cfg['artist_list']), 'fusion-genres.json')
     return cfg
@@ -490,6 +495,8 @@ def main():
     ap.add_argument('--genres', action='store_true', help='genre information instead: genre.nfo files in genres_folder (with --refresh: rewrite or fill in existing ones)')
     ap.add_argument('--artists-folder', help='folder for artists without their own music folder (overrides artists_folder; Fusion passes its Artist information folder)')
     ap.add_argument('--genres-folder', help='folder for genre information (overrides genres_folder; Fusion passes its Genre information folder)')
+    ap.add_argument('--artist-list', help='the artist list Fusion exported (overrides artist_list)')
+    ap.add_argument('--genre-list', help='the genre list Fusion exported (overrides genre_list)')
     ap.add_argument('--pause', action='store_true', help='wait for Enter before closing (for runs started from Fusion)')
     args = ap.parse_args()
     try:
@@ -510,18 +517,28 @@ def run(args):
         cfg['artists_folder'] = os.path.abspath(args.artists_folder)
     if args.genres_folder:
         cfg['genres_folder'] = os.path.abspath(args.genres_folder)
-    for k in ('music_root', 'artist_list'):
+    if args.artist_list:
+        cfg['artist_list'] = os.path.abspath(args.artist_list)
+    if args.genre_list:
+        cfg['genre_list'] = os.path.abspath(args.genre_list)
+    elif args.artist_list:
+        cfg['genre_list'] = os.path.join(os.path.dirname(cfg['artist_list']), 'fusion-genres.json')
+    if args.genres:
+        need = ('music_root',)  # genres read the genre list (checked in genres())
+    else:
+        need = ('music_root', 'artist_list')
+    for k in need:
         if not cfg[k] or not os.path.exists(cfg[k]):
             sys.exit(f'Settings: {k} = "{cfg[k]}" not found. Edit {SETTINGS}.')
     if not cfg['contact']:
         sys.exit(f'Settings: please fill in "contact" in {SETTINGS} (MusicBrainz asks for it).')
 
+    if args.genres:
+        return genres(cfg, args)
     with open(cfg['artist_list'], encoding='utf-8') as f:
         artists = json.load(f)['artists']
     if args.report:
         return report(cfg, artists)
-    if args.genres:
-        return genres(cfg, args)
     if args.only:
         artists = [a for a in artists if a['name'].casefold() == args.only.casefold()] or [{'name': args.only, 'mbid': None}]
     state = {}

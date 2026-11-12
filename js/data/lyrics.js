@@ -16,6 +16,7 @@ import * as store from '../core/store.js';
 export const LYRIC_TAGS = ['UNSYNCED LYRICS', 'SYNCEDLYRICS', 'LYRICS', 'UNSYNCEDLYRICS', 'SYNCED LYRICS'];
 
 const cache = new Map(); // handle -> Promise<lyrics | null>
+store.subscribe((k) => (k === 'lyricsHideCredits' || k === 'lyricsFiles') && cache.clear());
 
 export function forgetLyrics(handle) {
   if (handle) cache.delete(handle);
@@ -79,11 +80,11 @@ async function find(track) {
   for (const base of bases) {
     if (!(await exists(`${base}.lrc`))) continue;
     const f = await readFile(`${base}.lrc`);
-    const parsed = f && parseLyrics(f.text);
+    const parsed = f && parseLyrics(f.text, track);
     if (parsed) return { ...parsed, source: f.source };
   }
   const tags = await readTags(track);
-  const parsedTags = tags.map((t) => ({ ...parseLyrics(t.text), source: t.source }));
+  const parsedTags = tags.map((t) => ({ ...parseLyrics(t.text, track), source: t.source }));
   const timedTag = parsedTags.find((p) => p.synced);
   if (timedTag) return timedTag;
   // Plain: .txt files (and untimed .lrc), then tags.
@@ -91,7 +92,7 @@ async function find(track) {
     for (const ext of ['.txt', '.lrc']) {
       if (!(await exists(base + ext))) continue;
       const f = await readFile(base + ext);
-      const parsed = f && parseLyrics(f.text);
+      const parsed = f && parseLyrics(f.text, track);
       if (parsed?.text.trim()) return { ...parsed, source: f.source };
     }
   }
@@ -102,7 +103,7 @@ async function find(track) {
  * LRC text: "[mm:ss.xx]line" (several stamps a line, [offset:±ms], and
  * word timings <mm:ss.xx> are understood). Anything without stamps is plain.
  */
-export function parseLyrics(raw) {
+export function parseLyrics(raw, song = null) {
   const text = String(raw || '').replace(/\r\n?/g, '\n');
   const stamp = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
   let offset = 0;
@@ -126,7 +127,8 @@ export function parseLyrics(raw) {
   }
   if (lines.length >= 2) {
     lines.sort((a, b) => a.time - b.time);
-    return { synced: true, lines, text: lines.map((l) => l.text).join('\n') };
+    const kept = store.get('lyricsHideCredits') === false ? lines : withoutCredits(lines, text, song);
+    return { synced: true, lines: kept, text: kept.map((l) => l.text).join('\n') };
   }
   // Plain: without any [ar:…]-style header lines.
   const plain = text
@@ -135,6 +137,30 @@ export function parseLyrics(raw) {
     .join('\n')
     .trim();
   return { synced: false, lines: [], text: plain };
+}
+
+// Credits some sources put in timed lines ("Lyrics by：…", "作词 : …"),
+// and a first line that is just "Title - Artist".
+const CREDIT = /^\s*(?:(?:lyrics|words|music|composed|composer|arranged|arrangement|arranger|produced|producer|written|mixed|mastered|recorded|vocals?|lyricist|programming|guitar|bass|drums|keyboards?|strings|chorus|op|sp|isrc)(?:\s+by)?|作词|作詞|作曲|编曲|編曲|制作人|製作人|制作|演唱|词|詞|曲|和声|吉他|贝斯|鼓|混音|母带|录音|监制|出品|发行|歌手|原唱|翻唱|作詞・作曲|作詞作曲)\s*[:：]/i;
+
+function withoutCredits(lines, raw, song) {
+  const header = (k) => (new RegExp(`^\\s*\\[${k}:([^\\]]*)\\]`, 'im').exec(raw)?.[1] || '').trim();
+  const loose = (s) => String(s || '').toLowerCase().replace(/\s*[([（【].*?[)\]）】]\s*/g, ' ').replace(/[^\p{L}\p{N}]+/gu, '');
+  const title = loose(song?.title || header('ti'));
+  const artist = loose(song?.artist || header('ar'));
+  const isTitleLine = (text) => {
+    const t = loose(text);
+    return !!t && !!title && t.includes(title) && (!artist || t.includes(artist) || t === title);
+  };
+  // Credits and the title line only count before the singing starts (and
+  // "X by:" style credits anywhere: they're never lyrics).
+  let singing = false;
+  return lines.filter((l, i) => {
+    if (CREDIT.test(l.text)) return false;
+    if (!singing && i < 6 && l.time < 30 && isTitleLine(l.text)) return false;
+    if (l.text) singing = true;
+    return true;
+  });
 }
 
 /** Index of the line being sung at this time (-1 before the first). */

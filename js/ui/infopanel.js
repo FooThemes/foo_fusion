@@ -354,6 +354,7 @@ export function mountInfoPanel(root) {
   player.on('track', render);
   player.on('state', () => tab === 'lyrics' && lyricsShown && !root.hidden && render());
   store.subscribe((k) => k === 'infoPanel' && apply());
+  store.subscribe((k) => (k === 'lyricsHideCredits' || k === 'lyricsFiles') && ((lyricsShown = null), render()));
   apply();
 }
 

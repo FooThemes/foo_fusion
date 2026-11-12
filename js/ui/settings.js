@@ -153,7 +153,10 @@ export function mountSettings(root, app) {
         toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
         wordsField(),
       ]),
-      section('Lyrics', [lyricsFilesField()]),
+      section('Lyrics', [
+        lyricsFilesField(),
+        toggle('Hide credits in timed lyrics', 'lyricsHideCredits', 'Lines like “Lyrics by：…”, “Composed by：…” or “作词 : …”, and a first line that’s just the title and artist, which some lyric sources add as timed lines.'),
+      ]),
     ],
     artists: () => [
       section('Artists', [

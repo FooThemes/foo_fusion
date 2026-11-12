@@ -91,7 +91,18 @@ export class Grid {
     scroller.addEventListener('pointerdown', (e) => e.target === scroller && stopReveal(), { signal });
     scroller.addEventListener('keydown', stopReveal, { signal });
     scroller.addEventListener('scroll', this.onScroll, { passive: true, signal });
-    this.ro = new ResizeObserver(rafThrottle(() => this.layout()));
+    // Resizing the window: when the number of columns changes, the tiles
+    // glide to their new places (as they do when a panel slides).
+    this.ro = new ResizeObserver(
+      rafThrottle(() => {
+        if (this.sliding || this.rowCount == null || store.get('animations') === false) return this.layout();
+        const w = this.scroller.clientWidth;
+        const min = this.kind === 'artists' ? store.get('artistTileSize') : store.get('tileSize');
+        const cols = Math.max(1, Math.floor((w - MARGIN * 2) / (min + PAD * 2)));
+        if (cols !== this.cols && w) this.#glideTo(null);
+        else this.layout();
+      }),
+    );
     this.ro.observe(scroller);
     // The side panels slide open and shut (the info panel, the sidebar): as
     // the slide starts, the tiles move once, straight to where they'll be at
@@ -255,7 +266,7 @@ export class Grid {
 
   /** Lay out for this width now, tiles gliding from where they are on screen
    *  to their new places (new ones fade in), as long as the panel's slide. */
-  #glideTo(width) {
+  #glideTo(width = null) {
     const l0 = this.layer.getBoundingClientRect();
     const before = new Map();
     for (const [i, node] of this.tiles) {
@@ -264,6 +275,7 @@ export class Grid {
     }
     this.forcedWidth = width;
     this.layout();
+    if (width == null) this.forcedWidth = null;
     if (store.get('animations') === false) return;
     const l1 = this.layer.getBoundingClientRect();
     for (const [i, node] of this.tiles) {

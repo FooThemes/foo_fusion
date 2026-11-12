@@ -13,10 +13,10 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes, warmArt, refreshArt, refreshArtist } from '../data/artwork.js';
+import { bindArt, albumArtTypes, warmArt, refreshArtist } from '../data/artwork.js';
 import { ArtistHero } from './artisthero.js';
 import { GenreHero } from './genrehero.js';
-import { musicArtistFolder } from '../data/artistinfo.js';
+import { musicArtistFolder, onPictureRevoked } from '../data/artistinfo.js';
 import { trackContextMenu, handlesOf, refreshAlbums } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 import { genreFiles, forgetGenreInfo } from '../data/genreinfo.js';
@@ -25,6 +25,14 @@ import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
 
 const genreTiles = new Map(); // genre|size -> picture or collage URL (null: none)
+// Whether or not a grid is showing: URLs that are no longer valid go.
+window.addEventListener('fusion:genrerefresh', () => {
+  forgetCollages();
+  genreTiles.clear();
+});
+onPictureRevoked((url) => {
+  for (const [k, v] of genreTiles) if (v === url) genreTiles.delete(k);
+});
 const MARGIN = 32; // left/right margin: with the tile padding (PAD), covers line up with the tabs above
 const PAD = 8; // gap around each cover
 const OVERSCAN = 2; // extra rows rendered above/below the viewport
@@ -46,25 +54,31 @@ export class Grid {
     this.tileH = 210;
     this.kind = 'albums';
     this.top = 16; // where the first row starts (below the artist header, if any)
+    // Everything this grid listens to outside its own nodes ends with it
+    // (see destroy), or every visit to Songs and back would keep a grid alive.
+    this.ac = new AbortController();
+    const signal = this.ac.signal;
     this.hero = new ArtistHero(this);
     this.genreHero = new GenreHero(this);
     this.layer.append(this.hero.node, this.genreHero.node);
 
     // Genre pictures or information changed (the script ran, the folder moved).
-    window.addEventListener('fusion:genrerefresh', () => {
-      forgetCollages();
-      genreTiles.clear();
-      if (this.kind !== 'genres') return;
-      for (const node of this.tiles.values()) delete node.querySelector('.art img').dataset.artToken;
-      this.refreshHeads();
-    });
+    window.addEventListener(
+      'fusion:genrerefresh',
+      () => {
+        if (this.kind !== 'genres') return;
+        for (const node of this.tiles.values()) delete node.querySelector('.art img').dataset.artToken;
+        this.refreshHeads();
+      },
+      { signal },
+    );
 
     this.onScroll = rafThrottle(() => this.render());
     const stopReveal = () => (this.revealUntil = 0);
-    scroller.addEventListener('wheel', stopReveal, { passive: true });
-    scroller.addEventListener('pointerdown', (e) => e.target === scroller && stopReveal());
-    scroller.addEventListener('keydown', stopReveal);
-    scroller.addEventListener('scroll', this.onScroll, { passive: true });
+    scroller.addEventListener('wheel', stopReveal, { passive: true, signal });
+    scroller.addEventListener('pointerdown', (e) => e.target === scroller && stopReveal(), { signal });
+    scroller.addEventListener('keydown', stopReveal, { signal });
+    scroller.addEventListener('scroll', this.onScroll, { passive: true, signal });
     this.ro = new ResizeObserver(rafThrottle(() => this.layout()));
     this.ro.observe(scroller);
 
@@ -92,8 +106,12 @@ export class Grid {
   }
 
   destroy() {
+    this.ac.abort();
     this.ro.disconnect();
-    this.scroller.removeEventListener('scroll', this.onScroll);
+    clearTimeout(this.warmTimer);
+    this.hero.destroy();
+    this.genreHero.destroy();
+    this.panel.destroy();
     this.sizer.remove();
   }
 

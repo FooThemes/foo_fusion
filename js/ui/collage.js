@@ -4,14 +4,11 @@
 import { artUrl } from '../data/artwork.js';
 import { pictureUrl } from '../data/artistinfo.js';
 
-const pictures = new Map(); // file path + size -> Promise<blob URL>
 const collages = new Map(); // key -> Promise<blob URL | null>
 
 /** The genre's own picture, scaled for display (cached). */
 export function genrePictureUrl(file, px) {
-  const key = `${file.path}|${px}`;
-  if (!pictures.has(key)) pictures.set(key, pictureUrl(file, px));
-  return pictures.get(key);
+  return pictureUrl(file, px); // cached there
 }
 
 /** A collage of these tracks' covers, w × h CSS pixels (cached). */
@@ -25,7 +22,8 @@ export function collageUrl(handles, w, h) {
 }
 
 export function forgetCollages() {
-  pictures.clear();
+  // Free the collages' image data (tiles showing one keep their picture).
+  for (const p of collages.values()) p.then((url) => url && URL.revokeObjectURL(url));
   collages.clear();
 }
 

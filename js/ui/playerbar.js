@@ -10,7 +10,7 @@ import { player, ORDER_LABELS } from '../data/player.js';
 import { nowPlayingUrl, isRawUrl, refreshArt } from '../data/artwork.js';
 import { view } from '../data/view.js';
 import { playlists } from '../data/playlists.js';
-import { showMenu, showAppMenu, contextMenu } from './menus.js';
+import { showAppMenu, contextMenu } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { heartButton, setHeart } from './heart.js';
 import { favourites } from '../data/favourites.js';

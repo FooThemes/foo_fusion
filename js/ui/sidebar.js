@@ -6,7 +6,7 @@ import * as store from '../core/store.js';
 import { playlists, COLLECTION, FAVORITES } from '../data/playlists.js';
 import { player } from '../data/player.js';
 import { view } from '../data/view.js';
-import { playlistMenu, promptText, folderMenu } from './menus.js';
+import { playlistMenu, folderMenu } from './menus.js';
 import { folders } from '../data/folders.js';
 import { newPlaylistDialog } from './autoplaylist.js';
 import { draggablePlaylist, playlistDropTarget, folderDropTarget, draggableFolder } from './dnd.js';

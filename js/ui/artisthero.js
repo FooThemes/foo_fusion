@@ -50,20 +50,21 @@ export class ArtistHero {
         { label: 'Refresh artist information', run: () => (refreshArtist(this.name, this.handle ? [this.handle] : []), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
       ]);
     });
-    store.subscribe((k) => {
+    this.offStore = store.subscribe((k) => {
       if (!VERSION_KEYS.includes(k) || !this.name) return;
       this.key = null;
       this.found = false;
       this.show(this.name, this.handle);
     });
     // Read the artist's files again (right-click > Refresh, or Settings).
-    window.addEventListener('fusion:artistrefresh', (e) => {
+    this.onRefresh = (e) => {
       const name = e.detail?.name;
       if (!this.name || (name && name.toLowerCase() !== this.name.toLowerCase())) return;
       this.key = null;
       this.found = false;
       this.show(this.name, this.handle);
-    });
+    };
+    window.addEventListener('fusion:artistrefresh', this.onRefresh);
   }
 
   /** Read an artist's files and pictures ahead of opening their page. */
@@ -74,6 +75,11 @@ export class ArtistHero {
   }
 
   /** handle: one of the artist's tracks (for their own music folder). */
+  destroy() {
+    this.offStore();
+    window.removeEventListener('fusion:artistrefresh', this.onRefresh);
+  }
+
   async show(name, handle = null) {
     const key = `${name}|${handle || ''}`;
     if (key === this.key) return;

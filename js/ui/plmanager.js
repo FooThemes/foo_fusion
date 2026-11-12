@@ -6,7 +6,7 @@
 
 import { el, clear, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { call, tryCall } from '../core/bridge.js';
+import { call } from '../core/bridge.js';
 import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';

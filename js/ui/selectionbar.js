@@ -5,7 +5,7 @@ import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view } from '../data/view.js';
-import { showMenu, addToItems } from './menus.js';
+import { addToItems } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { favourites } from '../data/favourites.js';
 import { toast } from './toast.js';

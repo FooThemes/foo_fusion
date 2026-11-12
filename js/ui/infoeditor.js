@@ -150,6 +150,7 @@ async function edit(kind, name, dir, refresh) {
   showDates();
 
   // --- pictures
+  const previews = []; // blob URLs of dropped or pasted pictures, freed when the editor closes
   const changes = new Map(); // slot key -> { source: path | null, bytes: base64 | null, ext } | 'remove'
   const slots = kind.images.map((slot) => {
     const existing = [slot.base, ...slot.also].map((b) => images.find((im) => base(im.name) === b)).find(Boolean) || null;
@@ -181,7 +182,9 @@ async function edit(kind, name, dir, refresh) {
     const fromFile = async (file) => {
       if (!file || !/^image\//.test(file.type)) return toast('That isn’t a picture');
       const bytes = await toBase64(file);
-      take({ bytes, ext: extOf(file.name) || '.' + (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg') }, URL.createObjectURL(file));
+      const preview = URL.createObjectURL(file);
+      previews.push(preview);
+      take({ bytes, ext: extOf(file.name) || '.' + (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg') }, preview);
     };
     const fileInput = el('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => fromFile(fileInput.files[0]) });
     box.addEventListener('click', choose);
@@ -252,6 +255,7 @@ async function edit(kind, name, dir, refresh) {
     }
     return true;
   });
+  previews.forEach((u) => URL.revokeObjectURL(u));
   if (saved) {
     refresh();
     toast('Saved');

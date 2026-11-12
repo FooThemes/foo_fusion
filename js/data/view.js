@@ -218,9 +218,10 @@ class View extends Emitter {
     // switch first and set the page after.
     if (playlists.activePlaylist?.guid !== pl.guid) {
       await new Promise((resolve) => {
-        const off = playlists.on('active', () => (off?.(), resolve()));
+        const done = () => (off(), clearTimeout(timer), resolve());
+        const off = playlists.on('active', done);
+        const timer = setTimeout(done, 1500);
         playlists.activate(pl.index);
-        setTimeout(resolve, 1500);
       });
     }
     if (this.filter) {

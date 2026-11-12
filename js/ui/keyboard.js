@@ -3,7 +3,7 @@
 import { tryCall } from '../core/bridge.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
-import { runMainMenu, promptText, runSelectionCommand } from './menus.js';
+import { runSelectionCommand } from './menus.js';
 import { newPlaylistDialog } from './autoplaylist.js';
 
 export const SHORTCUTS = [

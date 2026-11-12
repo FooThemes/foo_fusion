@@ -8,7 +8,7 @@ import { call } from '../core/bridge.js';
 import { view } from '../data/view.js';
 import { player, ORDER_LABELS } from '../data/player.js';
 import { playlists } from '../data/playlists.js';
-import { showMenu, addToItems, renamePlaylist, deletePlaylist } from './menus.js';
+import { addToItems, renamePlaylist, deletePlaylist } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { editArtist, editGenre } from './infoeditor.js';
 import { editAutoplaylist } from './autoplaylist.js';

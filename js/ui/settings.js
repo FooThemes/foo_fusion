@@ -5,7 +5,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { ACCENTS } from '../core/store.js';
 import { tryCall, on } from '../core/bridge.js';
-import { runMainMenu, confirmDialog, showMenu, foobarMenuItems, promptPath } from './menus.js';
+import { confirmDialog, showMenu, foobarMenuItems, promptPath } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { forgetLyrics } from '../data/lyrics.js';
 import { refreshArt } from '../data/artwork.js';

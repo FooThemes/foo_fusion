@@ -104,7 +104,7 @@ export async function artistDetails(name, handle = null) {
 
 /** Read the artist's (or every artist's) information again. */
 export function forgetArtistInfo(name = null) {
-  pictures.clear();
+  releaseAll();
   if (!name) {
     found.clear();
     listing.clear();
@@ -190,18 +190,45 @@ export function pictureUrl(file, px, { trim = false } = {}) {
   // pictures at once instead of reading and scaling the files again.
   const key = `${file.path}|${file.size || ''}|${px || 0}|${trim}`;
   let p = pictures.get(key);
-  if (!p) {
-    p = makePictureUrl(file, px, trim);
+  if (p) {
+    // Most recently used last, so the ones dropped are the ones not seen lately.
+    pictures.delete(key);
     pictures.set(key, p);
-    p.then((u) => u || pictures.delete(key));
-    if (pictures.size > 300) pictures.delete(pictures.keys().next().value);
+    return p;
+  }
+  p = makePictureUrl(file, px, trim);
+  pictures.set(key, p);
+  p.then((u) => u || pictures.delete(key));
+  while (pictures.size > 300) {
+    const [old, gone] = pictures.entries().next().value;
+    pictures.delete(old);
+    release(gone);
   }
   return p;
 }
 
+// A picture dropped from the cache: its memory is freed (a blob URL holds
+// the image's bytes until it is revoked), and whoever remembered the URL is
+// told to forget it. Pictures already on screen stay as they are.
+const revokeListeners = new Set();
+export function onPictureRevoked(fn) {
+  revokeListeners.add(fn);
+}
+function release(promise) {
+  promise.then((url) => {
+    if (!url) return;
+    for (const fn of revokeListeners) fn(url);
+    URL.revokeObjectURL(url);
+  });
+}
+function releaseAll() {
+  for (const p of pictures.values()) release(p);
+  pictures.clear();
+}
+
 /** Forget the scaled pictures (files replaced or refreshed). */
 export function forgetPictures() {
-  pictures.clear();
+  releaseAll();
 }
 
 async function makePictureUrl(file, px, trim) {

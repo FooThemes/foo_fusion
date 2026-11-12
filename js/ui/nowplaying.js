@@ -28,11 +28,12 @@ export class NowPlaying {
       e.preventDefault();
       contextMenu({ mode: 'nowPlaying' }, [{ label: 'Refresh artwork', run: () => refreshArt([handle]) }]);
     });
-    store.subscribe((k) => VERSION_KEYS.includes(k) && this.render());
-    window.addEventListener('fusion:artrefresh', () => {
+    this.offStore = store.subscribe((k) => VERSION_KEYS.includes(k) && this.render());
+    this.onArtRefresh = () => {
       this.artUrl = undefined;
       this.render();
-    });
+    };
+    window.addEventListener('fusion:artrefresh', this.onArtRefresh);
     this.title = el('h2.np-title');
     this.artist = el('div.np-artist');
     this.album = el('div.np-album');
@@ -52,6 +53,8 @@ export class NowPlaying {
   }
 
   destroy() {
+    this.offStore();
+    window.removeEventListener('fusion:artrefresh', this.onArtRefresh);
     this.offs.forEach((off) => off());
     this.wrap.remove();
   }

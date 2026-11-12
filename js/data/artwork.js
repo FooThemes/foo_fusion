@@ -10,7 +10,7 @@ import * as store from '../core/store.js';
 import { forgetColours } from './albumcolours.js';
 import { logInfo } from '../core/log.js';
 import { artPatterns, pickByPatterns } from './artpatterns.js';
-import { artistFiles, pictureUrl, forgetArtistInfo } from './artistinfo.js';
+import { artistFiles, pictureUrl, forgetArtistInfo, onPictureRevoked } from './artistinfo.js';
 import { cachedUrl, isCachedAlpha, forget, storeCover, knownCover, rememberCover, clearArtCache, forgetDir } from './artcache.js';
 
 const cache = new Map(); // key -> Promise<string|null>
@@ -274,9 +274,27 @@ export function albumArtTypes(separateDiscs) {
 const infoUrls = new Map(); // picture path + size -> Promise<blob URL>
 function infoUrl(pick, px) {
   const key = `${pick.path}|${px}`;
-  if (!infoUrls.has(key)) infoUrls.set(key, pictureUrl(pick, px).then((u) => (u && /\.(png|gif|webp)$/i.test(pick.name) && rawUrls.add(u), u)));
+  if (!infoUrls.has(key)) {
+    const p = pictureUrl(pick, px).then((u) => (u && /\.(png|gif|webp)$/i.test(pick.name) && rawUrls.add(u), u));
+    p.url = null;
+    p.then((u) => (p.url = u));
+    infoUrls.set(key, p);
+  }
   return infoUrls.get(key);
 }
+// A scaled picture was dropped from memory: nothing here may hand its URL
+// out again (it would show as a broken image).
+onPictureRevoked((url) => {
+  rawUrls.delete(url);
+  loadedUrls.delete(url);
+  keepAlive.delete(url);
+  for (const [k, p] of infoUrls) if (p.url === url) infoUrls.delete(k);
+  for (const [k, v] of resolved) {
+    if (v !== url) continue;
+    resolved.delete(k);
+    cache.delete(k);
+  }
+});
 
 /** URL of a cover in the folder above a disc folder, or null. */
 export function parentCoverUrl(handle, cssSize) {
@@ -449,6 +467,9 @@ export function clearCache() {
   clearArtCache();
   dirPick.clear();
   cache.clear();
+  // Covers read from the folder above a disc folder are blob URLs made here:
+  // free their image data (covers on screen keep their picture).
+  for (const url of parentResolved.values()) if (url?.startsWith('blob:')) (rawUrls.delete(url), URL.revokeObjectURL(url));
   parentCache.clear();
   parentResolved.clear();
   dirKind.clear();

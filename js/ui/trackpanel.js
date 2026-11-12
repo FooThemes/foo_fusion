@@ -14,8 +14,8 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes, preloadArt, refreshArt } from '../data/artwork.js';
-import { showMenu, addToItems, trackContextMenu, handlesOf, refreshAlbums } from './menus.js';
+import { bindArt, albumArtTypes, preloadArt } from '../data/artwork.js';
+import { addToItems, trackContextMenu, refreshAlbums } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { prefetchWave } from './waveform.js';
 import { RowSelector } from './rowselect.js';
@@ -58,7 +58,8 @@ export class TrackPanel {
       if (this.group) trackContextMenu(this.visibleRows(), this.#refreshItems(this.rows), { select: false });
     });
     // Covers loaded again ("Refresh artwork"): colours from the new cover.
-    window.addEventListener('fusion:artrefresh', () => this.group && this.#renderCover());
+    this.onArtRefresh = () => this.group && this.#renderCover();
+    window.addEventListener('fusion:artrefresh', this.onArtRefresh);
     this.coverLabel = el('div.tp-cover-label', { hidden: true });
     this.title = el('h2.tp-title.ellipsis');
     // The title too (the whole album, nothing selected).
@@ -86,7 +87,7 @@ export class TrackPanel {
       ),
     );
     this.selector = new RowSelector(this.list, () => this.visibleRows());
-    favourites.on('change', ({ handles, state }) => refreshHearts(this.list, handles, state));
+    this.offFav = favourites.on('change', ({ handles, state }) => refreshHearts(this.list, handles, state));
     draggableRows(this.list, (e) => {
       const r = rowOf(e);
       return r == null ? null : selectionOr(r);
@@ -175,6 +176,12 @@ export class TrackPanel {
     this.node.dataset.bg = store.get('listBackground');
     this.refreshHead(group);
     this.#load();
+  }
+
+  destroy() {
+    this.group = null; // pending retries and loads stop here
+    this.offFav();
+    window.removeEventListener('fusion:artrefresh', this.onArtRefresh);
   }
 
   close() {

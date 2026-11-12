@@ -53,13 +53,14 @@ export class GenreHero {
         { label: 'Refresh genre information', run: () => (forgetGenreInfo(), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
       ]);
     });
-    window.addEventListener('fusion:genrerefresh', () => {
+    this.onRefresh = () => {
       if (!this.name) return;
       const name = this.name;
       this.name = null;
       this.key = null;
       this.show(name);
-    });
+    };
+    window.addEventListener('fusion:genrerefresh', this.onRefresh);
   }
 
   /** Read a genre's files and pictures ahead of opening its page. */
@@ -70,6 +71,10 @@ export class GenreHero {
   }
 
   /** Called whenever the genre page's albums change (heads arriving too). */
+  destroy() {
+    window.removeEventListener('fusion:genrerefresh', this.onRefresh);
+  }
+
   async show(name) {
     if (!name) return this.#hide();
     const sig = `${name}|${view.groups.length}|${view.groups.filter((g) => g.head).length}`;

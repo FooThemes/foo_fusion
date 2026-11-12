@@ -251,6 +251,14 @@ export async function installMock() {
       emit('playlist:created', { index: pls.length - 1, guid: pls.at(-1).guid, name: pls.at(-1).name });
       return { index: pls.length - 1, guid: pls.at(-1).guid };
     },
+    'library.getRandomTracks': (p) => ({ tracks: lib.slice(0, p.count || 10).map((t) => ({ ...t })) }),
+    'metadata.readBatch': (p) => ({ results: p.paths.map((path) => ({ path, success: true, tags: { ARTIST: 'x', TITLE: 'x', GENRE: 'x', 'ALBUM ARTIST': 'x', TITLE_ORIG: 'x', MOOD: 'x', LYRICS: 'x' } })) }),
+    'library.getFieldValues': (p) => {
+      const counts = new Map();
+      for (const t of lib) for (const v of String({ genre: t.genre, artist: t.artist, album: t.album, date: t.date }[p.field] || '').split(/;\s*/).filter(Boolean)) counts.set(v, (counts.get(v) || 0) + 1);
+      return { values: [...counts].sort((a, b) => b[1] - a[1]).map(([name, trackCount]) => ({ name, trackCount })) };
+    },
+    'titleformat.eval': (p) => ({ result: /\$nope/.test(p.pattern) ? (() => { throw new Error('bad'); })() : p.pattern.replace(/%album artist%/g, 'Atlas Songs').replace(/%[^%]*%/g, 'x') }),
     'library.query': (p) => {
       const q = p.query || '';
       if (/SORT\s+BY/i.test(q) || (q.match(/\(/g) || []).length !== (q.match(/\)/g) || []).length || (q.match(/"/g) || []).length % 2) throw Object.assign(new Error('bad query'), { mockCode: 'INVALID_PARAMS' });
@@ -524,11 +532,12 @@ export async function installMock() {
     },
     'metadata.readByPath': (p) => {
       const t = lib.find((x) => x.handle === p.path) || lib[0];
-      return { path: p.path, metadata: { title: [t.title], artist: [t.artist], album: [t.album], date: [String(t.date)], genre: (t.genre || '').split('; '), tracknumber: [String(t.trackNumber)], musicbrainz_trackid: ['0000-1111'], replaygain_track_gain: ['-7.12 dB'] } };
+      return { path: p.path, metadata: { ...(t.trackNumber === 3 ? { 'UNSYNCED LYRICS': ['A plain verse, line one\nLine two of it\n\nChorus here'] } : {}), title: [t.title], artist: [t.artist], album: [t.album], date: [String(t.date)], genre: (t.genre || '').split('; '), tracknumber: [String(t.trackNumber)], musicbrainz_trackid: ['0000-1111'], replaygain_track_gain: ['-7.12 dB'] } };
     },
     'titleformat.evalFields': (p) => {
       const t = lib.find((x) => x.handle === p.path);
-      return { path: p.path, infoAvailable: true, ...Object.fromEntries(Object.entries(p.fields).map(([k, pat]) => [k, t ? tfEval(pat, t) : ''])) };
+      const lyricPath = (pat) => (pat.startsWith('$directory_path') ? t.handle.replace(/\.[^.\\]+$/, '') : /\\lyrics\\/.test(pat) ? `${pat.split('\\lyrics\\')[0]}\\lyrics\\${t.artist} - ${t.title}` : null);
+      return { path: p.path, infoAvailable: true, ...Object.fromEntries(Object.entries(p.fields).map(([k, pat]) => [k, t ? (lyricPath(pat) ?? tfEval(pat, t)) : ''])) };
     },
     'titleformat.evalBatch': (p) => {
       const byPath = new Map(lib.map((t) => [t.handle, t]));
@@ -548,7 +557,7 @@ export async function installMock() {
         : p.directory.includes('_Artists') || /^C:\\Music\\[^\\]+$/.test(p.directory)
         ? { images: [{ name: 'artist.png', path: p.directory + '\\artist.png', size: 5000 }, { name: 'fanart.png', path: p.directory + '\\fanart.png', size: 9000 }] }
         : ({ images: [{ name: 'cover.jpg', path: p.directory + '\\cover.jpg', size: 1000 + (p.directory.length * 37) % 900 }] }),
-    'file.exists': (p) => ({ exists: /_Genres\\(Rock|Jazz)\\genre\.nfo$/.test(p.path) || (p.path.includes('_Artists') || /^C:\\Music\\[^\\]+\\artist\.nfo$/.test(p.path)) && p.path.endsWith('artist.nfo'), isFile: true, isDirectory: false }),
+    'file.exists': (p) => ({ exists: /\\02 [^\\]*\.lrc$/.test(p.path) || /_Genres\\(Rock|Jazz)\\genre\.nfo$/.test(p.path) || (p.path.includes('_Artists') || /^C:\\Music\\[^\\]+\\artist\.nfo$/.test(p.path)) && p.path.endsWith('artist.nfo'), isFile: true, isDirectory: false }),
     'webview.getSource': () => ({ source: 'activeTemplate', directory: 'C:\\fb\\profile\\webview-ui\\fusion', templateName: 'fusion' }),
     'file.mkdir': (p) => ((window.__mockOps ||= []).push('mkdir ' + p.path), {}),
     'file.copy': (p) => ((window.__mockOps ||= []).push(`copy ${p.source} -> ${p.destination}`), {}),
@@ -557,6 +566,8 @@ export async function installMock() {
     'shell.showInExplorer': (p) => (console.info('[mock] explorer', p.path), {}),
     'file.write': (p) => ((window.__mockWrites ||= []).push({ path: p.path, bytes: (p.content || '').length, content: /\.nfo$/.test(p.path) ? p.content : undefined }), { bytesWritten: (p.content || '').length }),
     'file.read': (p) =>
+      /\.lrc$/.test(p.path)
+        ? { content: '[ar:Someone]\n[ti:Song]\n' + Array.from({ length: 40 }, (_, i) => `[00:${String(Math.floor(i * 4 / 60)).padStart(2, '0')}:${String((i * 4) % 60).padStart(2, '0')}.00]Line number ${i + 1} of the song`).join('\n').replace(/\[00:(\d\d):/g, '[$1:') } :
       p.path.endsWith('logo.png') && window.__mockLogo
         ? { content: window.__mockLogo }
         : p.path.endsWith('genre.nfo')
@@ -574,7 +585,14 @@ Second paragraph.</description><wikipedia>https://en.wikipedia.org/wiki/Rock_mus
       items: ['File', 'Edit', 'View', 'Playback', 'Library', 'Help'].map((l) => ({ type: 'submenu', label: l, path: l, children: [{ type: 'command', label: `${l} command`, path: `${l}/${l} command`, enabled: true }] })),
     }),
     'menu.runMainMenuCommand': (p) => (console.info('[mock] main menu:', p.command), {}),
-    'menu.getContextMenu': () => ({ mode: 'selection', items: [{ type: 'command', label: 'Open containing folder', path: 'Open containing folder', commandId: 1 }], targetKey: 'x' }),
+    'menu.getContextMenu': () => ({
+      mode: 'selection',
+      items: [
+        { type: 'command', label: 'Open containing folder', path: 'Open containing folder', commandId: 1 },
+        { type: 'popup', label: 'OpenLyrics', children: [{ type: 'command', label: 'Search for lyrics', path: 'OpenLyrics/Search for lyrics', commandId: 50 }, { type: 'command', label: 'Edit lyrics', path: 'OpenLyrics/Edit lyrics', commandId: 51 }] },
+      ],
+      targetKey: 'x',
+    }),
     'menu.runContextCommandById': (p) => {
       // As the real host: the two safety checks go together.
       if (!!p.expectPath !== !!p.expectTarget) throw Object.assign(new Error('expectPath and expectTarget go together'), { code: 'INVALID_PARAMS' });

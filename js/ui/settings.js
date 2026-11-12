@@ -7,6 +7,7 @@ import { ACCENTS } from '../core/store.js';
 import { tryCall, on } from '../core/bridge.js';
 import { runMainMenu, confirmDialog, showMenu, foobarMenuItems, promptPath } from './menus.js';
 import { dropdown } from './dropdown.js';
+import { forgetLyrics } from '../data/lyrics.js';
 import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
 import { forgetGenreInfo } from '../data/genreinfo.js';
@@ -152,6 +153,7 @@ export function mountSettings(root, app) {
         toggle('Grey out edition tags', 'dimEditionTags', 'Dims an ending like “(Single)” or “[Live]” in titles when it contains one of these words'),
         wordsField(),
       ]),
+      section('Lyrics', [lyricsFilesField()]),
     ],
     artists: () => [
       section('Artists', [
@@ -388,6 +390,22 @@ export function mountSettings(root, app) {
   }
 
   // Edition-tag words as removable chips, with a box to add more.
+  // Where lyric files are looked for (title formatting, one a line).
+  function lyricsFilesField() {
+    const box = el('textarea.set-hex.set-patterns', { rows: 3, spellcheck: false, value: store.get('lyricsFiles') || '', 'aria-label': 'Lyric files' });
+    box.addEventListener('change', () => {
+      store.set('lyricsFiles', box.value.split('\n').map((l) => l.trim()).filter(Boolean).join('\n'));
+      forgetLyrics();
+    });
+    return el(
+      'div.set-folder',
+      null,
+      el('span.set-label', null, el('span', { text: 'Lyric files' }), el('small', { text: 'Where the Lyrics tab looks, one title formatting pattern a line, without the extension (.lrc, then .txt). %profile% is foobar2000’s profile folder. The second line is where foo_openlyrics saves by default; change it if you set it to save elsewhere. Lyrics in tags (UNSYNCED LYRICS, LYRICS…) are read too.' })),
+      box,
+      el('div.set-words-foot', null, el('small'), el('button.set-mini', { text: 'Defaults', onclick: () => (store.set('lyricsFiles', store.defaultOf('lyricsFiles')), forgetLyrics()) })),
+    );
+  }
+
   function wordsField() {
     const words = () =>
       String(store.get('dimWords') || '')

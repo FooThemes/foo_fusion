@@ -762,6 +762,70 @@
   border-color: #c42b1c;
 }
 
+/* Pattern completion (autoplaylist dialog). */
+.pa-list {
+  position: fixed;
+  z-index: 320;
+  min-width: 240px;
+  max-width: 420px;
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 4px 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  font-size: 13px;
+}
+
+.pa-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 12px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.pa-item.on {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pa-label {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pa-detail {
+  margin-left: auto;
+  color: var(--text2);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pa-item.on .pa-detail {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.pa-status {
+  min-height: 16px;
+  margin: -6px 0 8px;
+  padding-left: 118px;
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.pa-status.ok {
+  color: var(--accent);
+}
+
+.pa-status.warn {
+  color: #c42b1c;
+}
+
 .ap-error {
   margin: -6px 0 10px;
   padding-left: 118px;
@@ -1602,4 +1666,71 @@ body.pdragging * {
 
 .info-tags .info-table dd {
   line-height: 1.4;
+}
+
+/* Lyrics tab: timed lines light up as they're sung. */
+.info-lyrics {
+  padding-bottom: 40vh; /* room to keep the last lines a third of the way down */
+}
+
+.lyr-lines {
+  display: grid;
+  gap: 2px;
+}
+
+.lyr-line {
+  margin: 0;
+  padding: 4px 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text2);
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+  transform-origin: left center;
+}
+
+.lyr-line:hover {
+  color: var(--text);
+}
+
+.lyr-line.now {
+  color: var(--text);
+  font-weight: 600;
+  transform: scale(1.04);
+}
+
+.lyr-plain {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.lyr-source {
+  margin: 18px 0 4px;
+  font-size: 12px;
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyr-tools {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.lyr-btn {
+  padding: 0;
+  font-size: 13px;
+}
+
+.set-patterns {
+  width: 100%;
+  resize: vertical;
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 12px;
+  text-transform: none;
+  white-space: pre;
+  overflow-x: auto;
 }

@@ -68,6 +68,9 @@ const DEFAULTS = {
   largeNowPlayingArt: false,
   infoPanel: false,
   infoTab: 'details',
+  // Where lyric files are, one title formatting pattern a line, without the
+  // extension (.lrc, then .txt): beside the song, then foo_openlyrics' default.
+  lyricsFiles: '$directory_path(%path%)\\%filename%\n%profile%\\lyrics\\$replace([%artist% - ][%title%],/,-,\\,-,<,-,>,-,:,-,",-,|,-,?,-,*,-)',
   selectionBar: true,
   smoothScroll: true,
   waveformSeekbar: false,

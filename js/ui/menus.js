@@ -287,6 +287,19 @@ export async function runSelectionCommand(label) {
 }
 
 /** Run a foobar2000 context-menu command (by its label) on these songs. */
+/** Whether the context menu for these songs has this command (e.g. a component's). */
+const hasCache = new Map();
+export async function hasHandlesCommand(label, handles) {
+  if (hasCache.get(label)) return true;
+  if (!handles?.length) return false;
+  const res = await tryCall('menu.getContextMenu', { mode: 'handles', handles, withAvailability: false, i18n: false });
+  const want = label.toLowerCase();
+  const find = (nodes) => (nodes || []).some((n) => (n.type === 'command' && clean(n.label).toLowerCase() === want) || find(n.children));
+  const has = find(res?.items);
+  if (has) hasCache.set(label, true);
+  return has;
+}
+
 export async function runHandlesCommand(label, handles) {
   if (!handles?.length) return false;
   const res = await tryCall('menu.getContextMenu', { mode: 'handles', handles, withAvailability: false, i18n: false });

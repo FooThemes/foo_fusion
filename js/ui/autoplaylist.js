@@ -14,6 +14,7 @@ import { call, tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
 import { playlists, COLLECTION, FAVORITES } from '../data/playlists.js';
 import { toast } from './toast.js';
+import { attachAssist } from './patternassist.js';
 
 const HELP = {
   query: { file: 'Query Syntax Help.html', title: 'Query syntax' },
@@ -180,6 +181,11 @@ function showDialog(opts) {
       back.remove();
       resolve(v);
     };
+    // Completion, and a line saying what foobar2000 makes of each pattern.
+    const queryStatus = el('div.pa-status');
+    const sortStatus = el('div.pa-status');
+    if (!managed) attachAssist(query, 'query', queryStatus).refresh();
+    if (!managed) attachAssist(sort, 'format', sortStatus).refresh();
     // A wrong query stays red (and says why) until it's changed.
     const queryError = el('div.ap-error', { hidden: true });
     const bad = (msg) => {
@@ -255,7 +261,9 @@ function showDialog(opts) {
       null,
       field('Query pattern', query, 'query'),
       queryError,
+      queryStatus,
       field('Sort pattern', sort, 'sort'),
+      sortStatus,
       el('label.ap-check', null, forced, el('span', { text: 'Force-sorted' }), el('span.ap-hint', { text: 'keeps the sort order as songs are added; the playlist can’t be reordered by hand' })),
     );
     function setMode(k) {

@@ -54,9 +54,25 @@ export function mountPlayerBar(root, app) {
   const play = el('button.pb-play', { title: 'Play', onclick: () => player.playOrPause() }, icon('play'));
   const next = el('button.btn-icon', { title: 'Next', onclick: () => player.next() }, icon('next'));
   const volBtn = el('button.btn-icon', { title: 'Volume', onclick: toggleVolume }, icon('volume'));
+  // Lyrics: opens the track info panel on its Lyrics tab (or closes it).
+  const lyricsBtn = el(
+    'button.btn-icon.pb-lyrics',
+    {
+      title: 'Lyrics',
+      onclick: () => {
+        const showing = store.get('infoPanel') && store.get('infoTab') === 'lyrics';
+        if (!showing) store.set('infoTab', 'lyrics');
+        store.set('infoPanel', !showing);
+      },
+    },
+    icon('lyrics'),
+  );
+  const markLyrics = () => lyricsBtn.classList.toggle('on', !!store.get('infoPanel') && store.get('infoTab') === 'lyrics');
+  store.subscribe((k) => (k === 'infoPanel' || k === 'infoTab') && markLyrics());
+  markLyrics();
   // The original's "…" opened the settings panel; right-click keeps the menu.
   const more = el('button.btn-icon', { 'data-settings-toggle': '', title: 'Settings (right-click for the menu)', onclick: () => app.toggleSettings(), oncontextmenu: (e) => (e.preventDefault(), mainMenu()) }, icon('more'));
-  const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, volBtn, more);
+  const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, more);
 
   const volFill = el('div.vol-fill');
   const volTrack = el('div.vol-track', null, volFill);

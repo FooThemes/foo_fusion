@@ -199,6 +199,7 @@ body.no-sidebar #playerbar {
   color: var(--bar-text2) !important;
 }
 
+.pb-lyrics.on,
 .pb-order.on {
   color: var(--accent) !important;
 }

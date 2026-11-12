@@ -35,6 +35,7 @@ const P = {
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   delete: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
   rename: '<path d="M5 19h4L19 9l-4-4L5 15z"/><path d="M13 7l4 4"/>',
+  lyrics: '<path d="M4 6h10M4 10h10M4 14h6"/><circle cx="16.5" cy="17" r="2.5"/><path d="M19 17V6.5l2 1"/>',
   queue: '<path d="M4 7h11M4 12h11M4 17h7"/><path d="M15 14.5v5l4-2.5z" fill="currentColor" stroke="none"/>',
   info: '<circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.5"/>',
   note: '<path d="M9 17V6l10-2v11"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="15" r="2"/>',

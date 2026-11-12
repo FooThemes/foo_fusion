@@ -27,17 +27,23 @@ export function mountInfoPanel(root) {
       text: label,
       role: 'tab',
       dataset: { tab: key },
-      onclick: () => {
-        tab = key;
-        store.set('infoTab', key);
-        render();
-      },
+      onclick: () => store.set('infoTab', key),
     });
   const tabs = el('div.info-tabs', { role: 'tablist' }, tabBtn('details', 'Details'), tabBtn('tags', 'Tags'), tabBtn('technical', 'Technical'), tabBtn('lyrics', 'Lyrics'));
   const tech = el('div.info-tags', { hidden: true });
   const lyr = el('div.info-lyrics', { hidden: true });
-  const scroller = el('div.info-scroll', null, art, heading, tabs, table, tags, tech, lyr, empty);
+  const lyrTools = el('div.lyr-tools', { hidden: true });
+  // The cover, title and tabs stay put while the tab's content scrolls,
+  // unless they'd take more than half the panel: then it all scrolls.
+  const head = el('div.info-head', null, art, heading, tabs, lyrTools);
+  const body = el('div.info-body', null, table, tags, tech, lyr, empty);
+  const scroller = el('div.info-scroll', null, head, body);
   root.append(close, scroller);
+  const flow = () => scroller.classList.toggle('flow', head.offsetHeight > root.clientHeight / 2);
+  new ResizeObserver(flow).observe(root);
+  new ResizeObserver(flow).observe(head);
+  // What scrolls the tab's content.
+  const scrollBox = () => (scroller.classList.contains('flow') ? scroller : body);
 
   const render = debounce(async () => {
     if (root.hidden) return;
@@ -60,6 +66,7 @@ export function mountInfoPanel(root) {
     tags.hidden = tab !== 'tags';
     tech.hidden = tab !== 'technical';
     lyr.hidden = tab !== 'lyrics';
+    lyrTools.hidden = tab !== 'lyrics' || !t;
     if (!t) {
       clear(heading);
       clear(table);
@@ -90,30 +97,14 @@ export function mountInfoPanel(root) {
     if (shownFor !== t.handle + source) return;
     const m = multi || {};
     const values = (key, fallback) => (m[key] ? splitValues(m[key], key === 'genre' ? 'genres' : '') : fallback ? [fallback] : []);
-    // Names as links when the Collection has them; the rest as text.
-    const links = (list, kind) => {
-      const known = kind === 'genres' ? genres : artists;
-      const out = el('span');
-      list.forEach((v, i) => {
-        if (i) out.append(kind === 'genres' ? ', ' : '; ');
-        const name = known?.get(v.toLowerCase());
-        out.append(name ? el('button.info-link', { text: v, title: kind === 'genres' ? `Show ${name} albums` : `Show ${name}`, onclick: () => view.goTo(kind, name) }) : v);
-      });
-      return out;
-    };
+    const links = (list, kind) => linkList(list, kind, kind === 'genres' ? genres : artists);
     clear(heading);
     clear(table);
     const artistLine = el('div.info-artist');
     const artistValues = values('artist', t.artist);
     if (artistValues.length) artistLine.append(links(artistValues, 'artists'));
     heading.append(el('div.info-source', { text: source }), el('div.info-title', { text: t.title || '' }), artistLine);
-    const album = t.album
-      ? el('button.info-link', {
-          text: t.album,
-          title: `Open ${t.album} in the Collection`,
-          onclick: async () => view.goTo('albums', await view.albumKeyOf(t.handle)),
-        })
-      : null;
+    const album = t.album ? albumLink(t) : null;
     const rows = [
       ['Album', album],
       ['Album artist', values('albumArtist', t.albumArtist).length ? links(values('albumArtist', t.albumArtist), 'artists') : null],
@@ -136,11 +127,30 @@ export function mountInfoPanel(root) {
   }, 80);
   let shownFor = null;
 
+  // Names as links when the Collection has them; the rest as text.
+  function linkList(list, kind, known) {
+    const out = el('span');
+    list.forEach((v, i) => {
+      if (i) out.append(kind === 'genres' ? ', ' : '; ');
+      const name = known?.get(v.toLowerCase());
+      out.append(name ? el('button.info-link', { text: v, title: kind === 'genres' ? `Show ${name} albums` : `Show ${name}`, onclick: () => view.goTo(kind, name) }) : v);
+    });
+    return out;
+  }
+
+  function albumLink(t, text = t.album) {
+    return el('button.info-link', {
+      text,
+      title: `Open ${t.album} in the Collection`,
+      onclick: async () => view.goTo('albums', await view.albumKeyOf(t.handle)),
+    });
+  }
+
   const section = (box, title, pairs) => {
-    const list = pairs.filter(([, v]) => v != null && String(v).trim() !== '' && v !== '?');
+    const list = pairs.filter(([, v]) => v instanceof Node || (v != null && String(v).trim() !== '' && v !== '?'));
     if (!list.length) return;
     const dl = el('dl.info-table');
-    for (const [k, v] of list) dl.append(el('dt', { text: k }), el('dd', { text: String(v), title: String(v) }));
+    for (const [k, v] of list) dl.append(el('dt', { text: k }), v instanceof Node ? el('dd', null, v) : el('dd', { text: String(v), title: String(v) }));
     box.append(...(title ? [el('h3.info-section', { text: title })] : []), dl);
   };
 
@@ -150,7 +160,7 @@ export function mountInfoPanel(root) {
     const key = t.handle;
     if (tagsFor === key && tags.childElementCount) return;
     tagsFor = key;
-    const [meta, rg] = await Promise.all([
+    const [meta, rg, artists, genres] = await Promise.all([
       tryCall('metadata.readByPath', { path: t.handle }),
       tryCall('titleformat.evalFields', {
         path: t.handle,
@@ -161,10 +171,22 @@ export function mountInfoPanel(root) {
           ap: '%replaygain_album_peak%',
         },
       }),
+      view.libraryValues('artists'),
+      view.libraryValues('genres'),
     ]);
     if (tagsFor !== key) return;
     clear(tags);
-    section(tags, 'Tags', tagPairs(meta));
+    // The same links as Details; lyrics are in their own tab.
+    const ARTIST_TAGS = ['ARTIST', 'ALBUM ARTIST', 'ALBUMARTIST', 'PERFORMER', 'COMPOSER', 'ARTISTS', 'CONDUCTOR', 'LYRICIST', 'ORIGINAL ARTIST'];
+    const LYRIC_TAGS = ['LYRICS', 'UNSYNCED LYRICS', 'UNSYNCEDLYRICS', 'SYNCEDLYRICS', 'SYNCED LYRICS'];
+    const linked = tagPairs(meta, true).map(([k, v, list]) => {
+      if (LYRIC_TAGS.includes(k)) return [k, 'In the Lyrics tab'];
+      if (ARTIST_TAGS.includes(k)) return [k, linkList(list, 'artists', artists)];
+      if (k === 'GENRE') return [k, linkList(list.flatMap((g) => splitValues(g, 'genres')), 'genres', genres)];
+      if (k === 'ALBUM') return [k, albumLink(t, v)];
+      return [k, v];
+    });
+    section(tags, 'Tags', linked);
     const f = rg || {};
     section(tags, 'ReplayGain', [
       ['Track gain', f.tg],
@@ -226,10 +248,12 @@ export function mountInfoPanel(root) {
   let lyricLines = [];
   let lit = -1;
   let raf = 0;
-  let userScrolled = 0;
+  let userScrolled = -Infinity;
   let retry = 0;
-  scroller.addEventListener('wheel', () => (userScrolled = performance.now()), { passive: true });
-  scroller.addEventListener('pointerdown', (e) => e.target === scroller && (userScrolled = performance.now()));
+  for (const box of [scroller, body]) {
+    box.addEventListener('wheel', () => (userScrolled = performance.now()), { passive: true });
+    box.addEventListener('pointerdown', (e) => e.target === box && (userScrolled = performance.now()));
+  }
 
   async function renderLyrics(t, { again = false } = {}) {
     if (lyricsShown === t.handle && !again) return follow(t);
@@ -243,15 +267,16 @@ export function mountInfoPanel(root) {
     const [found, openLyrics] = await Promise.all([lyricsFor(t), hasHandlesCommand('Search for lyrics', [t.handle])]);
     if (lyricsShown !== t.handle) return;
     clear(lyr);
+    clear(lyrTools);
     lyricLines = [];
     lit = -1;
-    const tools = el('div.lyr-tools');
     if (openLyrics) {
-      tools.append(
-        el('button.btn-text.lyr-btn', { text: found ? 'Search again' : 'Search with OpenLyrics', onclick: () => searchOpenLyrics(t) }),
-        el('button.btn-text.lyr-btn', { text: 'Edit', title: 'Edit in foo_openlyrics', onclick: () => runHandlesCommand('Edit lyrics', [t.handle]) }),
+      lyrTools.append(
+        el('button.lyr-btn', { text: found ? 'Search again' : 'Search', title: 'Search for lyrics with foo_openlyrics', onclick: () => searchOpenLyrics(t) }),
+        el('button.lyr-btn', { text: 'Edit', title: 'Edit in foo_openlyrics', onclick: () => runHandlesCommand('Edit lyrics', [t.handle]) }),
       );
     }
+    lyrTools.title = found ? `${found.synced ? 'Timed lyrics' : 'Lyrics'} from ${found.source}` : '';
     if (!found) {
       lyr.append(
         el('p.info-note', {
@@ -259,10 +284,9 @@ export function mountInfoPanel(root) {
             ? 'No lyrics found. foo_openlyrics can search for them (and searches by itself as songs play, if “search even when there are no visible panels” is on in its preferences).'
             : 'No lyrics found. Fusion reads .lrc and .txt files beside the song or where foo_openlyrics saves them, and lyrics tags. Install foo_openlyrics to search for them.',
         }),
-        tools,
       );
       // foo_openlyrics may be searching for the playing song right now.
-      if (openLyrics && player.track?.handle === t.handle && !again) scheduleRetry(t, [4000, 10000, 25000]);
+      if (openLyrics && player.track?.handle === t.handle && !again) scheduleRetry(t, [4000, 8000, 15000, 25000, 40000, 60000]);
       return;
     }
     if (found.synced) {
@@ -280,7 +304,6 @@ export function mountInfoPanel(root) {
       );
       lyr.append(box);
     } else lyr.append(el('div.lyr-plain', { text: found.text }));
-    lyr.append(el('p.lyr-source', { text: `${found.synced ? 'Timed lyrics' : 'Lyrics'} from ${found.source.replace(/^.*\\/, '')}`, title: found.source }), tools);
     follow(t);
   }
 
@@ -294,11 +317,16 @@ export function mountInfoPanel(root) {
   }
 
   async function searchOpenLyrics(t) {
+    if (!lyricLines.length) {
+      clear(lyr);
+      lyr.append(el('p.info-note', { text: 'Searching with foo_openlyrics… (its progress shows in foobar2000’s own window)' }));
+    }
     await runHandlesCommand('Search for lyrics', [t.handle]);
     forgetLyrics(t.handle);
     lyricsShown = t.handle;
-    scheduleRetry(t, [3000, 8000, 20000]);
+    scheduleRetry(t, [3000, 6000, 10000, 20000, 35000]);
   }
+
 
   function follow(t) {
     stopFollow();
@@ -319,10 +347,13 @@ export function mountInfoPanel(root) {
       const line = i >= 0 ? lyr.querySelector(`.lyr-line[data-i="${i}"]`) : null;
       if (!line) return;
       line.classList.add('now');
-      // Keep it in view, a third of the way down, unless you've just scrolled.
+      // Keep it in the middle, unless you've just scrolled (and no further
+      // than the end: the list doesn't scroll past its last line).
       if (performance.now() - userScrolled > 4000) {
-        const top = line.offsetTop - scroller.clientHeight / 3;
-        scroller.scrollTo({ top, behavior: store.get('animations') === false ? 'auto' : 'smooth' });
+        const box = scrollBox();
+        const lineTop = line.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+        const top = Math.max(0, Math.min(box.scrollHeight - box.clientHeight, lineTop + line.offsetHeight / 2 - box.clientHeight / 2));
+        box.scrollTo({ top, behavior: store.get('animations') === false ? 'auto' : 'smooth' });
       }
     };
     tick();
@@ -354,6 +385,11 @@ export function mountInfoPanel(root) {
   player.on('track', render);
   player.on('state', () => tab === 'lyrics' && lyricsShown && !root.hidden && render());
   store.subscribe((k) => k === 'infoPanel' && apply());
+  store.subscribe((k) => {
+    if (k !== 'infoTab' || tab === store.get('infoTab')) return;
+    tab = store.get('infoTab');
+    render();
+  });
   store.subscribe((k) => (k === 'lyricsHideCredits' || k === 'lyricsFiles') && ((lyricsShown = null), render()));
   apply();
 }
@@ -363,9 +399,11 @@ function tagPairs(res) {
   if (!res) return [];
   const src = res.metadata || res.meta || res.tags || res.info?.meta || res;
   const out = [];
+  // [NAME, "a; b", ["a", "b"]]
   const add = (k, v) => {
     if (v == null || typeof v === 'object' && !Array.isArray(v)) return;
-    out.push([String(k).toUpperCase(), Array.isArray(v) ? v.join('; ') : String(v)]);
+    const list = (Array.isArray(v) ? v : [v]).map(String);
+    out.push([String(k).toUpperCase(), list.join('; '), list]);
   };
   if (Array.isArray(src)) for (const it of src) add(it.name ?? it.key ?? it.field, it.values ?? it.value);
   else if (typeof src === 'object') for (const [k, v] of Object.entries(src)) if (!['path', 'success', 'info', 'technical', 'subsong', 'cueIndex'].includes(k)) add(k, v);

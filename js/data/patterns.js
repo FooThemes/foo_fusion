@@ -18,6 +18,8 @@ export const TF = {
   artistsMulti:
     "$if2($meta_sep(artists,'|||'),$if2($meta_sep(albumartist_orig,'|||'),$if2($meta_sep(album artist,'|||'),$if2($meta_sep(artist_orig,'|||'),$if2($meta_sep(artist,'|||'),'Unknown Artist')))))",
   genresMulti: "$if2($meta_sep(genre,'|||'),'Unknown Genre')",
+  // The folder a song is in (Folders view).
+  dirKey: '$directory_path(%path%)',
 
   // Text shown on tiles (read from the first row of each group).
   albumTitle: "$if(%album%,%album%,$if(%album artist%,'Single(s)','Unknown Album'))",

@@ -23,6 +23,7 @@ import { genreFiles, forgetGenreInfo } from '../data/genreinfo.js';
 import { editArtist, editGenre } from './infoeditor.js';
 import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
+import { tryCall } from '../core/bridge.js';
 
 const genreTiles = new Map(); // genre|size -> picture or collage URL (null: none)
 const MARGIN = 32; // left/right margin: with the tile padding (PAD), covers line up with the tabs above
@@ -102,12 +103,12 @@ export class Grid {
     // Same groups as on screen (e.g. a reload after a re-sort that changed
     // nothing visible): just refresh the text, don't rebuild the tiles.
     const sig = view.groups.map((g) => `${g.key}:${firstRow(g)}:${g.count}`).join('|');
-    if (keepScroll && sig === this.sig && this.kind === (view.drill ? 'albums' : view.mode)) {
+    if (keepScroll && sig === this.sig && this.kind === gridKind()) {
       this.refreshHeads();
       return;
     }
     this.sig = sig;
-    const kind = view.drill ? 'albums' : view.mode;
+    const kind = gridKind();
     // Tiles whose album is still on screen keep their node (and its loaded
     // image) and just move; only new arrivals get a pooled node.
     for (const node of this.stale?.values() || []) this.#recycle(node);
@@ -288,6 +289,7 @@ export class Grid {
 
   /** Art to try for a tile, in order. */
   #types(g) {
+    if (this.kind === 'folders' && !g?.folder) return albumArtTypes(store.get('separateDiscs'));
     // Artists: their picture, foobar2000's artist art, then (unless that's
     // turned off) one of their album covers.
     if (this.kind === 'artists') return store.get('artistNoPicture') === 'placeholder' ? [`info:${g.key}`, 'artist'] : [`info:${g.key}`, 'artist', 'front'];
@@ -371,7 +373,20 @@ export class Grid {
     node.classList.toggle('expanded', i === this.expanded);
     node.classList.toggle('playing', this.#isPlaying(g));
     art.className = 'art';
-    if (this.kind === 'albums') {
+    const kind = this.kind === 'folders' ? (g.folder ? 'folder' : 'albums') : this.kind;
+    if (kind === 'folder') {
+      const f = g.folder;
+      // Albums; folders too when they aren't just one per album.
+      const albums = g.albumCount || 1;
+      const what = [plural(albums, 'album'), f.folders > albums ? plural(f.folders, 'folder') : ''].filter(Boolean).join(' · ');
+      t1.textContent = f.name;
+      t2.textContent = what;
+      art.classList.add('ph-folder');
+      node.title = `${f.path}\n${what}`;
+      this.#folderArt(node, g, sameAlbum);
+      return;
+    }
+    if (kind === 'albums') {
       const [artist, album] = splitAlbumKey(g.key);
       // Original / English / romanised: the lead version as the title, the
       // other at the start of the second line ("狂言 · Ado").
@@ -412,6 +427,52 @@ export class Grid {
       img.removeAttribute('src');
       img.classList.remove('loaded');
     }
+  }
+
+  /** A folder's own picture (folder.jpg, artist.jpg… inside it), else a
+   *  collage of its biggest albums, else its name. */
+  async #folderArt(node, g, same) {
+    const art = node.querySelector('.art');
+    const img = art.querySelector('img');
+    const w = this.artSize;
+    const h = this.artH;
+    const token = `folder|${g.key}|${w}x${h}`;
+    if (img.dataset.artToken === token) return;
+    img.dataset.artToken = token;
+    if (!same) {
+      img.removeAttribute('src');
+      img.classList.remove('loaded');
+    }
+    art.dataset.label = '';
+    const live = () => img.dataset.artToken === token;
+    const known = genreTiles.get(token);
+    if (known !== undefined) {
+      if (known) {
+        img.classList.add('instant', 'loaded');
+        img.src = known;
+      } else art.dataset.label = g.folder.name;
+      return;
+    }
+    img.classList.remove('instant');
+    let url = null;
+    const res = await tryCall('artwork.getFolderImages', { directory: g.folder.path });
+    if (!live()) return;
+    const files = res?.images || res?.files || [];
+    const pick = ['folder', 'artist', 'cover', 'front'].map((b) => files.find((f) => (f.name || '').toLowerCase().replace(/\.[^.]+$/, '') === b)).find(Boolean);
+    if (pick) url = await genrePictureUrl(pick, Math.max(w, h) * (window.devicePixelRatio || 1));
+    if (!url && g.collageRows?.length) {
+      const tracks = await view.tracks(g.collageRows);
+      if (!live()) return;
+      url = await collageUrl(tracks.map((t) => t?.handle).filter(Boolean), w, h);
+    }
+    if (!live()) return;
+    genreTiles.set(token, url);
+    if (!url) {
+      art.dataset.label = g.folder.name;
+      return;
+    }
+    img.onload = () => live() && img.classList.add('loaded');
+    img.src = url;
   }
 
   /** A genre's own picture, else a collage of its biggest albums, else a plain
@@ -478,7 +539,7 @@ export class Grid {
       view.playGroup(g);
       return;
     }
-    if (this.kind === 'albums') this.toggle(i);
+    if (this.kind === 'albums' || (this.kind === 'folders' && !g.folder)) this.toggle(i);
     else view.openDrill(g);
   }
 
@@ -608,13 +669,20 @@ export class Grid {
   showRow(row) {
     const i = view.groups.findIndex((g) => (g.rows ? g.rows.includes(row) : row >= g.start && row < g.start + g.count));
     if (i < 0) return;
-    if (this.kind === 'albums' && this.expanded !== i) this.toggle(i);
+    if ((this.kind === 'albums' || (this.kind === 'folders' && !view.groups[i].folder)) && this.expanded !== i) this.toggle(i);
     else this.scroller.scrollTo({ top: this.rowTop(Math.floor(i / this.cols)) - 8 });
   }
 
   firstRowOf(i) {
     return firstRow(view.groups[i]);
   }
+}
+
+/** What the grid shows: albums (an artist's or genre's page too), artists,
+ *  genres, or folders (folder tiles and albums). */
+function gridKind() {
+  if (view.mode === 'folders') return 'folders';
+  return view.drill ? 'albums' : view.mode;
 }
 
 export function splitAlbumKey(key) {

@@ -13,6 +13,10 @@
   --placeholder-icon: none;
 }
 
+.ph-folder {
+  --placeholder-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.2' stroke-linejoin='round'%3E%3Cpath d='M3.5 6.5h6l2 2h9v10h-17z'/%3E%3C/svg%3E");
+}
+
 .grid-sizer {
   position: relative;
   width: 100%;
@@ -147,7 +151,8 @@
 }
 
 /* Genres: a plain tile (no picture, no covers) shows its name */
-.art.ph-genre[data-label]:not([data-label=''])::after {
+.art.ph-genre[data-label]:not([data-label=''])::after,
+.art.ph-folder[data-label]:not([data-label=''])::after {
   content: attr(data-label);
   position: absolute;
   inset: auto 0 0 0;

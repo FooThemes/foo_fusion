@@ -162,7 +162,7 @@ export function mountSettings(root, app) {
       section('Artists', [
         select('Artists without a picture', 'artistNoPicture', [
           ['cover', 'Album cover', 'One of their album covers stands in'],
-          ['placeholder', 'Blank picture', 'The same plain picture for every artist without one'],
+          ['placeholder', 'Coloured silhouette', 'A silhouette on a colour of their own'],
         ]),
         toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
       ]),

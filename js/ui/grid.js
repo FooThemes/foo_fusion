@@ -8,7 +8,7 @@
 import { setTitle, versionText } from './titles.js';
 import { pickVersion } from '../data/versions.js';
 import { artistNameVersions } from '../data/artistinfo.js';
-import { el, rafThrottle, plural } from '../core/util.js';
+import { el, rafThrottle, plural, hash } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
@@ -509,6 +509,8 @@ export class Grid {
       t1.textContent = g.key;
       t2.textContent = albums;
       art.classList.add('round', 'ph-artist');
+      // Each artist's own colour, so pictureless artists don't all look alike.
+      art.style.setProperty('--ph-hue', hueOf(g.key));
       node.title = g.key;
       // English / romanised names from the artist's artist.nfo, when it has them.
       artistNameVersions(g.key, head?.handle).then((v) => {
@@ -754,4 +756,12 @@ export class Grid {
 export function splitAlbumKey(key) {
   const parts = key.split('|');
   return [parts[0] || '', parts[1] || ''];
+}
+
+/** A hue for a name. The hash is mixed first: its low bits alone bunch similar names together. */
+function hueOf(name) {
+  let h = hash(name.toLowerCase());
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) % 360;
 }

@@ -171,6 +171,11 @@
   background: linear-gradient(135deg, var(--accent), #222);
 }
 
+/* A known picture still decoding (a frame at most): no colour behind it. */
+.art.ph-genre.decoding {
+  background: none;
+}
+
 /* --- Expanded album ------------------------------------------------------ */
 
 .trackpanel {

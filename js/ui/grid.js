@@ -13,7 +13,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { view, firstRow } from '../data/view.js';
 import { player } from '../data/player.js';
-import { bindArt, albumArtTypes, warmArt, refreshArtist, keepDecoded } from '../data/artwork.js';
+import { bindArt, albumArtTypes, warmArt, refreshArtist } from '../data/artwork.js';
 import { ArtistHero } from './artisthero.js';
 import { GenreHero } from './genrehero.js';
 import { musicArtistFolder, onPictureRevoked } from '../data/artistinfo.js';
@@ -25,13 +25,25 @@ import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
 
 const genreTiles = new Map(); // genre|size -> picture or collage URL (null: none)
+// Those pictures, decoded and held (their own store, so browsing albums
+// can't push them out): a tile handed one draws it the same frame.
+const genreDecoded = new Map(); // url -> HTMLImageElement
+function holdDecoded(url) {
+  if (!url || genreDecoded.has(url)) return;
+  const im = new Image();
+  im.src = url;
+  im.decode().catch(() => {});
+  genreDecoded.set(url, im);
+}
 // Whether or not a grid is showing: URLs that are no longer valid go.
 window.addEventListener('fusion:genrerefresh', () => {
   forgetCollages();
   genreTiles.clear();
+  genreDecoded.clear();
 });
 onPictureRevoked((url) => {
   for (const [k, v] of genreTiles) if (v === url) genreTiles.delete(k);
+  genreDecoded.delete(url);
 });
 const MARGIN = 32; // left/right margin: with the tile padding (PAD), covers line up with the tabs above
 const PAD = 8; // gap around each cover
@@ -453,11 +465,20 @@ export class Grid {
     if (known !== undefined) {
       if (known) {
         img.classList.add('instant', 'loaded');
+        // Seen before: paint it with the tile (the tile waits for the picture
+        // rather than showing an empty frame first).
+        img.decoding = 'sync';
         img.src = known;
+        // Not decoded yet after all: no coloured placeholder meanwhile.
+        if (!img.complete) {
+          art.classList.add('decoding');
+          img.decode().catch(() => {}).finally(() => art.classList.remove('decoding'));
+        }
       } else art.dataset.label = g.key;
       return;
     }
     img.classList.remove('instant');
+    img.decoding = 'async';
     let url = null;
     const files = await genreFiles(g.key);
     if (!live()) return;
@@ -472,7 +493,7 @@ export class Grid {
     genreTiles.set(token, url);
     // Decoded and kept: a new grid (coming back from Songs or Folders) shows
     // it the same frame, not the placeholder first.
-    keepDecoded(url);
+    holdDecoded(url);
     if (!url) {
       img.removeAttribute('src');
       img.classList.remove('loaded');

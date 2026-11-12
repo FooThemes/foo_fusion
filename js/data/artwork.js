@@ -38,10 +38,6 @@ function markLoaded(url, decoded = null) {
     loadedUrls.delete(old);
   }
 }
-/** Keep a picture decoded (a tile can come back with it the same frame). */
-export function keepDecoded(url) {
-  if (url) markLoaded(url);
-}
 let pending = []; // { key, path, type, size, resolve }
 
 // The browser keeps fb2k:// pictures for a day, so after "Refresh artwork"

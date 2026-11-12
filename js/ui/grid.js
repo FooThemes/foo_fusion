@@ -93,25 +93,29 @@ export class Grid {
     scroller.addEventListener('scroll', this.onScroll, { passive: true, signal });
     this.ro = new ResizeObserver(rafThrottle(() => this.layout()));
     this.ro.observe(scroller);
-    // The side panels slide open and shut (the info panel, the sidebar): while
-    // they do, the tiles still rearrange with the width, but glide to their
-    // new places when the number of columns changes, instead of jumping.
+    // The side panels slide open and shut (the info panel, the sidebar): as
+    // the slide starts, the tiles move once, straight to where they'll be at
+    // the end, gliding there alongside the panel (no reflow on every frame).
     const app = document.getElementById('app');
     if (app) {
       const sliding = (e) => e.target === app && e.propertyName === 'grid-template-columns';
       let safety = 0;
       const stop = (e) => {
-        if (e && !sliding(e)) return;
+        if ((e && !sliding(e)) || !this.sliding) return;
         clearTimeout(safety);
         this.sliding = false;
+        this.forcedWidth = null;
+        this.layout();
       };
       app.addEventListener(
         'transitionrun',
         (e) => {
           if (!sliding(e)) return;
-          this.sliding = true;
           clearTimeout(safety);
-          safety = setTimeout(() => stop(null), 600); // in case no end event comes
+          safety = setTimeout(() => stop(null), 700); // in case no end event comes
+          const target = this.#widthAfterSlide(app);
+          this.sliding = true;
+          if (target && this.rowCount != null) this.#glideTo(target);
         },
         { signal },
       );
@@ -194,12 +198,10 @@ export class Grid {
   }
 
   layout() {
-    const w = this.scroller.clientWidth;
+    // Mid-slide the layout is already the end one (see #glideTo).
+    if (this.sliding && this.forcedWidth == null && this.rowCount != null) return;
+    const w = this.forcedWidth ?? this.scroller.clientWidth;
     if (!w) return;
-    if (this.sliding && this.rowCount != null && !this.gliding && store.get('animations') !== false) {
-      const cols = Math.max(1, Math.floor((w - MARGIN * 2) / ((this.kind === 'artists' ? store.get('artistTileSize') : store.get('tileSize')) + PAD * 2)));
-      if (cols !== this.cols) return this.#glide();
-    }
     // Keep the open album (or the first visible tile) where it was on screen
     // while the columns reflow, instead of jumping to wherever its row lands.
     const hadLayout = this.rowCount != null && this.lastWidth;
@@ -235,21 +237,34 @@ export class Grid {
     this.#warm();
   }
 
-  /** Lay out with the tiles gliding from where they are on screen to their
-   *  new places (tiles new to the screen fade in). */
-  #glide() {
+  /** The grid's width once the side panels finish sliding: the content
+   *  column's end width (the panels' widths are set at once; only the
+   *  columns animate), less what the grid's own box takes off it. */
+  #widthAfterSlide(app) {
+    let col = this.scroller;
+    while (col.parentElement && col.parentElement !== app) col = col.parentElement;
+    if (col.parentElement !== app) return 0;
+    const css = getComputedStyle(document.documentElement);
+    const body = getComputedStyle(document.body);
+    const px = (v) => parseFloat(v) || 0;
+    const side = document.body.classList.contains('no-sidebar') ? 0 : px(css.getPropertyValue('--sidebar-w'));
+    const info = px(body.getPropertyValue('--info-w'));
+    const end = app.clientWidth - side - info;
+    return Math.max(0, this.scroller.clientWidth + (end - col.getBoundingClientRect().width));
+  }
+
+  /** Lay out for this width now, tiles gliding from where they are on screen
+   *  to their new places (new ones fade in), as long as the panel's slide. */
+  #glideTo(width) {
     const l0 = this.layer.getBoundingClientRect();
     const before = new Map();
     for (const [i, node] of this.tiles) {
-      const r = node.getBoundingClientRect(); // mid-glide too
+      const r = node.getBoundingClientRect();
       before.set(node, { i, x: r.left - l0.left, y: r.top - l0.top });
     }
-    this.gliding = true;
-    try {
-      this.layout();
-    } finally {
-      this.gliding = false;
-    }
+    this.forcedWidth = width;
+    this.layout();
+    if (store.get('animations') === false) return;
     const l1 = this.layer.getBoundingClientRect();
     for (const [i, node] of this.tiles) {
       for (const a of node.getAnimations()) a.cancel();
@@ -257,9 +272,18 @@ export class Grid {
       if (was && was.i === i) {
         const x = was.x + l0.left - l1.left;
         const y = was.y + l0.top - l1.top;
+        if (Math.abs(x - this.#x(node)) < 1 && Math.abs(y - this.#y(node)) < 1) continue;
         node.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: node.style.transform }], { duration: 220, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
-      } else node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+      } else node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
     }
+  }
+
+  #x(node) {
+    return Number(/translate\(([-\d.]+)px/.exec(node.style.transform)?.[1] || 0);
+  }
+
+  #y(node) {
+    return Number(/translate\([-\d.]+px, ([-\d.]+)px/.exec(node.style.transform)?.[1] || 0);
   }
 
   /** Height the open album takes in the grid, including the gap below it. */

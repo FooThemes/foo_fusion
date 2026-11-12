@@ -437,9 +437,9 @@ class View extends Emitter {
 
     // Folders: the playlist's songs as a folder tree (see folderTree).
     if (this.mode === 'folders') {
-      const runs = await this.#groupRuns(pl, [TF.dirKey]);
+      const [runs, roots] = await Promise.all([this.#groupRuns(pl, [TF.dirKey]), libraryRoots()]);
       if (gen !== this.#generation || !runs) return;
-      this.tree = folderTree(runs, matched && new Set(matched));
+      this.tree = folderTree(runs, matched && new Set(matched), roots);
       this.groups = [];
       this.rows = null;
       this.total = this.tree.count;
@@ -968,7 +968,14 @@ export function splitValues(key, kind = '') {
  * count } from runs of "folder of the song". The top shows what's inside the
  * folder every song shares (E:\\Music: its folders).
  */
-function folderTree(runs, keep) {
+// The media library's music folders (Preferences > Media Library), for a while.
+let rootsCache = null;
+function libraryRoots() {
+  if (!rootsCache || Date.now() - rootsCache.at > 5 * 60 * 1000) rootsCache = { at: Date.now(), promise: tryCall('library.getRoots').then((r) => (r?.roots || []).map((x) => x.absolutePath || x.id).filter(Boolean)) };
+  return rootsCache.promise;
+}
+
+function folderTree(runs, keep, roots = []) {
   const top = { name: '', path: '', folders: new Map(), rows: [], count: 0 };
   for (const r of runs) {
     const parts = r.key.split('\\').filter(Boolean);
@@ -992,6 +999,24 @@ function folderTree(runs, keep) {
     return n;
   };
   finish(top);
+  // Several music folders (E:\\Music, D:\\Podcasts…): each at the top, by
+  // its full path, when they hold every song shown.
+  const find = (path) => {
+    let n = top;
+    for (const p of path.split('\\').filter(Boolean)) {
+      n = n.folders.find((c) => c.name.toLowerCase() === p.toLowerCase());
+      if (!n) return null;
+    }
+    return n;
+  };
+  const clean = roots.map((r) => r.replace(/[\\/]+$/, ''));
+  const outer = clean.filter((r) => !clean.some((o) => o !== r && r.toLowerCase().startsWith(o.toLowerCase() + '\\')));
+  const tops = outer.map(find).filter((n) => n?.count);
+  if (tops.length > 1 && tops.reduce((s, n) => s + n.count, 0) === top.count) {
+    for (const n of tops) n.label = n.path;
+    tops.sort((a, b) => groupCollator.compare(a.path, b.path));
+    return { name: '', path: '', folders: tops, rows: [], count: top.count };
+  }
   let root = top;
   while (root.folders.length === 1 && !root.rows.length) root = root.folders[0];
   return root;

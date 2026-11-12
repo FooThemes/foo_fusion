@@ -62,7 +62,7 @@ export function mountContent(root) {
   // A click on empty space (not on a song, tile or control) clears the selection.
   scroller.addEventListener('click', (e) => {
     if (!view.selection.size || e.ctrlKey || e.shiftKey) return;
-    if (e.target.closest('.song-row, .tp-row, .np-row, .tile, button, a, input, select, label, [role="button"], [role="tab"]')) return;
+    if (e.target.closest('.song-row, .tp-row, .np-row, .ft-row, .tile, button, a, input, select, label, [role="button"], [role="tab"]')) return;
     view.clearSelection();
   });
 

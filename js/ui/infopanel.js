@@ -33,17 +33,11 @@ export function mountInfoPanel(root) {
   const tech = el('div.info-tags', { hidden: true });
   const lyr = el('div.info-lyrics', { hidden: true });
   const lyrTools = el('div.lyr-tools', { hidden: true });
-  // The cover, title and tabs stay put while the tab's content scrolls,
-  // unless they'd take more than half the panel: then it all scrolls.
-  const head = el('div.info-head', null, art, heading, tabs, lyrTools);
-  const body = el('div.info-body', null, table, tags, tech, lyr, empty);
-  const scroller = el('div.info-scroll', null, head, body);
+  // One scroller: the cover and title scroll away, then the tabs (and the
+  // lyric buttons) stick to the top while the tab's content scrolls on.
+  const bar = el('div.info-bar', null, tabs, lyrTools);
+  const scroller = el('div.info-scroll', null, art, heading, bar, table, tags, tech, lyr, empty);
   root.append(close, scroller);
-  const flow = () => scroller.classList.toggle('flow', head.offsetHeight > root.clientHeight / 2);
-  new ResizeObserver(flow).observe(root);
-  new ResizeObserver(flow).observe(head);
-  // What scrolls the tab's content.
-  const scrollBox = () => (scroller.classList.contains('flow') ? scroller : body);
 
   const render = debounce(async () => {
     if (root.hidden) return;
@@ -250,10 +244,8 @@ export function mountInfoPanel(root) {
   let raf = 0;
   let userScrolled = -Infinity;
   let retry = 0;
-  for (const box of [scroller, body]) {
-    box.addEventListener('wheel', () => (userScrolled = performance.now()), { passive: true });
-    box.addEventListener('pointerdown', (e) => e.target === box && (userScrolled = performance.now()));
-  }
+  scroller.addEventListener('wheel', () => (userScrolled = performance.now()), { passive: true });
+  scroller.addEventListener('pointerdown', (e) => e.target === scroller && (userScrolled = performance.now()));
 
   async function renderLyrics(t, { again = false } = {}) {
     if (lyricsShown === t.handle && !again) return follow(t);
@@ -334,11 +326,11 @@ export function mountInfoPanel(root) {
       lyr.querySelector('.lyr-line.now')?.classList.remove('now');
       return;
     }
+    // The first move goes straight to the line (opening, switching tab);
+    // after that it glides from line to line.
+    let jump = true;
     const tick = () => {
-      if (root.hidden || lyr.hidden) {
-        lyricsShown = null;
-        return stopFollow();
-      }
+      if (root.hidden || lyr.hidden) return stopFollow();
       raf = requestAnimationFrame(tick);
       const i = lineAt(lyricLines, player.now());
       if (i === lit) return;
@@ -350,10 +342,12 @@ export function mountInfoPanel(root) {
       // Keep it in the middle, unless you've just scrolled (and no further
       // than the end: the list doesn't scroll past its last line).
       if (performance.now() - userScrolled > 4000) {
-        const box = scrollBox();
-        const lineTop = line.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
-        const top = Math.max(0, Math.min(box.scrollHeight - box.clientHeight, lineTop + line.offsetHeight / 2 - box.clientHeight / 2));
-        box.scrollTo({ top, behavior: store.get('animations') === false ? 'auto' : 'smooth' });
+        // The middle of what's visible below the stuck tabs.
+        const barH = bar.offsetHeight;
+        const lineTop = line.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+        const top = Math.max(0, Math.min(scroller.scrollHeight - scroller.clientHeight, lineTop + line.offsetHeight / 2 - barH - (scroller.clientHeight - barH) / 2));
+        scroller.scrollTo({ top, behavior: jump || store.get('animations') === false ? 'auto' : 'smooth' });
+        jump = false;
       }
     };
     tick();

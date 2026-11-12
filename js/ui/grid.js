@@ -93,18 +93,17 @@ export class Grid {
     scroller.addEventListener('scroll', this.onScroll, { passive: true, signal });
     this.ro = new ResizeObserver(rafThrottle(() => this.layout()));
     this.ro.observe(scroller);
-    // The side panels slide open and shut (the info panel, the sidebar): the
-    // tiles stay as they are while the width animates, then move once to
-    // their new places, instead of reflowing on every frame of the slide.
+    // The side panels slide open and shut (the info panel, the sidebar): while
+    // they do, the tiles still rearrange with the width, but glide to their
+    // new places when the number of columns changes, instead of jumping.
     const app = document.getElementById('app');
     if (app) {
       const sliding = (e) => e.target === app && e.propertyName === 'grid-template-columns';
       let safety = 0;
-      const settle = (e) => {
-        if ((e && !sliding(e)) || !this.sliding) return;
+      const stop = (e) => {
+        if (e && !sliding(e)) return;
         clearTimeout(safety);
         this.sliding = false;
-        this.#settle();
       };
       app.addEventListener(
         'transitionrun',
@@ -112,12 +111,12 @@ export class Grid {
           if (!sliding(e)) return;
           this.sliding = true;
           clearTimeout(safety);
-          safety = setTimeout(() => settle(null), 600); // in case no end event comes
+          safety = setTimeout(() => stop(null), 600); // in case no end event comes
         },
         { signal },
       );
-      app.addEventListener('transitionend', settle, { signal });
-      app.addEventListener('transitioncancel', settle, { signal });
+      app.addEventListener('transitionend', stop, { signal });
+      app.addEventListener('transitioncancel', stop, { signal });
     }
 
     this.layer.addEventListener('click', (e) => this.#click(e));
@@ -197,7 +196,10 @@ export class Grid {
   layout() {
     const w = this.scroller.clientWidth;
     if (!w) return;
-    if (this.sliding && this.rowCount != null) return; // see #settle
+    if (this.sliding && this.rowCount != null && !this.gliding && store.get('animations') !== false) {
+      const cols = Math.max(1, Math.floor((w - MARGIN * 2) / ((this.kind === 'artists' ? store.get('artistTileSize') : store.get('tileSize')) + PAD * 2)));
+      if (cols !== this.cols) return this.#glide();
+    }
     // Keep the open album (or the first visible tile) where it was on screen
     // while the columns reflow, instead of jumping to wherever its row lands.
     const hadLayout = this.rowCount != null && this.lastWidth;
@@ -233,24 +235,30 @@ export class Grid {
     this.#warm();
   }
 
-  /** After a panel slide: lay out once, tiles gliding from where they were on
-   *  screen to their new places (new ones fade in). */
-  #settle() {
-    const at = (node) => /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(node.style.transform)?.slice(1).map(Number);
+  /** Lay out with the tiles gliding from where they are on screen to their
+   *  new places (tiles new to the screen fade in). */
+  #glide() {
+    const l0 = this.layer.getBoundingClientRect();
     const before = new Map();
-    for (const [i, node] of this.tiles) before.set(node, { i, pos: at(node) });
-    const scroll = this.scroller.scrollTop;
-    this.layout();
-    if (store.get('animations') === false) return;
-    const moved = this.scroller.scrollTop - scroll; // the layout keeps the top row in view
     for (const [i, node] of this.tiles) {
+      const r = node.getBoundingClientRect(); // mid-glide too
+      before.set(node, { i, x: r.left - l0.left, y: r.top - l0.top });
+    }
+    this.gliding = true;
+    try {
+      this.layout();
+    } finally {
+      this.gliding = false;
+    }
+    const l1 = this.layer.getBoundingClientRect();
+    for (const [i, node] of this.tiles) {
+      for (const a of node.getAnimations()) a.cancel();
       const was = before.get(node);
-      const pos = at(node);
-      if (was && was.i === i && was.pos && pos) {
-        const [x0, y0] = was.pos;
-        if (x0 === pos[0] && y0 + moved === pos[1]) continue;
-        node.animate([{ transform: `translate(${x0}px, ${y0 + moved}px)` }, { transform: node.style.transform }], { duration: 260, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
-      } else node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
+      if (was && was.i === i) {
+        const x = was.x + l0.left - l1.left;
+        const y = was.y + l0.top - l1.top;
+        node.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: node.style.transform }], { duration: 220, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+      } else node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
     }
   }
 

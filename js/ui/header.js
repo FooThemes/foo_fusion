@@ -17,6 +17,7 @@ const TABS = [
   ['albums', 'Albums'],
   ['artists', 'Artists'],
   ['genres', 'Genres'],
+  ['folders', 'Folders'],
   ['songs', 'Songs'],
 ];
 
@@ -79,6 +80,8 @@ export function mountHeader(root, app) {
     clear(sortBtn).append(el('span.sort-label', { text: 'Sort by ' }), el('span.sort-value', { text: (SORTS[sortKey]?.label || 'Album').toLowerCase() }), icon('chevronDown'));
     const sortable = view.canSort();
     sortBtn.disabled = VIEW_SORTS[view.drill ? 'albums' : view.mode]?.length < 2 || !sortable;
+    // Folders are listed by name: no sort to choose (the arrow still flips them).
+    sortBtn.hidden = view.mode === 'folders';
     sortBtn.title = sortable ? '' : 'This autoplaylist keeps its own order. Change it in the autoplaylist settings.';
     dirBtn.disabled = !view.playlist;
     const desc = store.get('sortDescending');
@@ -92,6 +95,7 @@ export function mountHeader(root, app) {
     if (view.loading && !view.groups.length && view.mode !== 'songs') return 'Loading…';
     const n = view.groups.length;
     if (view.mode === 'songs') return view.total ? plural(view.total, 'song') : 'empty';
+    if (view.mode === 'folders') return view.tree ? `${plural(view.tree.folders.length, 'folder')} · ${plural(view.total, 'song')}` : '';
     if (view.drill || view.mode === 'albums') return n ? plural(n, 'album') : '';
     if (view.mode === 'artists') return n ? plural(n, 'artist') : '';
     if (view.mode === 'genres') return n ? plural(n, 'genre') : '';

@@ -10,6 +10,7 @@ import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { playlists, COLLECTION } from '../data/playlists.js';
 import { Grid } from './grid.js';
+import { FolderTree } from './foldertree.js';
 import { SongList } from './songs.js';
 import { NowPlaying } from './nowplaying.js';
 
@@ -66,7 +67,7 @@ export function mountContent(root) {
   });
 
   function kindFor(mode) {
-    return mode === 'songs' ? 'songs' : mode === 'nowplaying' ? 'nowplaying' : 'grid';
+    return mode === 'songs' ? 'songs' : mode === 'nowplaying' ? 'nowplaying' : mode === 'folders' ? 'folders' : 'grid';
   }
 
   function ensure() {
@@ -74,7 +75,7 @@ export function mountContent(root) {
     if (kind === currentKind && current) return false;
     current?.destroy();
     scroller.scrollTop = 0;
-    current = kind === 'songs' ? new SongList(scroller) : kind === 'nowplaying' ? new NowPlaying(scroller) : new Grid(scroller);
+    current = kind === 'songs' ? new SongList(scroller) : kind === 'nowplaying' ? new NowPlaying(scroller) : kind === 'folders' ? new FolderTree(scroller) : new Grid(scroller);
     currentKind = kind;
     scroller.dataset.kind = kind;
     return true;

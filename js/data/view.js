@@ -321,7 +321,7 @@ class View extends Emitter {
 
   currentSortKey() {
     const mode = this.mode === 'nowplaying' ? 'albums' : this.mode;
-    return store.get('sort')[mode];
+    return store.get('sort')[mode] || (mode === 'folders' ? 'path' : undefined);
   }
 
   /** Re-read the active playlist and regroup it. */
@@ -384,7 +384,7 @@ class View extends Emitter {
     // Artist and genre tiles are listed alphabetically whatever the playlist
     // order, so switching to those tabs never re-sorts (re-sorting a library
     // autoplaylist means foobar2000 rebuilds it, which takes a while).
-    const valueView = (this.mode === 'artists' || this.mode === 'genres') && !this.drill;
+    const valueView = ((this.mode === 'artists' || this.mode === 'genres') && !this.drill) || this.mode === 'folders';
     // Songs in an autoplaylist are sorted here instead (see #sortedRows), so
     // going between Songs and Albums doesn't rebuild the library either.
     const clientSongs = this.mode === 'songs' && pl.isLocked;
@@ -434,6 +434,18 @@ class View extends Emitter {
       matched = res ? res.items : [];
     }
     if (gen !== this.#generation) return;
+
+    // Folders: the playlist's songs as a folder tree (see folderTree).
+    if (this.mode === 'folders') {
+      const runs = await this.#groupRuns(pl, [TF.dirKey]);
+      if (gen !== this.#generation || !runs) return;
+      this.tree = folderTree(runs, matched && new Set(matched));
+      this.groups = [];
+      this.rows = null;
+      this.total = this.tree.count;
+      await this.syncSelection(false);
+      return this.#done(gen);
+    }
 
     if (this.mode === 'songs' || this.mode === 'nowplaying') {
       this.groups = [];
@@ -951,6 +963,47 @@ export function splitValues(key, kind = '') {
 }
 
 /** Merge runs with the same key (case-insensitive) into one group each. */
+/**
+ * Folders view: { name, path, folders: [nodes], rows: [direct playlist rows],
+ * count } from runs of "folder of the song". The top shows what's inside the
+ * folder every song shares (E:\\Music: its folders).
+ */
+function folderTree(runs, keep) {
+  const top = { name: '', path: '', folders: new Map(), rows: [], count: 0 };
+  for (const r of runs) {
+    const parts = r.key.split('\\').filter(Boolean);
+    let node = top;
+    let path = '';
+    for (const p of parts) {
+      path = path ? `${path}\\${p}` : p;
+      const k = p.toLowerCase();
+      let next = node.folders.get(k);
+      if (!next) node.folders.set(k, (next = { name: p, path, folders: new Map(), rows: [], count: 0 }));
+      node = next;
+    }
+    for (let i = r.start; i < r.start + r.count; i++) if (!keep || keep.has(i)) node.rows.push(i);
+  }
+  // Counts, and folders as sorted lists (folders with nothing left out).
+  const finish = (n) => {
+    const list = [...n.folders.values()].map(finish).filter((c) => c.count);
+    list.sort((a, b) => groupCollator.compare(a.name, b.name));
+    n.folders = list;
+    n.count = n.rows.length + list.reduce((s, c) => s + c.count, 0);
+    return n;
+  };
+  finish(top);
+  let root = top;
+  while (root.folders.length === 1 && !root.rows.length) root = root.folders[0];
+  return root;
+}
+
+/** Every playlist row under a folder. */
+export function folderRows(node) {
+  const out = [...node.rows];
+  for (const c of node.folders) out.push(...folderRows(c));
+  return out;
+}
+
 function mergeRuns(runs) {
   const map = new Map();
   for (const r of runs) {

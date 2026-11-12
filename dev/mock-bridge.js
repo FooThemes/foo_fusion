@@ -118,6 +118,7 @@ function tfEval(pattern, t) {
     [TF.genreKey]: () => t.genre || 'Unknown Genre',
     [TF.artistsMulti]: () => (t.artistsTag ? t.artistsTag.join('|||') : t.versions?.albumartist?.orig || t.albumArtist || t.artist || 'Unknown Artist'),
     [TF.genresMulti]: () => t.genre || 'Unknown Genre',
+    [TF.dirKey]: () => t.handle.replace(/\\[^\\]*$/, ''),
     [TF.albumTitle]: () => al,
     [TF.albumDiscTitle]: () => (t.totalDiscs > 1 ? `${al} (Disc ${t.discNumber})` : al),
     [TF.albumArtist]: () => aa,

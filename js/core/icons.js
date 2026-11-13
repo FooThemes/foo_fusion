@@ -28,6 +28,7 @@ const P = {
   refresh: '<path d="M19 12a7 7 0 1 1-2-4.9M19 4.5V8h-3.5"/>',
   reset: '<path d="M5 12a7 7 0 1 0 2-4.9M5 4.5V8h3.5"/>',
   back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  forward: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   chevronDown: '<path d="M7 10l5 5 5-5"/>',
   chevronRight: '<path d="M10 7l5 5-5 5"/>',
   sortAsc: '<path d="M8 18V6M5 9l3-3 3 3M14 7h5M14 12h4M14 17h3"/>',

@@ -78,6 +78,7 @@ export function mountPlayerBar(root, app) {
   const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, miniBtn, fullBtn, more);
   // The mini player shows a bigger cover: fetch one that size.
   window.addEventListener('fusion:mini', () => {
+    volPop.hidden = true;
     artTrack = undefined;
     renderTrack();
   });
@@ -109,7 +110,7 @@ export function mountPlayerBar(root, app) {
   textBox.addEventListener('pointerenter', () => {
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => {
-      if (!tipText) return;
+      if (!tipText || isMini()) return;
       tip.textContent = tipText;
       tip.hidden = false;
       const r = textBox.getBoundingClientRect();
@@ -320,15 +321,23 @@ export function mountPlayerBar(root, app) {
   // --- volume --------------------------------------------------------------
   function renderVolume() {
     const v = player.muted ? 0 : player.volume;
-    volFill.style.transform = `scaleY(${v / 100})`;
-    volValue.textContent = Math.round(v);
+    setVolFill(v);
     setIcon(volBtn.querySelector('.icon'), player.muted || v === 0 ? 'mute' : 'volume');
+  }
+  // The mini player has no room above the bar: there the slider lies across
+  // the controls row instead of standing up from the volume button.
+  function setVolFill(v) {
+    volFill.style.transform = volPop.classList.contains('across') ? `scaleX(${v / 100})` : `scaleY(${v / 100})`;
+    volValue.textContent = Math.round(v);
   }
   function toggleVolume() {
     volPop.hidden = !volPop.hidden;
     if (!volPop.hidden) {
-      const r = volBtn.getBoundingClientRect();
-      volPop.style.left = r.left + r.width / 2 - 30 + 'px';
+      const across = isMini();
+      volPop.classList.toggle('across', across);
+      const r = (across ? controls : volBtn).getBoundingClientRect();
+      Object.assign(volPop.style, across ? { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', bottom: 'auto' } : { left: r.left + r.width / 2 - 30 + 'px', top: '', width: '', height: '', bottom: '' });
+      setVolFill(player.muted ? 0 : player.volume);
       setTimeout(() => document.addEventListener('mousedown', closeVolume), 0);
     }
   }
@@ -341,10 +350,10 @@ export function mountPlayerBar(root, app) {
   volSlider.addEventListener('pointerdown', (e) => {
     volSlider.setPointerCapture(e.pointerId);
     const rect = volTrack.getBoundingClientRect();
-    const val = (ev) => clamp((rect.bottom - ev.clientY) / rect.height, 0, 1) * 100;
+    const across = volPop.classList.contains('across');
+    const val = (ev) => clamp(across ? (ev.clientX - rect.left) / rect.width : (rect.bottom - ev.clientY) / rect.height, 0, 1) * 100;
     const move = (ev) => {
-      volFill.style.transform = `scaleY(${val(ev) / 100})`;
-      volValue.textContent = Math.round(val(ev));
+      setVolFill(val(ev));
       player.setVolume(val(ev));
     };
     const up = () => {

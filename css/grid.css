@@ -896,19 +896,27 @@
   top: 0;
   left: 0;
   right: 0;
-  padding: 16px 0 0;
+}
+
+/* The shelves sit on a band of their own, set off from the albums below. */
+.shelves-band {
+  padding: 20px 0 4px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-bottom: 1px solid var(--line);
 }
 
 .shelf {
-  margin-bottom: 8px;
+  margin-bottom: 28px;
 }
 
+/* Heading to covers: 16px, for the shelves and "All albums" alike. */
 .shelf-head,
 .shelf-all {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 32px 12px 40px;
+  height: 34px;
+  margin: 0 32px 8px 40px;
   font-size: 18px;
   font-weight: 600;
   color: var(--text);
@@ -920,8 +928,13 @@
 }
 
 .shelf-all {
-  margin-top: 8px;
+  margin-top: 24px;
   margin-bottom: 0;
+}
+
+.shelf-panel {
+  position: relative;
+  margin: 4px 0 28px;
 }
 
 .shelf-arrows {

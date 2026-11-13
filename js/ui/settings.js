@@ -87,6 +87,15 @@ export function mountSettings(root, app) {
       el('button.set-tab', { role: 'tab', dataset: { tab: id }, onclick: () => ((tab = id), (body.scrollTop = 0), render()) }, label),
     ),
   );
+  // Main menu, Preferences, Fullscreen: above the tabs, on every page.
+  const quickRow = el(
+    'div.set-quick.set-quick-top',
+    null,
+    quick('menu', 'Main menu', async () => showMenu(await foobarMenuItems())),
+    quick('settings', 'Preferences', foobar('misc.showPreferences')),
+    fullscreenBtn,
+  );
+  panel.insertBefore(quickRow, body);
   panel.insertBefore(tabs, body);
 
   function render() {
@@ -95,16 +104,7 @@ export function mountSettings(root, app) {
       b.classList.toggle('on', on);
       b.setAttribute('aria-selected', String(on));
     }
-    clear(body).append(
-      el(
-        'div.set-quick',
-        null,
-        quick('menu', 'Main menu', async () => showMenu(await foobarMenuItems())),
-        quick('settings', 'Preferences', foobar('misc.showPreferences')),
-        fullscreenBtn,
-      ),
-      ...PAGES[tab](),
-    );
+    clear(body).append(...PAGES[tab]());
   }
 
   const PAGES = {

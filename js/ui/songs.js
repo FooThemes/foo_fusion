@@ -13,7 +13,8 @@ import { heartButton, setHeart, refreshHearts } from './heart.js';
 import { draggableRows, selectionOr } from './dnd.js';
 import { favourites } from '../data/favourites.js';
 import * as store from '../core/store.js';
-import { showMenu } from './menus.js';
+import { showMenu, dialog } from './menus.js';
+import { attachAssist } from './patternassist.js';
 
 const ROW_H = 35;
 const PAGE = 120;
@@ -41,9 +42,54 @@ const COLUMNS = {
 const DEFAULT_COLUMNS = ['fav', 'title', 'artist', 'album', 'year', 'genre', 'len'];
 const MIN_WIDTH = 28;
 
+// Your own columns: any title formatting pattern, as in foobar2000's own
+// playlist columns. Kept in store.customColumns as [{ id, label, pattern,
+// right }]; their values come with the songs' other details (view.tracks).
+const custom = () => store.get('customColumns') || [];
+const col = (k) => COLUMNS[k] || customCol(k);
+function customCol(k) {
+  const c = custom().find((x) => x.id === k);
+  return c && { label: c.label, width: c.right ? '80px' : 'minmax(0, 1.5fr)', right: !!c.right, menu: `${c.label} (${c.pattern})`, custom: c };
+}
+
 function columns() {
-  const list = (store.get('songColumns') || DEFAULT_COLUMNS).filter((k) => COLUMNS[k]);
+  const list = (store.get('songColumns') || DEFAULT_COLUMNS).filter((k) => col(k));
   return list.includes('title') ? list : ['title', ...list];
+}
+
+/** Add or change a column of your own: its name and title formatting pattern. */
+async function editColumn(existing = null) {
+  const name = el('input.dialog-input', { type: 'text', value: existing?.label || '', placeholder: 'e.g. Rating', spellcheck: false });
+  const pattern = el('input.dialog-input.pa-input', { type: 'text', value: existing?.pattern || '', placeholder: 'e.g. $if2(%rating%,-)', spellcheck: false });
+  const status = el('div.pa-status');
+  const right = el('input', { type: 'checkbox', checked: !!existing?.right });
+  const body = el(
+    'div.col-dialog',
+    null,
+    el('label.dialog-label', { text: 'Name' }),
+    name,
+    el('label.dialog-label', { text: 'Pattern (title formatting, as in foobar2000’s own columns)' }),
+    pattern,
+    status,
+    el('label.dialog-check', null, right, el('span', { text: 'Right-aligned (numbers)' })),
+  );
+  attachAssist(pattern, 'format', status).refresh?.();
+  const ok = await dialog(existing ? 'Edit column' : 'New column', body, (close) => [
+    el('button.btn-primary', { text: existing ? 'Save' : 'Add column', onclick: () => close(true) }),
+    el('button.btn-text', { text: 'Cancel', onclick: () => close(false) }),
+  ]);
+  const label = name.value.trim();
+  const pat = pattern.value.trim();
+  if (!ok || !pat) return;
+  const list = custom();
+  if (existing) {
+    store.set('customColumns', list.map((c) => (c.id === existing.id ? { ...c, label: label || pat, pattern: pat, right: right.checked } : c)));
+  } else {
+    const id = 'x' + Date.now().toString(36);
+    store.set('customColumns', [...list, { id, label: label || pat, pattern: pat, right: right.checked }]);
+    store.set('songColumns', [...columns(), id]);
+  }
+  view.refreshHeads(); // the songs' details again, with the new pattern
 }
 
 export class SongList {
@@ -54,11 +100,11 @@ export class SongList {
     this.wrap = el('div.songs', { role: 'listbox', 'aria-multiselectable': 'true' }, this.headerRow, this.sizer);
     scroller.append(this.wrap);
     this.#buildHeader();
-    this.headerRow.addEventListener('contextmenu', (e) => (e.preventDefault(), this.#columnMenu()));
+    this.headerRow.addEventListener('contextmenu', (e) => (e.preventDefault(), this.#columnMenu(e)));
     this.#dragColumns();
     this.#resizeColumns();
     this.offStore = store.subscribe((k) => {
-      if (k !== 'songColumns' && k !== 'songColumnWidths') return;
+      if (k !== 'songColumns' && k !== 'songColumnWidths' && k !== 'customColumns') return;
       this.#buildHeader();
       for (const node of [...this.nodes.values(), ...this.free]) node.remove();
       this.nodes.clear();
@@ -142,13 +188,13 @@ export class SongList {
   #buildHeader() {
     this.cols = columns();
     const widths = store.get('songColumnWidths') || {};
-    this.wrap.style.setProperty('--song-cols', this.cols.map((k) => (widths[k] ? `${widths[k]}px` : COLUMNS[k].width)).join(' '));
+    this.wrap.style.setProperty('--song-cols', this.cols.map((k) => (widths[k] ? `${widths[k]}px` : col(k).width)).join(' '));
     this.headerRow.replaceChildren(
       ...this.cols.map((k) =>
         el(
-          `div.c-${k}${COLUMNS[k].right ? '.right' : ''}`,
-          { dataset: { col: k }, title: COLUMNS[k].menu || COLUMNS[k].label },
-          COLUMNS[k].icon ? icon(COLUMNS[k].icon) : el('span.col-label', { text: COLUMNS[k].label }),
+          `div.c-${k}${col(k).right ? '.right' : ''}`,
+          { dataset: { col: k }, title: col(k).menu || col(k).label },
+          col(k).icon ? icon(col(k).icon) : el('span.col-label', { text: col(k).label }),
           el('span.col-resize', { title: 'Drag to resize; double-click for the default width' }),
         ),
       ),
@@ -184,7 +230,7 @@ export class SongList {
       drag.now = w;
       // Live, without rebuilding the rows: just the column template.
       const widths = { ...(store.get('songColumnWidths') || {}), [drag.key]: w };
-      this.wrap.style.setProperty('--song-cols', this.cols.map((k) => (widths[k] ? `${widths[k]}px` : COLUMNS[k].width)).join(' '));
+      this.wrap.style.setProperty('--song-cols', this.cols.map((k) => (widths[k] ? `${widths[k]}px` : col(k).width)).join(' '));
     });
     const end = () => {
       if (!drag) return;
@@ -198,52 +244,102 @@ export class SongList {
 
   }
 
-  /** Right-click the header: tick the columns to show. */
-  #columnMenu() {
+  /** Right-click the header: tick the columns to show, or add your own. */
+  #columnMenu(e) {
     const shown = new Set(this.cols);
     const toggle = (k) => {
       const list = shown.has(k) ? this.cols.filter((c) => c !== k) : [...this.cols, k];
       store.set('songColumns', list);
     };
+    const own = custom();
+    const clicked = own.find((c) => c.id === e?.target.closest?.('[data-col]')?.dataset.col);
     showMenu([
       ...Object.entries(COLUMNS).map(([k, c]) => ({ label: c.menu || c.label, checked: shown.has(k), enabled: !c.always, run: () => toggle(k) })),
+      ...(own.length ? ['-', ...own.map((c) => ({ label: c.label, checked: shown.has(c.id), run: () => toggle(c.id) }))] : []),
+      '-',
+      { label: 'New column…', run: () => editColumn() },
+      ...(clicked
+        ? [
+            { label: `Edit “${clicked.label}”…`, run: () => editColumn(clicked) },
+            {
+              label: `Delete “${clicked.label}”`,
+              run: () => {
+                store.set('customColumns', own.filter((c) => c.id !== clicked.id));
+                store.set('songColumns', this.cols.filter((k) => k !== clicked.id));
+              },
+            },
+          ]
+        : []),
       '-',
       { label: 'Reset columns', run: () => (store.set('songColumnWidths', {}), store.set('songColumns', [...DEFAULT_COLUMNS])) },
     ]);
   }
 
-  /** Drag a column header left or right to move the column. */
+  /** Drag a column header left or right to move the column. The other
+   *  columns (header and songs) make way as it passes them. */
   #dragColumns() {
     let drag = null;
+    const cellsOf = (k) => this.wrap.querySelectorAll(`[data-col="${CSS.escape(k)}"]`);
+    // Where the dragged column would go: the others it has passed shift over.
+    const plan = (d, dx) => {
+      const mid = d.rect.left + d.rect.width / 2 + dx;
+      const shift = new Map();
+      let at = d.index;
+      d.others.forEach(({ key, rect, index }) => {
+        const c = rect.left + rect.width / 2;
+        if (index > d.index && c < mid) {
+          shift.set(key, -d.rect.width);
+          at = Math.max(at, index);
+        } else if (index < d.index && c > mid) {
+          shift.set(key, d.rect.width);
+          at = Math.min(at, index);
+        } else shift.set(key, 0);
+      });
+      return { shift, at };
+    };
     this.headerRow.addEventListener('pointerdown', (e) => {
       const cell = e.target.closest('[data-col]');
       if (!cell || e.button !== 0 || e.target.closest('.col-resize')) return;
-      drag = { cell, key: cell.dataset.col, x: e.clientX, moved: false };
+      const heads = [...this.headerRow.querySelectorAll('[data-col]')];
+      drag = {
+        cell,
+        key: cell.dataset.col,
+        x: e.clientX,
+        moved: false,
+        index: heads.indexOf(cell),
+        rect: cell.getBoundingClientRect(),
+        others: heads.map((c, index) => ({ key: c.dataset.col, rect: c.getBoundingClientRect(), index })).filter((o) => o.key !== cell.dataset.col),
+      };
       this.headerRow.setPointerCapture(e.pointerId);
     });
     this.headerRow.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const dx = e.clientX - drag.x;
       if (!drag.moved && Math.abs(dx) < 6) return;
+      if (!drag.moved) this.wrap.classList.add('col-moving');
       drag.moved = true;
       drag.cell.classList.add('dragging');
-      drag.cell.style.transform = `translateX(${dx}px)`;
+      for (const c of cellsOf(drag.key)) {
+        c.classList.add('col-drag');
+        c.style.transform = `translateX(${dx}px)`;
+      }
+      const { shift } = plan(drag, dx);
+      for (const [k, by] of shift) for (const c of cellsOf(k)) c.style.transform = by ? `translateX(${by}px)` : '';
+      drag.dx = dx;
     });
-    const end = (e) => {
+    const end = () => {
       if (!drag) return;
       const d = drag;
       drag = null;
       d.cell.classList.remove('dragging');
-      d.cell.style.transform = '';
+      this.wrap.classList.remove('col-moving');
+      for (const c of this.wrap.querySelectorAll('[data-col]')) {
+        c.style.transform = '';
+        c.classList.remove('col-drag');
+      }
       if (!d.moved) return;
-      // Where it was dropped: before the first column whose middle is right of the pointer.
-      const others = [...this.headerRow.querySelectorAll('[data-col]')].filter((c) => c !== d.cell);
-      const before = others.find((c) => {
-        const r = c.getBoundingClientRect();
-        return e.clientX < r.left + r.width / 2;
-      });
+      const { at } = plan(d, d.dx || 0);
       const list = this.cols.filter((k) => k !== d.key);
-      const at = before ? list.indexOf(before.dataset.col) : list.length;
       list.splice(at, 0, d.key);
       if (list.join() !== this.cols.join()) store.set('songColumns', list);
     };
@@ -252,7 +348,7 @@ export class SongList {
   }
 
   #make() {
-    const node = el('div.song-row', { role: 'option' }, ...this.cols.map((k) => el(`div.c-${k}.ellipsis${COLUMNS[k].right ? '.right' : ''}`, { dataset: { col: k } })));
+    const node = el('div.song-row', { role: 'option' }, ...this.cols.map((k) => el(`div.c-${k}.ellipsis${col(k).right ? '.right' : ''}`, { dataset: { col: k } })));
     this.sizer.append(node);
     return node;
   }
@@ -292,7 +388,7 @@ export class SongList {
           } else c.replaceChildren();
           break;
         default:
-          c.textContent = t ? CELL[k](t, f) : '';
+          c.textContent = !t ? '' : CELL[k] ? CELL[k](t, f) : (f['x_' + k] ?? '');
       }
     });
     node.title = t ? `${t.title} - ${t.artist}` + (tip ? `\n\n${tip}` : '') : '';

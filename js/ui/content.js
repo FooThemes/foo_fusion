@@ -67,6 +67,8 @@ export function mountContent(root) {
     view.clearSelection();
   });
 
+  window.addEventListener('fusion:scrolltop', () => scroller.scrollTo({ top: 0, behavior: store.get('smoothScroll') ? 'smooth' : 'auto' }));
+
   function kindFor(mode) {
     return mode === 'songs' ? 'songs' : mode === 'nowplaying' ? 'nowplaying' : mode === 'stats' ? 'stats' : mode === 'folders' ? 'folders' : 'grid';
   }

@@ -391,6 +391,7 @@ button.heart.pb-heart.hate {
 body.mini .pb-mini,
 body.mini .pb-order,
 body.mini .pb-lyrics,
+body.mini .pb-controls [data-settings-toggle],
 body.mini #sidebar,
 body.mini #sidebar-resizer,
 body.mini #main,
@@ -401,6 +402,61 @@ body.mini .selection-bar {
 
 body.mini .pb-full {
   display: flex !important;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 30px !important;
+  height: 30px !important;
+  opacity: 0.7;
+}
+
+body.mini .pb-full:hover {
+  opacity: 1;
+}
+
+body.mini .pb-full .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Its title clears the enlarge button. */
+body.mini .pb-text {
+  padding-right: 30px;
+}
+
+/* Volume across the controls row (the mini player has no room above). */
+.vol-pop.across {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 4px 0 0;
+  box-shadow: none;
+}
+
+.vol-pop.across .vol-slider {
+  flex: 1;
+  width: auto;
+  height: 100%;
+  align-items: center;
+}
+
+.vol-pop.across .vol-track {
+  width: 100%;
+  height: 5px;
+}
+
+.vol-pop.across .vol-fill {
+  transform-origin: left;
+}
+
+.vol-pop.across .vol-mute {
+  order: -1;
+}
+
+.vol-pop.across .vol-value {
+  order: 1;
+  min-width: 26px;
+  text-align: right;
 }
 
 body.mini #app {
@@ -439,6 +495,10 @@ body.mini .pb-text {
   grid-area: text;
   align-self: end;
   padding-bottom: 4px;
+}
+
+body.mini #playerbar {
+  padding-right: 10px;
 }
 
 body.mini .pb-title {

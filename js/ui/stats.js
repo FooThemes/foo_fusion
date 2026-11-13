@@ -7,9 +7,9 @@
 // Playback Statistics (foo_enhanced_playcount) records; without it the page
 // says so and shows the library's growth instead.
 
-import { el, plural, formatDuration } from '../core/util.js';
+import { el, plural, formatDuration, debounce } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { tryCall, call } from '../core/bridge.js';
+import { tryCall, call, on } from '../core/bridge.js';
 import { TF } from '../data/patterns.js';
 import { playlists, COLLECTION } from '../data/playlists.js';
 import { bindArt } from '../data/artwork.js';
@@ -40,36 +40,44 @@ function parseTimes(text) {
   }
 }
 
-async function readAll(pl, onProgress) {
+const FORMATS = { ar: TF.artistsMulti, aa: TF.albumArtist, al: TF.albumTitle, k: TF.albumKey, gn: TF.genre, c: TF.playCountAny, l: TF.lastPlayedAny, a: TF.addedAny, pt: TIMES, lt: LASTFM_TIMES };
+const FIELDS = ['handle', 'title', 'duration'];
+
+function toTrack(t) {
+  const f = t.formats || {};
+  // Its own plays and Last.fm's, once each (the same play in both counts once).
+  const own = parseTimes(f.pt);
+  const lfm = parseTimes(f.lt).filter((x) => !own.some((o) => Math.abs(o - x) < 120000));
+  const times = own.concat(lfm);
+  return {
+    row: t.index,
+    handle: t.handle,
+    title: t.title,
+    duration: t.duration || 0,
+    artists: (f.ar || '').split('|||').filter(Boolean),
+    albumArtist: f.aa,
+    album: f.al,
+    albumKey: f.k,
+    genres: (f.gn || '').split('|||').filter(Boolean),
+    // The play counter, or every play known (with Last.fm's history the
+    // times can go back further than the counter does).
+    plays: Math.max(parseInt(f.c, 10) || 0, times.length),
+    last: f.l || '',
+    added: f.a || '',
+    times,
+  };
+}
+
+async function readAll(pl, onProgress, fresh = false) {
   const key = `${pl.guid}|${pl.trackCount}`;
-  if (cache?.key === key && Date.now() - cache.at < 120000) return cache.data;
-  const formats = { ar: TF.artistsMulti, aa: TF.albumArtist, al: TF.albumTitle, k: TF.albumKey, gn: TF.genre, c: TF.playCountAny, l: TF.lastPlayedAny, a: TF.addedAny, pt: TIMES, lt: LASTFM_TIMES };
+  if (cache?.key === key && !fresh) return cache.data;
+  const formats = FORMATS;
   const tracks = [];
   for (let from = 0; from < pl.trackCount; from += 2000) {
     const rows = Array.from({ length: Math.min(2000, pl.trackCount - from) }, (_, i) => from + i);
-    const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows, fields: ['handle', 'title', 'duration'], formats });
+    const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows, fields: FIELDS, formats });
     if (!res) return null;
-    for (const t of res.tracks) {
-      const f = t.formats || {};
-      // Its own plays and Last.fm's, once each (the same play in both counts once).
-      const own = parseTimes(f.pt);
-      const lfm = parseTimes(f.lt).filter((x) => !own.some((o) => Math.abs(o - x) < 120000));
-      tracks.push({
-        row: t.index,
-        handle: t.handle,
-        title: t.title,
-        duration: t.duration || 0,
-        artists: (f.ar || '').split('|||').filter(Boolean),
-        albumArtist: f.aa,
-        album: f.al,
-        albumKey: f.k,
-        genres: (f.gn || '').split('|||').filter(Boolean),
-        plays: parseInt(f.c, 10) || 0,
-        last: f.l || '',
-        added: f.a || '',
-        times: own.concat(lfm),
-      });
-    }
+    for (const t of res.tracks) tracks.push(toTrack(t));
     onProgress?.(Math.min(1, (from + 2000) / pl.trackCount));
   }
   cache = { key, at: Date.now(), data: tracks };
@@ -86,13 +94,49 @@ export class StatsPage {
   constructor(scroller) {
     this.wrap = el('div.stats');
     this.period = 'all';
+    this.scroller = scroller;
     scroller.append(this.wrap);
+    // Played or retagged songs: only those are read again, and the page
+    // redrawn where it is (not read from scratch).
+    const changed = new Set();
+    const refresh = debounce(() => {
+      const handles = [...changed];
+      changed.clear();
+      this.#refresh(handles);
+    }, 1500);
+    this.offTags = on('metadb:changed', (d) => {
+      for (const h of d.handles || []) changed.add(h);
+      if (changed.size) refresh();
+    });
     this.load();
   }
 
   destroy() {
     this.dead = true;
+    this.offTags?.();
     this.wrap.remove();
+  }
+
+  /** The page's own redraw (the content area calls this after scrolling). */
+  render() {
+    if (this.tracks) this.#draw();
+  }
+
+  async #refresh(handles) {
+    if (this.dead || !this.tracks || !handles.length) return;
+    const byHandle = new Map(this.tracks.map((t, i) => [t.handle, i]));
+    const idx = handles.map((h) => byHandle.get(h)).filter((i) => i != null);
+    if (!idx.length) return;
+    const res = await tryCall('playlist.getTracksAt', { playlist: this.pl.index, rows: idx.map((i) => this.tracks[i].row), fields: FIELDS, formats: FORMATS });
+    if (this.dead || !res) return;
+    for (const t of res.tracks) {
+      const i = byHandle.get(t.handle);
+      if (i != null) this.tracks[i] = toTrack(t);
+    }
+    this.hasTimes = this.tracks.some((t) => t.times.length);
+    const top = this.scroller.scrollTop;
+    this.#draw();
+    this.scroller.scrollTop = top;
   }
 
   async load() {
@@ -106,7 +150,18 @@ export class StatsPage {
     this.pl = pl;
     this.tracks = tracks;
     this.hasTimes = tracks.some((t) => t.times.length);
-    this.render();
+    this.#draw();
+    // Shown from what was read last time; read again quietly if that was a
+    // while ago (songs played meanwhile), and redrawn in place.
+    if (Date.now() - cache.at > 60000) {
+      const again = await readAll(pl, null, true);
+      if (this.dead || !again) return;
+      this.tracks = again;
+      this.hasTimes = again.some((t) => t.times.length);
+      const top = this.scroller.scrollTop;
+      this.#draw();
+      this.scroller.scrollTop = top;
+    }
   }
 
   /** Plays of a song in the chosen period (all of them without play times). */
@@ -117,7 +172,7 @@ export class StatsPage {
     return t.times.filter((x) => x >= from).length;
   }
 
-  render() {
+  #draw() {
     const tracks = this.tracks;
     const plays = new Map(tracks.map((t) => [t, this.#plays(t)]));
     const total = [...plays.values()].reduce((a, b) => a + b, 0);
@@ -149,7 +204,7 @@ export class StatsPage {
         ? el(
             'div.stats-periods',
             { role: 'tablist' },
-            ...PERIODS.map(([id, label]) => el('button.stats-period' + (id === this.period ? '.on' : ''), { role: 'tab', 'aria-selected': String(id === this.period), onclick: () => ((this.period = id), this.render()) }, label)),
+            ...PERIODS.map(([id, label]) => el('button.stats-period' + (id === this.period ? '.on' : ''), { role: 'tab', 'aria-selected': String(id === this.period), onclick: () => ((this.period = id), this.#draw()) }, label)),
           )
         : null,
     );
@@ -172,6 +227,7 @@ export class StatsPage {
       sections.push(
         el('div.stats-cols', null, barList('Top artists', top(artists), (e) => openValue('artists', e.key)), barList('Top genres', top(genres), (e) => openValue('genres', e.key))),
         this.#albums(top(albums)),
+        this.#songs(played.sort((a, b) => plays.get(b) - plays.get(a)).slice(0, TOP), plays),
       );
     }
     sections.push(this.#timeline());
@@ -194,13 +250,37 @@ export class StatsPage {
           bindArt(img, a.handle, 120, ['front']);
           return el(
             'button.stats-album',
-            { title: `Play ${a.title}`, onclick: () => call('playlist.playTrack', { playlist: this.pl.index, index: a.row }) },
+            { title: `Open ${a.title}`, onclick: async () => view.goTo('albums', await view.albumKeyOf(a.handle)) },
             el('span.stats-rank', { text: String(i + 1) }),
             el('div.art.ph-album', null, img),
             el('span.stats-album-t1.ellipsis', { text: a.title }),
             el('span.stats-album-t2.ellipsis', { text: `${a.artist} · ${plural(a.n, 'play')}` }),
           );
         }),
+      ),
+    );
+  }
+
+  /** The most played songs: click one to play it. */
+  #songs(list, plays) {
+    if (!list.length) return el('div');
+    const max = Math.max(1, ...list.map((t) => plays.get(t)));
+    return el(
+      'section.stats-section',
+      null,
+      el('h3', { text: 'Top songs' }),
+      el(
+        'div.stats-bars',
+        null,
+        ...list.map((t) =>
+          el(
+            'button.stats-bar.stats-bar-song',
+            { title: `Play ${t.title}`, onclick: () => call('playlist.playTrack', { playlist: this.pl.index, index: t.row }) },
+            el('span.stats-bar-name.ellipsis', null, el('span', { text: t.title }), el('span.dim', { text: ` · ${t.artists.join(', ')}` })),
+            el('span.stats-bar-track', null, el('span.stats-bar-fill', { style: { width: `${(plays.get(t) / max) * 100}%` } })),
+            el('span.stats-bar-n', { text: plays.get(t).toLocaleString() }),
+          ),
+        ),
       ),
     );
   }

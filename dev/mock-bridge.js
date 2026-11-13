@@ -194,6 +194,7 @@ export async function installMock() {
   }
   const listeners = new Map();
   const emit = (event, data) => setTimeout(() => (listeners.get(event) || []).forEach((fn) => fn(data)), 0);
+  window.__mockEmit = emit;
   let config = {};
   try {
     config = JSON.parse(localStorage.getItem('fusion-mock-config') || '{}');

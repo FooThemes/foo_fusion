@@ -351,7 +351,7 @@ export async function runMainMenuAny(paths) {
 
 // --- in-page dialogs -------------------------------------------------------
 
-function dialog(title, body, buttons) {
+export function dialog(title, body, buttons) {
   return new Promise((resolve) => {
     const root = document.getElementById('overlay-root');
     const close = (v) => {

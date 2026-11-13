@@ -459,6 +459,7 @@ export class Grid {
   }
 
   refreshSelection() {
+    this.shelves.refreshSelection();
     this.panel.refreshSelection();
   }
 
@@ -695,6 +696,7 @@ export class Grid {
   }
 
   toggle(i) {
+    this.shelves.closeAlbum(); // one open album at a time
     if (this.expanded === i) {
       this.collapse();
       return;

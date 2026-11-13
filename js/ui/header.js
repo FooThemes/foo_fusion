@@ -35,7 +35,18 @@ export function mountHeader(root, app) {
   root.append(el('div.head-row', null, showSide, back, title, actions), tools);
 
   for (const [mode, label] of TABS) {
-    tabs.append(el('button.tab', { role: 'tab', dataset: { mode }, onclick: () => view.setMode(mode) }, label));
+    tabs.append(
+      el(
+        'button.tab',
+        {
+          role: 'tab',
+          dataset: { mode },
+          // The tab already showing: back to the top of it.
+          onclick: () => (mode === view.mode && !view.drill ? window.dispatchEvent(new CustomEvent('fusion:scrolltop')) : view.setMode(mode)),
+        },
+        label,
+      ),
+    );
   }
 
   function render() {
@@ -112,7 +123,9 @@ export function mountHeader(root, app) {
   }
 
   function orderMenu(e) {
-    dropdown(e.currentTarget, Object.entries(ORDER_LABELS).map(([k, label]) => ({ label, checked: player.order === k, run: () => player.setOrder(k) })));
+    // Default | repeats | Random | shuffles (as the play bar's menu).
+    const items = Object.entries(ORDER_LABELS).flatMap(([k, label]) => [...(k === 'repeat-playlist' || k === 'random' || k === 'shuffle-tracks' ? ['-'] : []), { label, checked: player.order === k, run: () => player.setOrder(k) }]);
+    dropdown(e.currentTarget, items);
   }
 
   async function shuffleAll() {

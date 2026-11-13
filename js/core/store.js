@@ -92,6 +92,7 @@ const DEFAULTS = {
   versionTooltips: true, // list every version in tooltips
   gifCovers: 'large', // animate GIF covers: 'large' (open album, Now Playing), 'everywhere' or 'never'
   artistNoPicture: 'cover', // artists without a picture: 'cover' (an album's) or 'placeholder'
+  customColumns: [], // your own Songs view columns: [{ id, label, pattern, right }]
   songColumns: null, // Songs view columns in order (null: the defaults, see songs.js)
   songColumnWidths: {}, // Songs view column -> width in px (sized by hand)
   genreInfoFolder: '', // one folder per genre: genre.nfo, folder.jpg, fanart.jpg

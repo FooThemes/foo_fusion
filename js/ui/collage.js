@@ -3,6 +3,8 @@
 
 import { artUrl } from '../data/artwork.js';
 import { pictureUrl } from '../data/artistinfo.js';
+import { cachedUrl, storeCover } from '../data/artcache.js';
+import { hash } from '../core/util.js';
 
 const collages = new Map(); // key -> Promise<blob URL | null>
 
@@ -11,11 +13,28 @@ export function genrePictureUrl(file, px) {
   return pictureUrl(file, px); // cached there
 }
 
-/** A collage of these tracks' covers, w × h CSS pixels (cached). */
+/**
+ * A collage of these tracks' covers, w × h CSS pixels (cached). Also kept on
+ * disk in the art cache, named after the albums in it: a genre's collage is
+ * made again only when its biggest albums change.
+ */
 export function collageUrl(handles, w, h) {
   const key = `${handles.join('|')}|${w}x${h}`;
   if (!collages.has(key)) {
-    collages.set(key, make(handles, w, h).catch(() => null));
+    const dpr = window.devicePixelRatio || 1;
+    const W = Math.round(w * dpr);
+    const H = Math.round(h * dpr);
+    const pick = { path: `collage:${hash(handles.join('|')).toString(36)}${hash(handles.join('|') + '#').toString(36)}:${handles.length}`, size: 1, name: 'collage.webp' };
+    const size = `${Math.max(W, H)}c${W}x${H}`; // the longer side (for scaling), then the exact size
+    const disk = cachedUrl(pick, size, false);
+    collages.set(
+      key,
+      disk
+        ? Promise.resolve(disk)
+        : make(handles, w, h)
+            .then((url) => (url && storeCover(pick, size, url, false), url))
+            .catch(() => null),
+    );
     if (collages.size > 300) collages.delete(collages.keys().next().value);
   }
   return collages.get(key);

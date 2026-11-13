@@ -35,8 +35,10 @@ export function mountInfoPanel(root) {
   const lyrTools = el('div.lyr-tools', { hidden: true });
   // One scroller: the cover and title scroll away, then the tabs (and the
   // lyric buttons) stick to the top while the tab's content scrolls on.
-  const bar = el('div.info-bar', null, tabs, lyrTools);
-  const scroller = el('div.info-scroll', null, art, heading, bar, table, tags, tech, lyr, empty);
+  // The song's title and artist stay at the top with the tabs (only the
+  // cover scrolls away); the lyric buttons wait at the bottom right.
+  const bar = el('div.info-bar', null, heading, tabs);
+  const scroller = el('div.info-scroll', null, art, bar, table, tags, tech, lyr, empty, lyrTools);
   root.append(close, scroller);
 
   const render = debounce(async () => {

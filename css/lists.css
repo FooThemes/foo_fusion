@@ -697,3 +697,24 @@
   color: var(--text2);
   font-size: 13px;
 }
+
+.stats-bar .dim {
+  color: var(--text2);
+}
+
+/* Moving a column: the others slide aside as it passes (header and songs). */
+.songs.col-moving [data-col] {
+  transition: transform 0.15s ease;
+}
+
+.songs.col-moving .song-head [data-col].dragging,
+.songs.col-moving .song-row [data-col] {
+  position: relative;
+}
+
+.songs.col-moving .col-drag {
+  transition: none;
+  z-index: 2;
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--line);
+}

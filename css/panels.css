@@ -794,12 +794,12 @@
 
 .plm-row {
   position: relative;
-  padding-left: calc(22px + var(--depth, 0) * 22px);
+  padding-left: calc(22px + var(--depth, 0) * 18px);
 }
 
 .plm-folder .chev {
   position: absolute;
-  left: calc(4px + var(--depth, 0) * 22px);
+  left: calc(4px + var(--depth, 0) * 18px);
   width: 14px !important;
   height: 14px !important;
 }
@@ -996,14 +996,14 @@ body.pdragging * {
 }
 
 /* Settings pages: tabs under the heading. */
-.set-tabs {
+.tabs.line.set-tabs {
   justify-content: space-between;
   gap: 0;
   padding: 0 16px;
   flex: none;
 }
 
-.set-tabs .tab {
+.tabs.line.set-tabs .tab {
   padding: 8px 4px 7px;
 }
 

@@ -506,6 +506,15 @@
   color: var(--list-text2);
 }
 
+.tp-plays {
+  flex: none;
+  width: 64px;
+  text-align: right;
+  color: var(--list-text2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .tp-len {
   flex: none;
   color: var(--list-text2);

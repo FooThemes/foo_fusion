@@ -100,35 +100,13 @@ export function mountPlayerBar(root, app) {
   }
   new ResizeObserver(() => [title, artist].forEach(marquee)).observe(nowBox);
 
-  // Hover card for the playing song, placed above the bar (there's no room
-  // below it) and kept inside the window.
-  let tipText = '';
-  let tipTimer = 0;
-  const tip = el('div.pb-tip', { hidden: true });
-  document.body.append(tip);
+  // Hover card for the playing song (tooltip.js places it: above the bar).
   const textBox = nowBox.querySelector('.pb-text');
-  textBox.addEventListener('pointerenter', () => {
-    clearTimeout(tipTimer);
-    tipTimer = setTimeout(() => {
-      if (!tipText || isMini()) return;
-      tip.textContent = tipText;
-      tip.hidden = false;
-      const r = textBox.getBoundingClientRect();
-      const w = tip.offsetWidth;
-      tip.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
-      tip.style.top = r.top - tip.offsetHeight - 10 + 'px';
-    }, 500);
-  });
-  textBox.addEventListener('pointerleave', () => {
-    clearTimeout(tipTimer);
-    tip.hidden = true;
-  });
 
   // foobar2000's own menu for the playing song (Properties and so on).
   nowBox.addEventListener('contextmenu', (e) => {
     if (!player.active) return;
     e.preventDefault();
-    tip.hidden = true;
     const handle = player.track?.handle;
     contextMenu({ mode: 'nowPlaying' }, handle ? [{ label: 'Refresh artwork', run: () => refreshArt([handle]) }] : []);
   });
@@ -159,7 +137,7 @@ export function mountPlayerBar(root, app) {
     root.classList.toggle('idle', !on);
     const tip = setVersioned(titleText, on ? t.title || t.path.split(/[\\/]/).pop() : '', v?.title, 'titles');
     setVersioned(artistText, on ? t.artist : '', on ? v?.artist : null, 'artists');
-    tipText = on ? [t.title, t.artist, t.album].filter(Boolean).join('\n') + (tip ? `\n\n${tip}` : '') : '';
+    textBox.dataset.tip = on ? [t.title, t.artist, t.album].filter(Boolean).join('\n') + (tip ? `\n\n${tip}` : '') : '';
     requestAnimationFrame(() => [title, artist].forEach(marquee));
     heart.dataset.handle = on ? t.handle : '';
     heart.hidden = !on;

@@ -12,6 +12,7 @@ import { folders } from '../data/folders.js';
 import { newPlaylistDialog } from './autoplaylist.js';
 import { draggablePlaylist, playlistDropTarget, folderDropTarget, draggableFolder } from './dnd.js';
 import { overlayScroll } from './oscroll.js';
+import { playlistIcon, folderIcon } from './plicon.js';
 
 export function mountSidebar(root, app) {
   const search = el('input.search-input', {
@@ -116,7 +117,7 @@ export function mountSidebar(root, app) {
             playlistMenu(p);
           },
         },
-        icon(p.isAutoplaylist ? 'autoplaylist' : 'playlist'),
+        playlistIcon(p),
         el('span.label.ellipsis', { text: p.name }),
         showCounts ? el('span.count', { text: p.trackCount.toLocaleString() }) : null,
       );
@@ -140,7 +141,7 @@ export function mountSidebar(root, app) {
         'button.pl-item.pl-folder',
         { title: `${f.name} - ${node.members.length} playlists`, 'aria-expanded': String(!f.collapsed), onclick: () => folders.toggle(f.id), oncontextmenu: (e) => (e.preventDefault(), folderMenu(f)) },
         icon(f.collapsed ? 'chevronRight' : 'chevronDown', 'chev'),
-        icon('folder'),
+        folderIcon(f),
         el('span.label.ellipsis', { text: f.name }),
         node.members.some((m) => m.guid === pg) ? el('span.dot') : null,
       );

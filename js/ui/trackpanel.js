@@ -29,6 +29,7 @@ const ROW_H = 35;
 const COL_MIN = 300;
 const COL_GAP = 30; // .tp-grid column-gap
 const ROW_CHROME = 150; // number, heart, length, padding and gaps around a title
+const PLAYS_W = 76; // a song's plays (Listening stats): .tp-plays and its gap
 const ROW_H2 = 52; // two-line rows for albums of long titles
 const MAX_ROWS = 22; // fewer columns, but not longer than this per column
 const PAD = 40; // same as the left margin, so the panel is evenly padded
@@ -139,7 +140,7 @@ export class TrackPanel {
     // titles would be cut off (long titles get wider columns, more rows).
     let cols = Math.max(1, Math.min(maxCols, Math.ceil(biggest / 4)));
     const widths = this.#labelWidths();
-    const colWidth = (c) => (listW - COL_GAP * (c - 1)) / c - ROW_CHROME;
+    const colWidth = (c) => (listW - COL_GAP * (c - 1)) / c - ROW_CHROME - (this.group?.plays ? PLAYS_W : 0);
     const fitShare = (c, lines = 1) => (widths.length ? widths.filter((w) => w <= colWidth(c) * lines).length / widths.length : 1);
     const floor = Math.max(1, Math.min(cols, Math.ceil(biggest / MAX_ROWS)));
     while (cols > floor && fitShare(cols) < 0.9) cols--;
@@ -259,6 +260,7 @@ export class TrackPanel {
     if (head?.date || head?.year) parts.push(head.date || head.year);
     for (const g of splitValues(head?.genre || '', 'genres')) parts.push(link('genres', g));
     for (const t of [discs, plural(this.rows.length, 'song'), total ? formatDuration(total) : null]) if (t) parts.push(t);
+    if (group.playsTotal) parts.push(plural(group.playsTotal, 'play')); // opened from Listening stats
     clear(this.meta);
     parts.forEach((p, i) => this.meta.append(...(i ? [' · '] : []), p));
     this.#offerFullAlbum(group);
@@ -435,7 +437,7 @@ export class TrackPanel {
     const albumArtist = this.group?.head?.artist || '';
     const makeRows = (rows, perCol) => {
       const grid = el('div.tp-grid', { style: { gridTemplateRows: `repeat(${perCol}, ${this.rowH || ROW_H}px)` } });
-      for (const r of rows) grid.append(trackRow(r, byRow.get(r), albumArtist));
+      for (const r of rows) grid.append(trackRow(r, byRow.get(r), albumArtist, this.group?.plays));
       return grid;
     };
     if (this.multiDisc && this.disc === 'all') {
@@ -534,7 +536,8 @@ function trackNum(t) {
   return t ? t.formats?.n || (t.trackNumber ? String(t.trackNumber).padStart(2, '0') : '') : '';
 }
 
-function trackRow(r, t, albumArtist) {
+/** `plays`: each song's plays by handle, shown before its length (Listening stats). */
+function trackRow(r, t, albumArtist, plays) {
   // The text sits in an inner span so a cut-off title can slide on hover.
   const text = el('span.tp-name-in');
   const name = el('span.tp-name.ellipsis', null, text);
@@ -544,6 +547,7 @@ function trackRow(r, t, albumArtist) {
     el('span.tp-num', { text: trackNum(t) }),
     name,
     t ? heartButton(t.handle, favourites.state(t)) : null,
+    plays ? el('span.tp-plays', { text: t && plays.get(t.handle) ? plural(plays.get(t.handle), 'play') : '' }) : null,
     el('span.tp-len', { text: t ? formatTime(t.duration) : '' }),
   );
   if (t) {

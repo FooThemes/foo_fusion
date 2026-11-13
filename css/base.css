@@ -238,6 +238,21 @@ input {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
+/* Hover boxes (tooltip.js), for everything with a title. */
+.tip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 420px;
+  padding: 7px 11px;
+  background: var(--menu-bg);
+  color: #eee;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-line;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
 /* A song in a list: the album panel's, Songs, Now playing (each lays out
    its own columns). */
 .row {

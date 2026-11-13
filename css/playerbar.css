@@ -371,20 +371,6 @@ button.heart.pb-heart.hate {
   cursor: pointer;
 }
 
-.pb-tip {
-  position: fixed;
-  z-index: 1000;
-  max-width: 420px;
-  padding: 8px 12px;
-  background: var(--menu-bg);
-  color: #eee;
-  font-size: 12.5px;
-  line-height: 1.45;
-  white-space: pre-line;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-}
-
 /* Mini player (ui/mini.js): the window is just the play bar, laid out as a
    cover on the left with the title, seek bar and controls beside it. */
 .pb-full,

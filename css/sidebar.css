@@ -241,12 +241,12 @@ body.side-collapsed .side-manage {
    with the playlists around it; contents indent one step per level. */
 #sidebar .pl-item {
   position: relative;
-  padding-left: calc(18px + var(--depth, 0) * 20px);
+  padding-left: calc(18px + var(--depth, 0) * 16px);
 }
 
 .pl-folder .chev {
   position: absolute;
-  left: calc(2px + var(--depth, 0) * 20px);
+  left: calc(2px + var(--depth, 0) * 16px);
   width: 14px !important;
   height: 14px !important;
   color: var(--side-text2);

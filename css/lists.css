@@ -499,7 +499,10 @@
 
 .stats-bar:hover,
 .stats-album:hover,
-.stats-song:hover {
+.stats-song:hover,
+.stats-bar.menu-open,
+.stats-album.menu-open,
+.stats-song.menu-open {
   background: var(--hover);
 }
 

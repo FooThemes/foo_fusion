@@ -18,6 +18,7 @@ import { newPlaylistDialog } from './autoplaylist.js';
 import { folders } from '../data/folders.js';
 import { overlayScroll } from './oscroll.js';
 import { sheet } from './sheet.js';
+import { playlistIcon, folderIcon } from './plicon.js';
 
 export function mountPlaylistManager(root, app) {
   const list = el('div.plm-list', { role: 'listbox', 'aria-label': 'Playlists', 'aria-multiselectable': 'true', tabindex: 0 });
@@ -76,7 +77,7 @@ export function mountPlaylistManager(root, app) {
       const row = el(
         'div.row.plm-row' + (nested ? '.nested' : ''),
         { role: 'option', tabindex: -1, dataset: { guid: p.guid }, title: `${p.name}\n${plural(p.trackCount, 'song')}${p.isAutoplaylist ? ' · autoplaylist' : ''}${p.isLocked ? ' · locked' : ''}` },
-        icon(p.isAutoplaylist ? 'autoplaylist' : playlists.isSpecial(p) ? 'collection' : 'playlist'),
+        playlistIcon(p),
         el('span.plm-name.ellipsis', { text: p.name }),
         el('span.plm-count', { text: p.trackCount.toLocaleString() }),
       );
@@ -121,10 +122,10 @@ export function mountPlaylistManager(root, app) {
       }
       const f = node.folder;
       const head = el(
-        'div.plm-row.plm-folder',
+        'div.row.plm-row.plm-folder',
         { title: `${f.name}\n${plural(node.members.length, 'playlist')}`, 'aria-expanded': String(!f.collapsed) },
         icon(f.collapsed ? 'chevronRight' : 'chevronDown', 'chev'),
-        icon('folder'),
+        folderIcon(f),
         el('span.plm-name.ellipsis', { text: f.name }),
         el('span.plm-count', { text: String(node.members.length) }),
       );

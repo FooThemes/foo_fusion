@@ -7,12 +7,14 @@
 // Playback Statistics (foo_enhanced_playcount) records; without it the page
 // says so and shows the library's growth instead.
 
-import { el, plural, formatDuration, formatTime } from '../core/util.js';
+import { el, plural, formatDuration } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { playlists, COLLECTION } from '../data/playlists.js';
 import { bindArt } from '../data/artwork.js';
 import { view } from '../data/view.js';
-import { listening, listeningData, knownData, playSong } from '../data/listening.js';
+import { listening, listeningData, knownData, playSong, currentRows } from '../data/listening.js';
+import { InlineAlbum } from './inlinealbum.js';
+import { tabBar } from './tabs.js';
 
 const TOP = 10;
 const FORGOTTEN_DAYS = 182;
@@ -28,8 +30,12 @@ export class StatsPage {
     this.wrap = el('div.stats');
     this.period = 'all';
     this.scroller = scroller;
-    this.openAlbum = null; // album key shown open under Top albums
+    // Top albums open in place, as albums do in the Collection.
+    this.album = new InlineAlbum({ scroller, className: 'stats-album-panel' });
+    this.groups = new Map(); // album key -> its group (rows in the Collection)
     scroller.append(this.wrap);
+    this.resize = new ResizeObserver(() => this.album.layout());
+    this.resize.observe(this.wrap);
     // Played or retagged songs are read again on their own (listening.js):
     // the page is redrawn where it is.
     this.offChange = listening.on('change', () => this.#update());
@@ -39,7 +45,17 @@ export class StatsPage {
   destroy() {
     this.dead = true;
     this.offChange();
+    this.resize.disconnect();
+    this.album.destroy();
     this.wrap.remove();
+  }
+
+  refreshPlaying() {
+    this.album.refreshPlaying();
+  }
+
+  refreshSelection() {
+    this.album.refreshSelection();
   }
 
   /** The page's own redraw (the content area calls this after scrolling). */
@@ -115,11 +131,10 @@ export class StatsPage {
       'div.stats-head',
       null,
       this.hasTimes
-        ? el(
-            'div.stats-periods',
-            { role: 'tablist' },
-            ...PERIODS.map(([id, label]) => el('button.stats-period' + (id === this.period ? '.on' : ''), { role: 'tab', 'aria-selected': String(id === this.period), onclick: () => ((this.period = id), this.#draw()) }, label)),
-          )
+        ? tabBar(
+            PERIODS.map(([id, label]) => [id, label]),
+            { className: 'small', label: 'Period', picked: this.period, onPick: (id) => ((this.period = id), this.#draw()) },
+          ).node
         : null,
     );
 
@@ -140,7 +155,7 @@ export class StatsPage {
     } else {
       sections.push(
         el('div.stats-cols', null, barList('Top artists', top(artists), (e) => openValue('artists', e.key)), barList('Top genres', top(genres), (e) => openValue('genres', e.key))),
-        this.#albums(top(albums), plays),
+        this.#albums(top(albums)),
         this.#songs(played.sort((a, b) => plays.get(b) - plays.get(a)).slice(0, TOP), plays),
       );
     }
@@ -150,31 +165,18 @@ export class StatsPage {
     this.wrap.replaceChildren(head, tiles, ...sections);
   }
 
-  /** The most played albums: click one to open its songs right there. */
-  #albums(list, plays) {
+  /** The most played albums: click one to open it right there. */
+  #albums(list) {
     if (!list.length) return el('div');
     const grid = el('div.stats-albums');
-    const open = (a, tile) => {
-      const was = grid.querySelector('.stats-album-panel');
-      const same = this.openAlbum === a.key;
-      grid.querySelectorAll('.stats-album.open').forEach((n) => n.classList.remove('open'));
-      if (was) closePanel(was);
-      this.openAlbum = same ? null : a.key;
-      if (same) return;
-      tile.classList.add('open');
-      // After the last tile of the clicked tile's row, across the whole grid.
-      const tiles = [...grid.querySelectorAll('.stats-album')];
-      const rowEnd = tiles.filter((t) => t.offsetTop === tile.offsetTop).pop();
-      const panel = this.#albumPanel(a, plays);
-      rowEnd.after(panel);
-      slideOpen(panel);
-    };
+    const reopen = this.album.key;
+    this.album.close({ animate: false }); // the page is being redrawn
     list.forEach((a, i) => {
       const img = el('img', { alt: '', decoding: 'async' });
       bindArt(img, a.handle, 160, ['front']);
       const tile = el(
         'button.stats-album',
-        { title: a.title, onclick: () => open(a, tile) },
+        { title: a.title, onclick: () => this.#openAlbum(a, tile, grid) },
         el('span.stats-rank', { text: String(i + 1) }),
         el('div.art.ph-album', null, img),
         el('span.stats-album-t1.ellipsis', { text: a.title }),
@@ -182,62 +184,39 @@ export class StatsPage {
       );
       grid.append(tile);
       // Open before the redraw (a song played): open again, without sliding.
-      if (this.openAlbum === a.key) {
-        tile.classList.add('open');
-        queueMicrotask(() => {
-          const tiles = [...grid.querySelectorAll('.stats-album')];
-          tiles.filter((t) => t.offsetTop === tile.offsetTop).pop()?.after(this.#albumPanel(a, plays));
-        });
-      }
+      if (reopen === a.key) queueMicrotask(() => this.#openAlbum(a, tile, grid, { animate: false }));
     });
     return el('section.stats-section', null, el('h3', { text: 'Top albums' }), grid);
   }
 
-  /** An album's songs with their plays: click a song to play it. */
-  #albumPanel(a, plays) {
-    const songs = this.tracks.filter((t) => t.albumKey === a.key).sort((x, y) => (x.discKey || '').localeCompare(y.discKey || '') || (parseInt(x.number, 10) || 0) - (parseInt(y.number, 10) || 0));
-    const img = el('img', { alt: '', decoding: 'async' });
-    bindArt(img, a.handle, 200, ['front']);
-    const playAll = () => songs[0] && playSong(this.pl, songs[0]);
-    const goTo = async () => view.goTo('albums', await view.albumKeyOf(a.handle));
-    return el(
-      'div.stats-album-panel',
-      null,
-      el(
-        'div.sap-inner',
-        null,
-        el('div.art.ph-album.sap-cover', null, img),
-        el(
-          'div.sap-body',
-          null,
-          el(
-            'div.sap-head',
-            null,
-            el('div', null, el('h4.ellipsis', { text: a.title }), el('div.sap-meta.ellipsis', { text: `${a.artist} · ${plural(songs.length, 'song')} · ${plural(a.n, 'play')}` })),
-            el(
-              'div.sap-buttons',
-              null,
-              el('button.btn-icon.round', { title: 'Play the album', onclick: playAll }, icon('play')),
-              el('button.btn-icon.round', { title: 'Show it in the Collection', onclick: goTo }, icon('collection')),
-            ),
-          ),
-          el(
-            'div.sap-songs',
-            null,
-            ...songs.map((t) =>
-              el(
-                'button.sap-song',
-                { title: `Play ${t.title}`, onclick: () => playSong(this.pl, t) },
-                el('span.sap-n', { text: t.number || '' }),
-                el('span.ellipsis', { text: t.title }),
-                el('span.sap-plays', { text: plays.get(t) ? plural(plays.get(t), 'play') : '' }),
-                el('span.sap-len', { text: formatTime(t.duration) }),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  /** Open (or close) an album under its row of tiles. */
+  async #openAlbum(a, tile, grid, opts) {
+    if (this.album.tile === tile) return this.album.close();
+    const group = await this.#group(a);
+    if (!group || this.dead || !tile.isConnected) return;
+    // After the last tile of the clicked tile's row, across the whole grid.
+    const row = [...grid.querySelectorAll('.stats-album')].filter((t) => t.offsetTop === tile.offsetTop).pop();
+    this.album.open(tile, group, row, opts);
+  }
+
+  /**
+   * An album as the Collection's album list has it: its songs' rows (in disc
+   * and track order) and what its heading shows. The album list reads the
+   * songs from the Collection, so that's the list the page has open.
+   */
+  async #group(a) {
+    if (!(await collectionView(this.pl))) return null;
+    const songs = this.tracks
+      .filter((t) => t.albumKey === a.key)
+      .sort((x, y) => (x.discKey || '').localeCompare(y.discKey || '') || (parseInt(x.number, 10) || 0) - (parseInt(y.number, 10) || 0));
+    const rows = await currentRows(this.pl, songs);
+    if (!rows.length) return null;
+    const was = this.groups.get(a.key);
+    if (was && was.rows.join() === rows.join()) return was;
+    // The heading's year and genre come from the songs once they're read.
+    const group = { key: a.key, start: rows[0], count: rows.length, rows, head: { title: a.title, artist: a.artist, handle: a.handle }, partialHead: true };
+    this.groups.set(a.key, group);
+    return group;
   }
 
   /** The most played songs: click one to play it. */
@@ -339,24 +318,22 @@ export class StatsPage {
   }
 }
 
-/** Grow from nothing to its height (then let it size itself). */
-function slideOpen(node) {
-  const h = node.scrollHeight;
-  node.style.height = '0px';
-  node.style.overflow = 'hidden';
-  requestAnimationFrame(() => {
-    node.style.height = h + 'px';
-    node.addEventListener('transitionend', () => ((node.style.height = ''), (node.style.overflow = '')), { once: true });
-  });
-}
-
-function closePanel(node) {
-  node.style.height = node.scrollHeight + 'px';
-  node.style.overflow = 'hidden';
-  requestAnimationFrame(() => {
-    node.style.height = '0px';
-    node.addEventListener('transitionend', () => node.remove(), { once: true });
-    setTimeout(() => node.remove(), 400);
+/**
+ * Make the Collection the list the page has open (it stays on Listening
+ * stats): an album opened here reads, selects and plays its songs there.
+ */
+function collectionView(pl) {
+  const ready = () => view.playlist?.guid === pl.guid && !view.loading;
+  if (ready()) return Promise.resolve(true);
+  if (playlists.activePlaylist?.guid !== pl.guid) playlists.activate(pl.index);
+  return new Promise((resolve) => {
+    const done = (ok) => {
+      off();
+      clearTimeout(timer);
+      resolve(ok);
+    };
+    const off = view.on('change', () => ready() && done(true));
+    const timer = setTimeout(() => done(ready()), 4000);
   });
 }
 

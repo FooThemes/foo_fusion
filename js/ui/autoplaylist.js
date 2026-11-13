@@ -15,6 +15,8 @@ import * as store from '../core/store.js';
 import { playlists, COLLECTION, FAVORITES } from '../data/playlists.js';
 import { toast } from './toast.js';
 import { attachAssist } from './patternassist.js';
+import { tabBar } from './tabs.js';
+import { openModal } from './modal.js';
 
 const HELP = {
   query: { file: 'Query Syntax Help.html', title: 'Query syntax' },
@@ -162,14 +164,13 @@ function wireHelpLinks(frame, openFile) {
 
 function showDialog(opts) {
   return new Promise((resolve) => {
-    const root = document.getElementById('overlay-root');
     let mode = opts.tabs ? opts.tab || 'playlist' : 'auto';
-    const name = el('input.dialog-input', { type: 'text', value: opts.name, spellcheck: false, disabled: !!opts.nameLocked });
+    const name = el('input.field', { type: 'text', value: opts.name, spellcheck: false, disabled: !!opts.nameLocked });
     // Collection and Favourites are Fusion's own: their queries are fixed, and
     // they're kept in the view's order by Fusion's Sort menu.
     const managed = !!opts.playlist && playlists.isSpecial(opts.playlist);
-    const query = el('input.dialog-input.mono', { type: 'text', value: opts.query, spellcheck: false, disabled: managed, placeholder: 'e.g. GENRE HAS rock AND %rating% GREATER 3' });
-    const sort = el('input.dialog-input.mono', { type: 'text', value: managed ? '' : opts.sort, spellcheck: false, disabled: managed, placeholder: managed ? 'Set by the Sort menu above the albums' : 'Optional, e.g. %album artist% | %date% | %album%' });
+    const query = el('input.field.mono', { type: 'text', value: opts.query, spellcheck: false, disabled: managed, placeholder: 'e.g. GENRE HAS rock AND %rating% GREATER 3' });
+    const sort = el('input.field.mono', { type: 'text', value: managed ? '' : opts.sort, spellcheck: false, disabled: managed, placeholder: managed ? 'Set by the Sort menu above the albums' : 'Optional, e.g. %album artist% | %date% | %album%' });
     const forced = el('input', { type: 'checkbox', checked: !!opts.keepSorted, disabled: managed });
     const helpTitle = el('div.ap-help-title');
     // allow-same-origin (but no scripts) so Fusion can handle clicks inside it.
@@ -177,8 +178,9 @@ function showDialog(opts) {
     helpFrame.addEventListener('load', () => wireHelpLinks(helpFrame, showHelpFile));
     const help = el('div.ap-help', { hidden: true }, el('div.ap-help-head', null, helpTitle, el('button.btn-icon', { title: 'Close help', onclick: () => (help.hidden = true, box.classList.remove('with-help')) }, icon('close'))), helpFrame);
 
+    let remove = null;
     const close = (v) => {
-      back.remove();
+      remove();
       resolve(v);
     };
     // Completion, and a line saying what foobar2000 makes of each pattern.
@@ -220,7 +222,7 @@ function showDialog(opts) {
       close({ kind: 'auto', name: name.value.trim(), query: q, sort: sort.value.trim(), keepSorted: forced.checked });
     };
     const field = (label, input, helpKey) =>
-      el('label.ap-field', null, el('span.ap-label', { text: label }), input, helpKey ? el('button.btn-icon.ap-q', { type: 'button', title: `${HELP[helpKey].title} help`, onclick: (e) => (e.preventDefault(), showHelp(helpKey)) }, '?') : el('span.ap-q-gap'));
+      el('label.ap-field', null, el('span.ap-label', { text: label }), input, helpKey ? el('button.btn-icon.btn-outline.ap-q', { type: 'button', title: `${HELP[helpKey].title} help`, onclick: (e) => (e.preventDefault(), showHelp(helpKey)) }, '?') : el('span.ap-q-gap'));
 
     // A link in one help page to the other (e.g. title formatting from the query page).
     function showHelpFile(file) {
@@ -248,12 +250,12 @@ function showDialog(opts) {
 
     // Tabs (new playlist only): Playlist | Autoplaylist.
     const tabs = opts.tabs
-      ? el(
-          'div.ap-tabs',
-          { role: 'tablist' },
-          [['playlist', 'Playlist'], ['auto', 'Autoplaylist']].map(([k, label]) =>
-            el('button.ap-tab', { type: 'button', role: 'tab', dataset: { k }, text: label, onclick: () => setMode(k) }),
-          ),
+      ? tabBar(
+          [
+            ['playlist', 'Playlist'],
+            ['auto', 'Autoplaylist'],
+          ],
+          { className: 'ap-tabs', label: 'Kind', onPick: (k) => setMode(k) },
         )
       : null;
     const autoPart = el(
@@ -274,10 +276,7 @@ function showDialog(opts) {
         box.classList.remove('with-help');
       }
       name.placeholder = k === 'auto' ? 'Uses the query if left empty' : 'New playlist';
-      tabs?.querySelectorAll('.ap-tab').forEach((t) => {
-        t.classList.toggle('on', t.dataset.k === k);
-        t.setAttribute('aria-selected', String(t.dataset.k === k));
-      });
+      tabs?.set(k);
       (k === 'auto' && name.value ? query : name).focus();
     }
     const box = el(
@@ -286,7 +285,7 @@ function showDialog(opts) {
       el(
         'div.ap-main',
         null,
-        tabs || el('h2', { text: opts.title }),
+        tabs?.node || el('h2', { text: opts.title }),
         field('Name', name),
         autoPart,
         opts.unknown
@@ -302,13 +301,10 @@ function showDialog(opts) {
       ),
       help,
     );
-    const back = el('div.dialog-back', { onmousedown: (e) => e.target === back && close(null) }, box);
-    back.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close(null);
-      if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type === 'text') ok();
-      e.stopPropagation();
+    remove = openModal(box, {
+      cancel: () => close(null),
+      onKey: (e) => e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type === 'text' && ok(),
     });
-    root.append(back);
     if (opts.tabs) setMode(mode);
     else (opts.nameLocked || opts.name ? query : name).focus();
   });

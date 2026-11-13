@@ -178,7 +178,7 @@ export class NowPlaying {
 
   #row(t, o) {
     const node = el(
-      'div.np-row' + (o.current ? '.current' : '') + (o.previous ? '.previous' : ''),
+      'div.row.np-row' + (o.current ? '.current' : '') + (o.previous ? '.previous' : ''),
       {
         ondblclick: o.onplay,
         title: `${t.title} - ${t.artist}`,

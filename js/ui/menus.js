@@ -4,6 +4,7 @@
 import { call, tryCall } from '../core/bridge.js';
 import { toggleMini, isMini } from './mini.js';
 import { el, winPath } from '../core/util.js';
+import { tidyItems } from './dropdown.js';
 import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { toast } from './toast.js';
@@ -12,22 +13,14 @@ import { folders } from '../data/folders.js';
 import * as store from '../core/store.js';
 import { player } from '../data/player.js';
 import { refreshArt } from '../data/artwork.js';
+import { openModal } from './modal.js';
 
 /** Show a native menu built from [{ id, label, checked, enabled, submenu, run }]. */
 export async function showMenu(items) {
   const actions = new Map();
   let n = 0;
-  // No separator first, last or twice in a row (a menu ending in a line
-  // looks unfinished), at every level.
-  const tidy = (list) =>
-    list.filter(Boolean).reduce((out, it) => {
-      const sep = it === '-' || it.type === 'separator';
-      if (sep && (!out.length || out[out.length - 1] === '-')) return out;
-      out.push(sep ? '-' : it);
-      return out;
-    }, []).filter((it, i, a) => !(it === '-' && i === a.length - 1));
   const convert = (list) =>
-    tidy(list).map((it) => {
+    tidyItems(list).map((it) => {
       if (it === '-' || it.type === 'separator') return { type: 'separator' };
       const id = it.id || `m${n++}`;
       if (it.run) actions.set(id, it.run);
@@ -362,19 +355,13 @@ export async function runMainMenuAny(paths) {
 
 export function dialog(title, body, buttons) {
   return new Promise((resolve) => {
-    const root = document.getElementById('overlay-root');
+    let remove = null;
     const close = (v) => {
-      back.remove();
+      remove();
       resolve(v);
     };
-    const back = el('div.dialog-back', { onmousedown: (e) => e.target === back && close(null) });
     const box = el('div.dialog', { role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, el('h2', { text: title }), body, el('div.dialog-buttons', null, buttons(close)));
-    back.append(box);
-    back.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close(null);
-      e.stopPropagation();
-    });
-    root.append(back);
+    remove = openModal(box, { cancel: () => close(null) });
     (box.querySelector('input') || box.querySelector('button.btn-primary'))?.focus();
   });
 }
@@ -384,7 +371,7 @@ export function dialog(title, body, buttons) {
  * system's own picker). Resolves with the path, or null when cancelled.
  */
 export function promptPath(title, hint, { value = '', placeholder = '', folder = true, filter = null, okLabel = 'OK' } = {}) {
-  const input = el('input.dialog-input', { type: 'text', value, placeholder, spellcheck: false });
+  const input = el('input.field', { type: 'text', value, placeholder, spellcheck: false });
   const browse = el('button.btn-text.dialog-browse', {
     type: 'button',
     text: 'Browse…',
@@ -407,7 +394,7 @@ export function promptPath(title, hint, { value = '', placeholder = '', folder =
 }
 
 export function promptText(title, value = '', hint = '') {
-  const input = el('input.dialog-input', { type: 'text', value, spellcheck: false });
+  const input = el('input.field', { type: 'text', value, spellcheck: false });
   input.addEventListener('focus', () => input.select(), { once: true });
   const body = hint ? el('div', null, el('p', { text: hint }), input) : input;
   return dialog(title, body, (close) => {

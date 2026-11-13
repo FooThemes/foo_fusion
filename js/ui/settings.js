@@ -19,6 +19,8 @@ import { VERSION } from '../version.js';
 import { TEXT_KINDS } from '../data/versions.js';
 import { setVersioned } from './titles.js';
 import { overlayScroll } from './oscroll.js';
+import { sheet } from './sheet.js';
+import { tabBar } from './tabs.js';
 
 const VERSION_CHOICES = [
   ['orig', 'Original'],
@@ -44,22 +46,9 @@ const LANGUAGE_KINDS = [
 export function mountSettings(root, app) {
   const body = el('div.set-body');
   overlayScroll(body);
-  const panel = el('div.settings', { role: 'dialog', 'aria-label': 'Settings' }, el('div.set-head', null, el('h2', { text: 'Settings' }), el('button.btn-icon', { title: 'Close', onclick: () => app.toggleSettings(false) }, icon('close'))), body);
+  const sh = sheet({ side: 'right', title: 'Settings', className: 'settings', toggle: '[data-settings-toggle]', close: () => app.toggleSettings(false) }, body);
+  const panel = sh.node;
   root.append(panel);
-  panel.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') app.toggleSettings(false);
-  });
-  // A click anywhere outside the panel closes it (not one on the button that
-  // toggles it, nor in a dialog or menu the panel opened).
-  document.addEventListener(
-    'pointerdown',
-    (e) => {
-      if (!panel.classList.contains('open') || panel.contains(e.target)) return;
-      if (e.target.closest?.('[data-settings-toggle], .dialog-back, .mock-menu, .dd-layer')) return;
-      app.toggleSettings(false);
-    },
-    true,
-  );
   // foobar2000's own windows: out of the way first.
   const foobar = (method) => () => {
     app.toggleSettings(false);
@@ -82,13 +71,7 @@ export function mountSettings(root, app) {
     ['more', 'More'],
   ];
   let tab = 'look';
-  const tabs = el(
-    'div.set-tabs',
-    { role: 'tablist' },
-    TABS.map(([id, label]) =>
-      el('button.set-tab', { role: 'tab', dataset: { tab: id }, onclick: () => ((tab = id), (body.scrollTop = 0), render()) }, label),
-    ),
-  );
+  const tabs = tabBar(TABS, { className: 'line set-tabs', label: 'Settings pages', onPick: (id) => ((tab = id), (body.scrollTop = 0), render()) });
   // Main menu, Preferences, Fullscreen: above the tabs, on every page.
   const quickRow = el(
     'div.set-quick.set-quick-top',
@@ -98,14 +81,10 @@ export function mountSettings(root, app) {
     fullscreenBtn,
   );
   panel.insertBefore(quickRow, body);
-  panel.insertBefore(tabs, body);
+  panel.insertBefore(tabs.node, body);
 
   function render() {
-    for (const b of tabs.children) {
-      const on = b.dataset.tab === tab;
-      b.classList.toggle('on', on);
-      b.setAttribute('aria-selected', String(on));
-    }
+    tabs.set(tab);
     clear(body).append(...PAGES[tab]());
   }
 
@@ -276,7 +255,7 @@ export function mountSettings(root, app) {
 
   // A path box with a Browse button (the system's picker).
   function pathField(label, key, hint, placeholder, { folder = true, filter = null, onSet: set = (v) => store.set(key, v), startIn = null } = {}) {
-    const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder, spellcheck: false, 'aria-label': label });
+    const input = el('input.field.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder, spellcheck: false, 'aria-label': label });
     // Either slash will do; the path is kept the Windows way.
     const onSet = (v) => {
       const path = winPath(v);
@@ -284,7 +263,7 @@ export function mountSettings(root, app) {
       set(path);
     };
     input.addEventListener('change', () => onSet(input.value));
-    const browse = el('button.set-mini.set-browse', {
+    const browse = el('button.btn-soft.set-browse', {
       type: 'button',
       text: 'Browse…',
       onclick: async (e) => {
@@ -313,7 +292,7 @@ export function mountSettings(root, app) {
 
   // Characters that separate genres within one tag.
   function genreSplitField() {
-    const input = el('input.set-hex.set-split', { type: 'text', value: store.get('genreSplit') ?? ';', spellcheck: false, maxLength: 12, 'aria-label': 'Split genres at' });
+    const input = el('input.field.set-hex.set-split', { type: 'text', value: store.get('genreSplit') ?? ';', spellcheck: false, maxLength: 12, 'aria-label': 'Split genres at' });
     input.addEventListener('change', () => store.set('genreSplit', [...new Set(input.value.replace(/\s+/g, ''))].join(' ')));
     return el(
       'div.set-folder',
@@ -390,7 +369,7 @@ export function mountSettings(root, app) {
       'div.set-select-row',
       null,
       el('div.set-select-line', null, el('span', { text: label }), selectButton(label, key, options)),
-      cur?.[2] ? el('small.set-select-hint', { text: cur[2] }) : null,
+      cur?.[2] ? el('small.hint', { text: cur[2] }) : null,
     );
   }
 
@@ -453,7 +432,7 @@ export function mountSettings(root, app) {
   // Edition-tag words as removable chips, with a box to add more.
   // Where lyric files are looked for (title formatting, one a line).
   function lyricsFilesField() {
-    const box = el('textarea.set-hex.set-patterns', { rows: 3, spellcheck: false, value: store.get('lyricsFiles') || '', 'aria-label': 'Lyric files' });
+    const box = el('textarea.field.set-hex.set-patterns', { rows: 3, spellcheck: false, value: store.get('lyricsFiles') || '', 'aria-label': 'Lyric files' });
     box.addEventListener('change', () => {
       store.set('lyricsFiles', box.value.split('\n').map((l) => l.trim()).filter(Boolean).join('\n'));
       forgetLyrics();
@@ -463,7 +442,7 @@ export function mountSettings(root, app) {
       null,
       el('span.set-label', null, el('span', { text: 'Lyric files' }), el('small', { text: 'Where the Lyrics tab looks, one title formatting pattern a line, without the extension (.lrc, then .txt). %profile% is foobar2000’s profile folder. The second line is where foo_openlyrics saves by default; change it if you set it to save elsewhere. Lyrics in tags (UNSYNCED LYRICS, LYRICS…) are read too.' })),
       box,
-      el('div.set-words-foot', null, el('small'), el('button.set-mini', { text: 'Defaults', onclick: () => (store.set('lyricsFiles', store.defaultOf('lyricsFiles')), forgetLyrics()) })),
+      el('div.set-words-foot', null, el('small'), el('button.btn-soft', { text: 'Defaults', onclick: () => (store.set('lyricsFiles', store.defaultOf('lyricsFiles')), forgetLyrics()) })),
     );
   }
 
@@ -493,7 +472,7 @@ export function mountSettings(root, app) {
       'div.set-words-box' + (off ? '.off' : ''),
       null,
       el('div.set-chips', null, chips, add),
-      el('div.set-words-foot', null, el('small', { text: 'Works with (…), […], <…>, {…}, ‹…›, «…», 【…】, ~…~, 〜…〜, -…- and " - …" endings.' }), el('button.set-mini', { text: 'Defaults', disabled: off, onclick: () => store.set('dimWords', store.defaultOf('dimWords')) })),
+      el('div.set-words-foot', null, el('small', { text: 'Works with (…), […], <…>, {…}, ‹…›, «…», 【…】, ~…~, 〜…〜, -…- and " - …" endings.' }), el('button.btn-soft', { text: 'Defaults', disabled: off, onclick: () => store.set('dimWords', store.defaultOf('dimWords')) })),
     );
   }
 
@@ -522,11 +501,7 @@ export function mountSettings(root, app) {
       'div.set-choice',
       null,
       el('span', { text: label }),
-      el(
-        'div.seg',
-        null,
-        options.map(([value, text]) => el('button' + (store.get(key) === value ? '.on' : ''), { text, onclick: () => (store.set(key, value), render()) })),
-      ),
+      tabBar(options, { className: 'small', label, picked: store.get(key), onPick: (value) => (store.set(key, value), render()) }).node,
     );
   }
 
@@ -562,7 +537,7 @@ export function mountSettings(root, app) {
     const hue = el('input.hue', { type: 'range', min: 0, max: 359, step: 1, value: Math.round(hsl.h), 'aria-label': 'Hue' });
     const shade = el('input.shade', { type: 'range', min: 25, max: 65, step: 1, value: Math.round(clampN(hsl.l, 25, 65)), 'aria-label': 'Lightness' });
     const picker = el('input.set-picker', { type: 'color', value: cur, title: 'Pick any colour' });
-    const hex = el('input.set-hex', { type: 'text', value: cur.toUpperCase(), maxLength: 7, spellcheck: false, 'aria-label': 'Hex colour' });
+    const hex = el('input.field.set-hex', { type: 'text', value: cur.toUpperCase(), maxLength: 7, spellcheck: false, 'aria-label': 'Hex colour' });
     const preview = el('span.set-colour-preview', { style: { background: cur } });
     let timer = 0;
     const apply = (c, from) => {
@@ -607,7 +582,7 @@ export function mountSettings(root, app) {
   // Re-render on changes, keeping the scroll position (and not while the
   // custom colour controls are being dragged or typed in).
   store.subscribe(() => {
-    if (!panel.classList.contains('open')) return;
+    if (!sh.isOpen) return;
     if (panel.querySelector('.set-custom')?.contains(document.activeElement)) return;
     const refocus = document.activeElement?.classList.contains('set-word-add');
     const top = body.scrollTop;
@@ -618,13 +593,13 @@ export function mountSettings(root, app) {
   return {
     open(on) {
       if (on) render();
-      panel.classList.toggle('open', on);
+      sh.set(on);
       // preventScroll: focusing inside the sliding panel must not scroll the
       // main area sideways (that was the brief "shift" when opening).
-      if (on) setTimeout(() => panel.querySelector('.set-head button')?.focus({ preventScroll: true }), 230);
+      if (on) setTimeout(() => sh.closeBtn.focus({ preventScroll: true }), 230);
     },
     get isOpen() {
-      return panel.classList.contains('open');
+      return sh.isOpen;
     },
   };
 }

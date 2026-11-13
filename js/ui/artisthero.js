@@ -6,65 +6,46 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall } from '../core/bridge.js';
-import { artistFiles, artistDetails, pictureUrl } from '../data/artistinfo.js';
+import { artistFiles, artistDetails } from '../data/artistinfo.js';
 import { pickVersion, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { refreshArtist } from '../data/artwork.js';
-import { showMenu, refreshAlbums } from './menus.js';
+import { refreshAlbums } from './menus.js';
+import { Hero, preload } from './hero.js';
 import { view } from '../data/view.js';
 import { editArtist } from './infoeditor.js';
 
-const GAP = 24; // between the header and the first row of albums
-
-export class ArtistHero {
+export class ArtistHero extends Hero {
   constructor(grid) {
-    this.grid = grid;
-    this.name = null;
-    this.expanded = false;
-    this.fanart = el('img.ah-fanart', { alt: '' });
-    this.picture = el('img', { alt: '' });
-    this.pictureBox = el('div.ah-picture', null, this.picture);
-    this.title = el('h2.ah-name');
-    this.logo = el('img.ah-logo', { alt: '' });
-    this.meta = el('div.ah-meta');
-    this.bio = el('div.ah-bio');
-    this.assoc = el('div.ah-assoc');
-    // Click anywhere on a cut-off biography to read it all (and again to fold it).
-    this.bio.addEventListener('click', (e) => {
-      if (e.target.closest('a, button') || getSelection()?.toString()) return;
-      if (this.expanded || this.bio.classList.contains('clipped')) this.#toggle();
-    });
-    this.more = el('button.ah-more', { onclick: () => this.#toggle() });
-    this.links = el('div.ah-links');
-    this.node = el(
-      'div.artist-hero',
-      { hidden: true },
-      el('div.ah-back', null, this.fanart),
-      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.logo, this.title, this.meta, this.assoc, this.bio, el('div.ah-foot', null, this.more, this.links))),
-    );
-    this.node.addEventListener('contextmenu', (e) => {
-      if (!this.name) return;
-      e.preventDefault();
-      showMenu([
-        { label: 'Edit artist information…', run: () => editArtist(this.name, this.handle) },
-        { label: 'Refresh artist information', run: () => (refreshArtist(this.name, this.handle ? [this.handle] : []), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
-      ]);
-    });
+    const logo = el('img.ah-logo', { alt: '' });
+    super(grid, { above: [logo], refreshEvent: 'fusion:artistrefresh' });
+    this.logo = logo;
     this.offStore = store.subscribe((k) => {
       if (!VERSION_KEYS.includes(k) || !this.name) return;
       this.key = null;
       this.found = false;
       this.show(this.name, this.handle);
     });
-    // Read the artist's files again (right-click > Refresh, or Settings).
-    this.onRefresh = (e) => {
-      const name = e.detail?.name;
-      if (!this.name || (name && name.toLowerCase() !== this.name.toLowerCase())) return;
-      this.key = null;
-      this.found = false;
-      this.show(this.name, this.handle);
-    };
-    window.addEventListener('fusion:artistrefresh', this.onRefresh);
+  }
+
+  menuItems() {
+    return [
+      { label: 'Edit artist information…', run: () => editArtist(this.name, this.handle) },
+      { label: 'Refresh artist information', run: () => (refreshArtist(this.name, this.handle ? [this.handle] : []), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
+    ];
+  }
+
+  /** Read the artist's files again (right-click > Refresh, or Settings). */
+  refresh(e) {
+    const name = e.detail?.name;
+    if (!this.name || (name && name.toLowerCase() !== this.name.toLowerCase())) return;
+    this.key = null;
+    this.found = false;
+    this.show(this.name, this.handle);
+  }
+
+  loaded(img) {
+    if (img === this.logo) this.measure(); // the logo can change the header's height
   }
 
   /** Read an artist's files and pictures ahead of opening their page. */
@@ -76,8 +57,8 @@ export class ArtistHero {
 
   /** handle: one of the artist's tracks (for their own music folder). */
   destroy() {
+    super.destroy();
     this.offStore();
-    window.removeEventListener('fusion:artistrefresh', this.onRefresh);
   }
 
   async show(name, handle = null) {
@@ -90,13 +71,13 @@ export class ArtistHero {
     if (name !== this.name) this.expanded = false;
     this.name = name;
     this.found = false;
-    if (!name) return this.#hide();
+    if (!name) return this.hide();
     const [files, nfo] = await Promise.all([artistFiles(name, handle), artistDetails(name, handle)]);
     // MusicBrainz placeholders ("[unknown]", "[dialogue]", Various Artists)
     // aren't artists: no biography (any found is about the word), pictures only.
     const info = /^\[.+\]$|^various artists$/i.test(name.trim()) ? null : nfo;
     if (this.key !== key) return;
-    if (!files || (!files.picture && !files.fanart && !info)) return this.#hide();
+    if (!files || (!files.picture && !files.fanart && !info)) return this.hide();
     // The pictures first (usually already scaled and decoded this session),
     // so the header changes in one go instead of text, then pictures.
     const ready = await preload([
@@ -130,10 +111,10 @@ export class ArtistHero {
     // A logo, when there is one, stands in for the name (kept for screen readers).
     this.node.classList.toggle('has-logo', !!files.logo);
     this.logo.alt = pick ? pick.lead : this.title.textContent;
-    this.#setImage(this.logo, files.logo, 800, ready[0]);
-    this.#setImage(this.picture, files.picture, 400, ready[1]);
-    this.#setImage(this.fanart, files.fanart, 1600, ready[2]);
-    this.#measure();
+    this.setImage(this.logo, files.logo, 800, ready[0], { trim: true });
+    this.setImage(this.picture, files.picture, 400, ready[1]);
+    this.setImage(this.fanart, files.fanart, 1600, ready[2]);
+    this.measure();
   }
 
   /** Genres (linked to their pages when the library has them), years, dates. */
@@ -158,7 +139,7 @@ export class ArtistHero {
       // else capitalised.
       tags.forEach((t, i) => {
         const known = genres.get(t.toLowerCase());
-        g.append(...(i ? [', '] : []), known ? this.#valueLink('genres', known) : genreCase(t));
+        g.append(...(i ? [', '] : []), known ? this.valueLink('genres', known) : genreCase(t));
       });
       parts.push(g);
     }
@@ -184,85 +165,11 @@ export class ArtistHero {
       const line = el('div', null, el('span.ah-assoc-label', { text: label + ' ' }));
       // Artists in the library first (they're links), then the rest.
       const sorted = [...list].sort((a, b) => artists.has(b.name.toLowerCase()) - artists.has(a.name.toLowerCase()));
-      sorted.forEach((p, i) => line.append(...(i ? [', '] : []), artists.has(p.name.toLowerCase()) ? this.#valueLink('artists', p.name) : p.name));
+      sorted.forEach((p, i) => line.append(...(i ? [', '] : []), artists.has(p.name.toLowerCase()) ? this.valueLink('artists', p.name) : p.name));
       this.assoc.append(line);
     }
-    this.#measure();
+    this.measure();
   }
-
-  #valueLink(kind, value) {
-    return el('button.ah-value', { text: value, title: kind === 'artists' ? `Show ${value}` : `Show ${value} albums`, onclick: () => view.showValue(kind, value) });
-  }
-
-  async #setImage(img, file, px, ready = null) {
-    // Ready (decoded): shown at once, no fade.
-    img.classList.toggle('instant', !!ready);
-    if (ready) {
-      img.onload = null;
-      if (img.src !== ready) img.src = ready;
-      img.classList.add('loaded');
-      return;
-    }
-    img.classList.remove('loaded');
-    img.removeAttribute('src');
-    if (!file) return;
-    const name = this.name;
-    const url = await pictureUrl(file, px, { trim: img === this.logo });
-    if (!url || this.name !== name) return;
-    img.onload = () => {
-      img.classList.add('loaded');
-      if (img === this.logo) this.#measure(); // the logo can change the header's height
-    };
-    img.src = url;
-  }
-
-  #toggle() {
-    this.expanded = !this.expanded;
-    this.#measure();
-  }
-
-  // Show "More" only if the biography is longer than the clamp; then tell
-  // the grid where the albums start.
-  #measure() {
-    this.node.classList.toggle('expanded', this.expanded);
-    requestAnimationFrame(() => {
-      const clipped = this.bio.scrollHeight > this.bio.clientHeight + 2;
-      this.bio.classList.toggle('clipped', clipped && !this.expanded);
-      this.bio.classList.toggle('foldable', this.expanded);
-      this.more.hidden = !this.expanded && !clipped;
-      this.more.textContent = this.expanded ? 'Less' : 'More';
-      this.grid.top = this.node.offsetHeight + GAP;
-      this.grid.layout();
-    });
-  }
-
-  #hide() {
-    this.node.hidden = true;
-    const rest = this.grid.restTop();
-    if (this.grid.top !== rest) {
-      this.grid.top = rest;
-      this.grid.layout();
-    }
-  }
-}
-
-/**
- * Scaled picture URLs for [file, px, trim] entries, each decoded, waiting at
- * most a moment: entries not ready by then are null (they fade in later).
- */
-export async function preload(entries, wait = 350) {
-  const out = entries.map(() => null);
-  const jobs = entries.map(async ([file, px, trim], i) => {
-    if (!file) return;
-    const url = await pictureUrl(file, px, { trim: !!trim });
-    if (!url) return;
-    const im = new Image();
-    im.src = url;
-    await im.decode().catch(() => {});
-    out[i] = url;
-  });
-  await Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, wait))]);
-  return out.slice();
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

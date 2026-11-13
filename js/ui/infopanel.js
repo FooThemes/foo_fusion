@@ -11,6 +11,8 @@ import { icon } from '../core/icons.js';
 import { lyricsFor, forgetLyrics, lineAt } from '../data/lyrics.js';
 import { runHandlesCommand, hasHandlesCommand } from './menus.js';
 import { overlayScroll } from './oscroll.js';
+import { tabBar } from './tabs.js';
+import { valueLink, albumLink } from './links.js';
 
 export function mountInfoPanel(root) {
   const img = el('img', { alt: '' });
@@ -23,14 +25,15 @@ export function mountInfoPanel(root) {
   // Details (a summary) / Tags (every tag in the file, ReplayGain) /
   // Technical (the file and its audio) / Lyrics.
   let tab = store.get('infoTab') || 'details';
-  const tabBtn = (key, label) =>
-    el('button.info-tab', {
-      text: label,
-      role: 'tab',
-      dataset: { tab: key },
-      onclick: () => store.set('infoTab', key),
-    });
-  const tabs = el('div.info-tabs', { role: 'tablist' }, tabBtn('details', 'Details'), tabBtn('tags', 'Tags'), tabBtn('technical', 'Technical'), tabBtn('lyrics', 'Lyrics'));
+  const tabs = tabBar(
+    [
+      ['details', 'Details'],
+      ['tags', 'Tags'],
+      ['technical', 'Technical'],
+      ['lyrics', 'Lyrics'],
+    ],
+    { className: 'line info-tabs', label: 'Song info', onPick: (key) => store.set('infoTab', key) },
+  );
   const tech = el('div.info-tags', { hidden: true });
   const lyr = el('div.info-lyrics', { hidden: true });
   const lyrTools = el('div.lyr-tools', { hidden: true });
@@ -38,7 +41,7 @@ export function mountInfoPanel(root) {
   // lyric buttons) stick to the top while the tab's content scrolls on.
   // The song's title and artist stay at the top with the tabs (only the
   // cover scrolls away); the lyric buttons wait at the bottom right.
-  const bar = el('div.info-bar', null, heading, tabs);
+  const bar = el('div.info-bar', null, heading, tabs.node);
   const scroller = el('div.info-scroll', null, art, bar, table, tags, tech, lyr, empty, lyrTools);
   overlayScroll(scroller);
   root.append(close, scroller);
@@ -58,8 +61,8 @@ export function mountInfoPanel(root) {
     }
     empty.hidden = !!t;
     art.hidden = !t;
-    tabs.hidden = !t;
-    for (const b of tabs.children) b.classList.toggle('on', b.dataset.tab === tab);
+    tabs.node.hidden = !t;
+    tabs.set(tab);
     table.hidden = tab !== 'details';
     tags.hidden = tab !== 'tags';
     tech.hidden = tab !== 'technical';
@@ -102,7 +105,7 @@ export function mountInfoPanel(root) {
     const artistValues = values('artist', t.artist);
     if (artistValues.length) artistLine.append(links(artistValues, 'artists'));
     heading.append(el('div.info-source', { text: source }), el('div.info-title', { text: t.title || '' }), artistLine);
-    const album = t.album ? albumLink(t) : null;
+    const album = t.album ? albumLinkOf(t) : null;
     const rows = [
       ['Album', album],
       ['Album artist', values('albumArtist', t.albumArtist).length ? links(values('albumArtist', t.albumArtist), 'artists') : null],
@@ -131,17 +134,13 @@ export function mountInfoPanel(root) {
     list.forEach((v, i) => {
       if (i) out.append(kind === 'genres' ? ', ' : '; ');
       const name = known?.get(v.toLowerCase());
-      out.append(name ? el('button.info-link', { text: v, title: kind === 'genres' ? `Show ${name} albums` : `Show ${name}`, onclick: () => view.goTo(kind, name) }) : v);
+      out.append(name ? valueLink(kind, name, { label: v, go: () => view.goTo(kind, name) }) : v);
     });
     return out;
   }
 
-  function albumLink(t, text = t.album) {
-    return el('button.info-link', {
-      text,
-      title: `Open ${t.album} in the Collection`,
-      onclick: async () => view.goTo('albums', await view.albumKeyOf(t.handle)),
-    });
+  function albumLinkOf(t, text = t.album) {
+    return albumLink(t.handle, text, t.album);
   }
 
   const section = (box, title, pairs) => {
@@ -181,7 +180,7 @@ export function mountInfoPanel(root) {
       if (LYRIC_TAGS.includes(k)) return [k, 'In the Lyrics tab'];
       if (ARTIST_TAGS.includes(k)) return [k, linkList(list, 'artists', artists)];
       if (k === 'GENRE') return [k, linkList(list.flatMap((g) => splitValues(g, 'genres')), 'genres', genres)];
-      if (k === 'ALBUM') return [k, albumLink(t, v)];
+      if (k === 'ALBUM') return [k, albumLinkOf(t, v)];
       return [k, v];
     });
     section(tags, 'Tags', linked);
@@ -268,8 +267,8 @@ export function mountInfoPanel(root) {
     lit = -1;
     if (openLyrics) {
       lyrTools.append(
-        el('button.lyr-btn', { text: found ? 'Search again' : 'Search', title: 'Search for lyrics with foo_openlyrics', onclick: () => searchOpenLyrics(t) }),
-        el('button.lyr-btn', { text: 'Edit', title: 'Edit in foo_openlyrics', onclick: () => runHandlesCommand('Edit lyrics', [t.handle]) }),
+        el('button.btn-soft', { text: found ? 'Search again' : 'Search', title: 'Search for lyrics with foo_openlyrics', onclick: () => searchOpenLyrics(t) }),
+        el('button.btn-soft', { text: 'Edit', title: 'Edit in foo_openlyrics', onclick: () => runHandlesCommand('Edit lyrics', [t.handle]) }),
       );
     }
     lyrTools.title = found ? `${found.synced ? 'Timed lyrics' : 'Lyrics'} from ${found.source}` : '';

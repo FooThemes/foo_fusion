@@ -328,7 +328,7 @@ export function attachAssist(input, kind, status) {
   let index = 0;
   let ctx = null;
   let token = 0;
-  const list = el('div.pa-list', { role: 'listbox', hidden: true });
+  const list = el('div.popup.pa-list', { role: 'listbox', hidden: true });
   input.setAttribute('autocomplete', 'off');
   input.setAttribute('aria-autocomplete', 'list');
 

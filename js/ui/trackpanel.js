@@ -23,6 +23,7 @@ import { RowSelector } from './rowselect.js';
 import { heartButton, refreshHearts } from './heart.js';
 import { draggableRows, selectionOr } from './dnd.js';
 import { favourites } from '../data/favourites.js';
+import { valueLink } from './links.js';
 
 const ROW_H = 35;
 const COL_MIN = 300;
@@ -232,7 +233,7 @@ export class TrackPanel {
     if (group !== this.group || total <= this.rows.length) return;
     this.buttons.querySelector('.tp-full')?.remove();
     this.buttons.prepend(
-      el('button.tp-full', { title: `Open the whole album (${plural(total, 'song')}) in the Collection`, onclick: () => view.goTo('albums', group.key) }, icon('collection'), el('span', { text: `Full album · ${total}` })),
+      el('button.btn-outline.tp-full', { title: `Open the whole album (${plural(total, 'song')}) in the Collection`, onclick: () => view.goTo('albums', group.key) }, icon('collection'), el('span', { text: `Full album · ${total}` })),
     );
   }
 
@@ -244,8 +245,7 @@ export class TrackPanel {
     const total = this.#totalLength(this.rows);
     const discs = this.multiDisc ? plural(this.discs.length, 'disc') : null;
     // Artist and genres link to their own pages; blank genres are left out.
-    const link = (kind, value, label = value) =>
-      el('button.tp-link', { text: label, title: kind === 'artists' ? `Show ${label}'s albums` : `Show ${label} albums`, onclick: () => view.showValue(kind, value, this.group) });
+    const link = (kind, value, label = value) => valueLink(kind, value, { label, go: () => view.showValue(kind, value, this.group) });
     const parts = [];
     const who = head?.artist || artist;
     // With versions, the link shows the lead one and opens the original
@@ -356,6 +356,13 @@ export class TrackPanel {
     }
     this.retries = 0;
     this.tracks = tracks;
+    // Opened from outside the album list (Listening stats): the heading's
+    // year and genre from the songs, now they're read.
+    if (group.partialHead && tracks[0]) {
+      group.head.date ||= tracks[0].date;
+      group.head.genre ||= tracks[0].genre;
+      group.partialHead = false;
+    }
     // Likely to be played next: its first song's waveform, ready for then.
     if (store.get('waveformSeekbar') && tracks[0]?.handle) setTimeout(() => this.group === group && prefetchWave(tracks[0].handle), 600);
     const discs = splitDiscs(this.rows, tracks);
@@ -532,7 +539,7 @@ function trackRow(r, t, albumArtist) {
   const text = el('span.tp-name-in');
   const name = el('span.tp-name.ellipsis', null, text);
   const node = el(
-    'div.tp-row',
+    'div.row.tp-row',
     { role: 'option', dataset: { row: r }, tabindex: -1 },
     el('span.tp-num', { text: trackNum(t) }),
     name,
@@ -575,5 +582,5 @@ function rowOf(e) {
 }
 
 function btn(name, label, onclick) {
-  return el('button.btn-icon.round', { title: label, 'aria-label': label, onclick }, icon(name));
+  return el('button.btn-icon.btn-outline.round', { title: label, 'aria-label': label, onclick }, icon(name));
 }

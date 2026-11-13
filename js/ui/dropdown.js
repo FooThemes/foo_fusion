@@ -7,6 +7,23 @@ import { icon } from '../core/icons.js';
 
 let open = null; // { root, close }
 
+/**
+ * Menu items without a separator first, last or twice in a row (a menu
+ * ending in a line looks unfinished). Both kinds of menu use this, at every
+ * level.
+ */
+export function tidyItems(list) {
+  return list
+    .filter(Boolean)
+    .reduce((out, it) => {
+      const sep = it === '-' || it.type === 'separator';
+      if (sep && (!out.length || out[out.length - 1] === '-')) return out;
+      out.push(sep ? '-' : it);
+      return out;
+    }, [])
+    .filter((it, i, a) => !(it === '-' && i === a.length - 1));
+}
+
 /** Show items under (or above, near the bottom) the anchor element. */
 export function dropdown(anchor, items, { align = 'left' } = {}) {
   if (open) {
@@ -37,9 +54,9 @@ export function dropdown(anchor, items, { align = 'left' } = {}) {
     const onBlur = () => close();
     const menus = [];
     const build = (list, parentItem) => {
-      const menu = el('div.dd-menu', { role: 'menu' });
-      for (const it of list) {
-        if (it === '-' || it?.type === 'separator') {
+      const menu = el('div.popup.dd-menu', { role: 'menu' });
+      for (const it of tidyItems(list)) {
+        if (it === '-') {
           menu.append(el('div.dd-sep'));
           continue;
         }

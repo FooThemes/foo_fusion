@@ -330,17 +330,6 @@
   font-size: 13px;
 }
 
-.tp-link {
-  color: inherit;
-  font: inherit;
-  padding: 0;
-}
-
-.tp-link:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
-
 /* Album colours: the title takes the cover's accent colour. */
 .trackpanel[data-bg='art'] .tp-title {
   color: var(--accent);
@@ -362,18 +351,11 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--list-text) 35%, transparent);
 }
 
 .btn-icon.round .icon {
   width: 17px;
   height: 17px;
-}
-
-.btn-icon.round:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
 }
 
 .tp-list {
@@ -494,21 +476,8 @@
 
 .tp-row {
   display: flex;
-  align-items: center;
   gap: 12px;
-  height: 35px;
-  padding: 0 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--list-text) 10%, transparent);
-  font-size: 14px;
-  outline: none;
-}
-
-.tp-row:hover {
-  background: var(--hover);
-}
-
-.tp-row.selected {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .tp-num {
@@ -541,11 +510,6 @@
   flex: none;
   color: var(--list-text2);
   font-size: 12px;
-}
-
-.tp-row.playing .tp-name {
-  color: var(--accent);
-  font-weight: 600;
 }
 
 /* Album colours: the dislike heart matches the like heart (grey can vanish
@@ -709,19 +673,6 @@
 }
 
 /* Genre and band links: plain text that underlines on hover. */
-.ah-value {
-  color: inherit;
-  font: inherit;
-  padding: 0;
-  text-decoration: underline dotted;
-  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
-  text-underline-offset: 3px;
-}
-
-.ah-value:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
 
 /* "Member of Nickelback", "Members …" */
 .ah-assoc {
@@ -823,15 +774,9 @@
   height: 34px;
   padding: 0 14px;
   border-radius: 17px;
-  border: 1px solid color-mix(in srgb, var(--list-text) 35%, transparent);
   color: var(--list-text);
   font-size: 13px;
   margin-right: 4px;
-}
-
-.tp-full:hover {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .tp-full .icon {
@@ -932,15 +877,20 @@
   margin-bottom: 0;
 }
 
-.shelf-panel {
+/* An album opened in place outside the grid (inlinealbum.js): shelves,
+   Listening stats. */
+.inline-album {
   position: relative;
-  margin: 4px 0 28px;
   transition: height 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 /* Clipped while it slides (its pointer shows again once it's open). */
-.shelf-panel.sliding {
+.inline-album.sliding {
   overflow: hidden;
+}
+
+.shelf-panel {
+  margin: 4px 0 28px;
 }
 
 .shelf-arrows {

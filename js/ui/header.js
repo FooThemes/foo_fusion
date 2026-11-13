@@ -12,6 +12,7 @@ import { addToItems, renamePlaylist, deletePlaylist } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { editArtist, editGenre } from './infoeditor.js';
 import { editAutoplaylist } from './autoplaylist.js';
+import { tabBar } from './tabs.js';
 
 const TABS = [
   ['albums', 'Albums'],
@@ -26,28 +27,18 @@ export function mountHeader(root, app) {
   const back = el('button.btn-icon.head-back', { title: 'Back', onclick: () => view.closeDrill() }, icon('back'));
   const title = el('h1.head-title.ellipsis');
   const actions = el('div.head-actions');
-  const tabs = el('div.tabs', { role: 'tablist' });
   const sortBtn = el('button.sort-btn', { onclick: sortMenu });
   const dirBtn = el('button.btn-icon.dir-btn', { onclick: () => view.setSort(view.currentSortKey(), !store.get('sortDescending')) });
   const count = el('span.head-count');
-  const tools = el('div.head-tools', null, tabs, sortBtn, dirBtn, count);
+  const tabs = tabBar(TABS, {
+    label: 'Show',
+    // The tab already showing: back to the top of it.
+    onPick: (mode) => (mode === view.mode && !view.drill ? window.dispatchEvent(new CustomEvent('fusion:scrolltop')) : view.setMode(mode)),
+  });
+  const tools = el('div.head-tools', null, tabs.node, sortBtn, dirBtn, count);
 
   root.append(el('div.head-row', null, showSide, back, title, actions), tools);
 
-  for (const [mode, label] of TABS) {
-    tabs.append(
-      el(
-        'button.tab',
-        {
-          role: 'tab',
-          dataset: { mode },
-          // The tab already showing: back to the top of it.
-          onclick: () => (mode === view.mode && !view.drill ? window.dispatchEvent(new CustomEvent('fusion:scrolltop')) : view.setMode(mode)),
-        },
-        label,
-      ),
-    );
-  }
 
   function render() {
     const pl = view.playlist;
@@ -85,11 +76,7 @@ export function mountHeader(root, app) {
     }
 
     tools.hidden = page;
-    for (const t of tabs.children) {
-      const on = t.dataset.mode === view.mode;
-      t.classList.toggle('active', on);
-      t.setAttribute('aria-selected', String(on));
-    }
+    tabs.set(view.mode);
     const sortKey = view.currentSortKey();
     clear(sortBtn).append(el('span.sort-label', { text: 'Sort by ' }), el('span.sort-value', { text: (SORTS[sortKey]?.label || 'Album').toLowerCase() }), icon('chevronDown'));
     const sortable = view.canSort();

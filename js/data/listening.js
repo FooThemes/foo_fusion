@@ -216,13 +216,23 @@ async function sync(pl, onProgress) {
   return tracksOf();
 }
 
-/** Play a song of the Collection (its row checked first: a re-sort moves it). */
+/**
+ * Where these songs are in the Collection now. Usually where they were read;
+ * after a re-sort they've moved, and the Collection is listed again (just the
+ * handles: quick) to find them.
+ */
+export async function currentRows(pl, list) {
+  if (!list.length) return [];
+  const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows: list.map((t) => t.row), fields: ['handle'] });
+  const got = new Map((res?.tracks || []).map((x) => [x.index, x.handle]));
+  if (list.every((t) => got.get(t.row) === t.handle)) return list.map((t) => t.row);
+  if (state?.guid === pl.guid) state.complete = false;
+  await listeningData(pl);
+  return list.map((t) => state?.byHandle.get(t.handle)?.row).filter((r) => r != null);
+}
+
+/** Play a song of the Collection. */
 export async function playSong(pl, t) {
-  const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows: [t.row], fields: ['handle'] });
-  let row = res?.tracks?.[0]?.handle === t.handle ? t.row : -1;
-  if (row < 0) {
-    const all = await listeningData(pl);
-    row = all.find((x) => x.handle === t.handle)?.row ?? -1;
-  }
-  if (row >= 0) return tryCall('playlist.playTrack', { playlist: pl.index, index: row });
+  const [row] = await currentRows(pl, [t]);
+  if (row != null) return tryCall('playlist.playTrack', { playlist: pl.index, index: row });
 }

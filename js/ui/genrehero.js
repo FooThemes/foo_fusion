@@ -8,59 +8,37 @@ import { el, clear, plural, formatDuration } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall } from '../core/bridge.js';
 import { genreFiles, genreDetails, forgetGenreInfo } from '../data/genreinfo.js';
-import { pictureUrl } from '../data/artistinfo.js';
 import { collageUrl } from './collage.js';
-import { showMenu, refreshAlbums } from './menus.js';
+import { refreshAlbums } from './menus.js';
 import { view } from '../data/view.js';
-import { genreCase, preload } from './artisthero.js';
+import { genreCase } from './artisthero.js';
+import { Hero, preload } from './hero.js';
 import { editGenre } from './infoeditor.js';
 
-const GAP = 24;
-const statsCache = new Map(); // genre|songs -> { seconds, artists, top } // between the header and the first row of albums
+const statsCache = new Map(); // genre|songs -> { seconds, artists, top }
 const PIC_W = 180;
 const PIC_H = 180;
 
-export class GenreHero {
+export class GenreHero extends Hero {
   constructor(grid) {
-    this.grid = grid;
+    const stats = el('div.gh-stats');
+    super(grid, { className: '.genre-hero', pictureClass: '.gh-picture', details: [stats], refreshEvent: 'fusion:genrerefresh' });
+    this.stats = stats;
+  }
+
+  menuItems() {
+    return [
+      { label: 'Edit genre information…', run: () => editGenre(this.name) },
+      { label: 'Refresh genre information', run: () => (forgetGenreInfo(), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
+    ];
+  }
+
+  refresh() {
+    if (!this.name) return;
+    const name = this.name;
     this.name = null;
-    this.expanded = false;
-    this.fanart = el('img.ah-fanart', { alt: '' });
-    this.picture = el('img', { alt: '' });
-    this.pictureBox = el('div.ah-picture.gh-picture', null, this.picture);
-    this.title = el('h2.ah-name');
-    this.meta = el('div.ah-meta');
-    this.stats = el('div.gh-stats');
-    this.assoc = el('div.ah-assoc');
-    this.bio = el('div.ah-bio');
-    this.bio.addEventListener('click', (e) => {
-      if (e.target.closest('a, button') || getSelection()?.toString()) return;
-      if (this.expanded || this.bio.classList.contains('clipped')) this.#toggle();
-    });
-    this.more = el('button.ah-more', { onclick: () => this.#toggle() });
-    this.links = el('div.ah-links');
-    this.node = el(
-      'div.artist-hero.genre-hero',
-      { hidden: true },
-      el('div.ah-back', null, this.fanart),
-      el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, this.title, this.meta, this.stats, this.assoc, this.bio, el('div.ah-foot', null, this.more, this.links))),
-    );
-    this.node.addEventListener('contextmenu', (e) => {
-      if (!this.name) return;
-      e.preventDefault();
-      showMenu([
-        { label: 'Edit genre information…', run: () => editGenre(this.name) },
-        { label: 'Refresh genre information', run: () => (forgetGenreInfo(), refreshAlbums(view.groups.flatMap((g) => view.groupRows(g)))) },
-      ]);
-    });
-    this.onRefresh = () => {
-      if (!this.name) return;
-      const name = this.name;
-      this.name = null;
-      this.key = null;
-      this.show(name);
-    };
-    window.addEventListener('fusion:genrerefresh', this.onRefresh);
+    this.key = null;
+    this.show(name);
   }
 
   /** Read a genre's files and pictures ahead of opening its page. */
@@ -71,12 +49,8 @@ export class GenreHero {
   }
 
   /** Called whenever the genre page's albums change (heads arriving too). */
-  destroy() {
-    window.removeEventListener('fusion:genrerefresh', this.onRefresh);
-  }
-
   async show(name) {
-    if (!name) return this.#hide();
+    if (!name) return this.hide();
     const sig = `${name}|${view.groups.length}|${view.groups.filter((g) => g.head).length}`;
     if (sig === this.key) return;
     this.key = sig;
@@ -131,15 +105,15 @@ export class GenreHero {
     this.node.classList.toggle('has-fanart', !!(back || collage));
     if (files?.picture) {
       this.pictureFor = 'own';
-      this.#setImage(this.picture, files.picture, PIC_W * 2, ready[0]);
+      this.setImage(this.picture, files.picture, PIC_W * 2, ready[0]);
     } else {
       this.pictureFor = collage ? handles.join('|') : null;
-      this.#showUrl(this.picture, collage);
+      this.showUrl(this.picture, collage);
     }
-    if (back) this.#setImage(this.fanart, back, 1600, ready[1]);
-    else this.#showUrl(this.fanart, collage);
+    if (back) this.setImage(this.fanart, back, 1600, ready[1]);
+    else this.showUrl(this.fanart, collage);
     if (!collage && !files?.picture) this.#renderPicture();
-    this.#measure();
+    this.measure();
   }
 
   /** The four biggest albums' first songs, for the collage. */
@@ -152,17 +126,6 @@ export class GenreHero {
   }
 
   /** A URL already decoded (or null: clear), shown at once. */
-  #showUrl(img, url) {
-    img.classList.add('instant');
-    if (!url) {
-      img.classList.remove('loaded');
-      img.removeAttribute('src');
-      return;
-    }
-    if (img.src !== url) img.src = url;
-    img.classList.add('loaded');
-  }
-
   /** No picture of its own: the collage, once its albums' covers are known. */
   async #renderPicture() {
     if (this.files?.picture) return;
@@ -199,7 +162,7 @@ export class GenreHero {
       const ordered = [...known, ...rest];
       const item = (g) => {
         const lib = genres.get(g.toLowerCase());
-        return lib ? this.#valueLink('genres', lib) : genreCase(g);
+        return lib ? this.valueLink('genres', lib) : genreCase(g);
       };
       const firstCount = Math.max(known.length, 8);
       ordered.slice(0, firstCount).forEach((g, i) => line.append(...(i ? [', '] : []), item(g)));
@@ -210,7 +173,7 @@ export class GenreHero {
           text: `and ${more} more`,
           onclick: () => {
             wrap.replaceWith(...ordered.slice(firstCount).flatMap((g) => [', ', item(g)]));
-            this.#measure();
+            this.measure();
           },
         });
         const wrap = el('span', null, ' ', btn);
@@ -264,59 +227,17 @@ export class GenreHero {
     clear(this.top);
     if (top.length > 1) {
       this.top.append(el('span.ah-assoc-label', { text: 'Top artists ' }));
-      top.forEach(([who], i) => this.top.append(...(i ? [', '] : []), artists.has(who.toLowerCase()) ? this.#valueLink('artists', artists.get(who.toLowerCase())) : who));
+      top.forEach(([who], i) => this.top.append(...(i ? [', '] : []), artists.has(who.toLowerCase()) ? this.valueLink('artists', artists.get(who.toLowerCase())) : who));
       this.stats.after(this.top);
     }
-    this.#measure();
+    this.measure();
     void key;
   }
 
-  #valueLink(kind, value) {
-    return el('button.ah-value', { text: value, title: kind === 'artists' ? `Show ${value}` : `Show ${value} albums`, onclick: () => view.showValue(kind, value) });
-  }
-
-  async #setImage(img, file, px, ready = null) {
-    if (ready) return this.#showUrl(img, ready);
-    img.classList.remove('loaded', 'instant');
-    const name = this.name;
-    const url = await pictureUrl(file, px);
-    if (!url || this.name !== name) return;
-    img.onload = () => img.classList.add('loaded');
-    img.src = url;
-  }
-
-  #toggle() {
-    this.expanded = !this.expanded;
-    this.#measure();
-  }
-
-  #measure() {
-    this.node.classList.toggle('expanded', this.expanded);
-    requestAnimationFrame(() => {
-      if (this.node.hidden) return;
-      const clipped = this.bio.scrollHeight > this.bio.clientHeight + 2;
-      this.bio.classList.toggle('clipped', clipped && !this.expanded);
-      this.bio.classList.toggle('foldable', this.expanded);
-      this.more.hidden = !this.expanded && !clipped;
-      this.more.textContent = this.expanded ? 'Less' : 'More';
-      const top = this.node.offsetHeight + GAP;
-      if (top !== this.grid.top) {
-        this.grid.top = top;
-        this.grid.layout();
-      }
-    });
-  }
-
-  #hide() {
+  hide() {
     this.name = null;
     this.key = null;
     this.statsFor = null;
-    if (this.node.hidden) return;
-    this.node.hidden = true;
-    const rest = this.grid.restTop();
-    if (this.grid.top !== rest) {
-      this.grid.top = rest;
-      this.grid.layout();
-    }
+    if (!this.node.hidden) super.hide();
   }
 }

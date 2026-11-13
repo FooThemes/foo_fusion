@@ -18,7 +18,7 @@ import { pickVersion } from '../data/versions.js';
 import { setTitle, versionText } from './titles.js';
 import { listening, listeningData, knownData } from '../data/listening.js';
 import { trackContextMenu } from './menus.js';
-import { TrackPanel } from './trackpanel.js';
+import { InlineAlbum } from './inlinealbum.js';
 
 export const SHELVES = {
   added: { label: 'Recently added', hint: 'Newest in your library first' },
@@ -117,11 +117,13 @@ export class Shelves {
     this.shown = !!kept && !this.node.hidden;
     parent.append(this.node);
     // An album opened from a shelf opens there, under its shelf.
-    this.panelHost = this.#panelHost();
-    this.panel = new TrackPanel(this.panelHost);
-    this.panelBox = el('div.shelf-panel');
-    this.panelBox.append(this.panel.node);
-    this.openKey = null;
+    this.album = new InlineAlbum({
+      scroller: grid.scroller,
+      className: 'shelf-panel',
+      onSize: () => this.layout(),
+      // The albums below glide along with it.
+      onSlide: (on) => grid.layer.classList.toggle('animating', on),
+    });
     this.node.addEventListener('click', (e) => this.#click(e), { signal });
     this.node.addEventListener(
       'dblclick',
@@ -154,9 +156,7 @@ export class Shelves {
     this.offStore();
     this.offListening();
     this.ac.abort();
-    this.#closePanel(false);
-    this.panel.destroy();
-    this.panelBox.remove();
+    this.album.destroy();
     kept = this.shown ? { node: this.node, sig: this.sig } : null;
     this.node.remove();
   }
@@ -195,8 +195,8 @@ export class Shelves {
   }
 
   #draw() {
-    const openKey = this.openKey;
-    this.#closePanel(false);
+    const openKey = this.album.key;
+    this.album.close({ animate: false });
     const rows = this.shelves.map(({ id, items }) => {
       const row = el('div.shelf-row', null, ...items.map((i) => this.#tile(i)));
       const scroll = (dir) => row.scrollBy({ left: dir * Math.max(this.grid.tileW, row.clientWidth - this.grid.tileW), behavior: store.get('smoothScroll') ? 'smooth' : 'auto' });
@@ -217,7 +217,7 @@ export class Shelves {
     this.shown = true;
     if (openKey) {
       const tile = this.node.querySelector(`.shelf-tile[data-key="${CSS.escape(openKey)}"]`);
-      if (tile) this.#openPanel(tile);
+      if (tile) this.#openAlbum(tile, { animate: false });
     }
     this.layout();
   }
@@ -273,7 +273,7 @@ export class Shelves {
 
   refreshPlaying() {
     if (!this.shown) return;
-    if (this.openKey) this.panel.refreshPlaying();
+    this.album.refreshPlaying();
     const r = player.playingPlaylist === view.playlist?.index ? player.playingIndex : -1;
     for (const node of this.node.querySelectorAll('.shelf-tile')) {
       const g = view.groups.find((x) => x.key === node.dataset.key);
@@ -282,7 +282,7 @@ export class Shelves {
   }
 
   refreshSelection() {
-    if (this.openKey) this.panel.refreshSelection();
+    this.album.refreshSelection();
   }
 
   /** Tile sizes follow the grid's; the albums start below the shelves. */
@@ -290,14 +290,10 @@ export class Shelves {
     if (!this.shown || !this.grid.tileW) return;
     this.node.style.setProperty('--tile-w', this.grid.tileW + 'px');
     this.node.style.setProperty('--art', this.grid.artSize + 'px');
-    if (this.openKey) {
-      this.panel.layout(this.grid.scroller.clientWidth);
-      this.#sizeBox(this.panel.height);
-    }
+    this.album.layout();
     // While the open album slides, the albums below go straight to where
     // they'll be (gliding there with it), not to where the slide is now.
-    const sliding = this.panelBox.isConnected ? (this.boxTarget ?? 0) - this.panelBox.offsetHeight : 0;
-    const top = this.node.offsetHeight + sliding + GAP;
+    const top = this.node.offsetHeight + this.album.pending + GAP;
     if (top === this.grid.top) return;
     this.grid.top = top;
     if (!fromGrid) this.grid.layout();
@@ -310,7 +306,7 @@ export class Shelves {
 
   #hide() {
     if (!this.shown) return;
-    this.#closePanel(false);
+    this.album.close({ animate: false });
     this.shown = false;
     this.sig = '';
     this.node.hidden = true;
@@ -332,113 +328,20 @@ export class Shelves {
     if (!g) return;
     if (e.target.closest('.tile-play')) return view.playGroup(g);
     const tile = e.target.closest('.shelf-tile');
-    if (this.openTile === tile) return this.#closePanel();
-    this.#openPanel(tile);
+    if (this.album.tile === tile) return this.album.close();
+    this.#openAlbum(tile);
   }
 
-  /** What the album panel needs from a "grid": here, one row (the shelf's)
-   *  with the pointer under the clicked tile wherever it has scrolled to. */
-  #panelHost() {
-    const self = this;
-    return {
-      cols: 1,
-      tileH: 0,
-      rowTop: () => 0,
-      get tileW() {
-        // The panel puts its pointer at 40 + tileW / 2: aim it at the tile.
-        const t = self.openTile;
-        if (!t) return 0;
-        const x = t.getBoundingClientRect().left + t.offsetWidth / 2 - self.node.getBoundingClientRect().left;
-        return Math.max(0, (x - 40) * 2);
-      },
-      relayout: () => self.#panelResized(),
-      collapse: () => self.#closePanel(),
-    };
-  }
-
-  #openPanel(tile) {
+  #openAlbum(tile, opts) {
     const g = view.groups.find((x) => x.key === tile.dataset.key);
     if (!g) return;
     this.grid.collapse(); // one open album at a time
-    this.openTile?.classList.remove('expanded');
-    this.openTile = tile;
-    this.openKey = g.key;
-    tile.classList.add('expanded');
-    const shelf = tile.closest('.shelf');
-    clearTimeout(this.closeTimer);
-    if (this.panelBox.previousElementSibling !== shelf) {
-      // Starts shut, under its shelf, and slides open.
-      this.panelBox.style.height = '0px';
-      this.boxTarget = 0;
-      shelf.after(this.panelBox);
-      void this.panelBox.offsetHeight;
-    }
-    this.panel.layout(this.grid.scroller.clientWidth);
-    this.panel.open(g, 0);
-    this.#panelResized();
-    // Keep the pointer under the tile as the shelf scrolls sideways.
-    const row = tile.parentElement;
-    this.offRowScroll?.();
-    const follow = () => this.panel.layout(this.grid.scroller.clientWidth);
-    row.addEventListener('scroll', follow, { passive: true });
-    this.offRowScroll = () => row.removeEventListener('scroll', follow);
+    this.album.open(tile, g, tile.closest('.shelf'), opts);
   }
 
   /** Close an album opened from a shelf (the grid is opening one). */
   closeAlbum() {
-    this.#closePanel();
-  }
-
-  #closePanel(relayout = true) {
-    if (!this.openKey) return;
-    this.openKey = null;
-    this.openTile?.classList.remove('expanded');
-    this.openTile = null;
-    this.offRowScroll?.();
-    const box = this.panelBox;
-    const panel = this.panel;
-    if (!relayout || !box.isConnected) {
-      panel.close();
-      box.remove();
-      this.boxTarget = 0;
-      return;
-    }
-    // Slides shut (as the grid's own album list does), then goes.
-    this.#sizeBox(0);
-    this.layout();
-    clearTimeout(this.closeTimer);
-    this.closeTimer = setTimeout(() => {
-      if (this.openKey) return; // opened again meanwhile
-      panel.close();
-      box.remove();
-      this.layout();
-    }, 240);
-  }
-
-  /** The open album's space: animated, with the albums below gliding along. */
-  #sizeBox(h) {
-    if (this.boxTarget === h) return;
-    this.boxTarget = h;
-    this.panelBox.classList.add('sliding');
-    this.panelBox.style.height = h + 'px';
-    this.grid.layer.classList.add('animating');
-    clearTimeout(this.slideTimer);
-    this.slideTimer = setTimeout(() => {
-      this.panelBox.classList.remove('sliding');
-      this.grid.layer.classList.remove('animating');
-    }, 260);
-  }
-
-  /** The open album changed height (songs arrived, a disc picked). */
-  #panelResized() {
-    if (!this.openKey) return;
-    this.#sizeBox(this.panel.height);
-    this.layout();
-    // Show it all, if it isn't (the songs arrive a moment after opening).
-    const sc = this.grid.scroller;
-    const box = this.panelBox.getBoundingClientRect();
-    const view_ = sc.getBoundingClientRect();
-    if (box.bottom > view_.bottom) sc.scrollBy({ top: Math.min(box.bottom - view_.bottom + 16, box.top - view_.top - 120), behavior: store.get('smoothScroll') ? 'smooth' : 'auto' });
+    this.album.close();
   }
 }
 

@@ -99,7 +99,7 @@ export class FolderTree {
     const need = [];
     for (let i = first; i <= last; i++) {
       if (this.nodes.has(i)) continue;
-      const node = this.pool.pop() || el('div.ft-row');
+      const node = this.pool.pop() || el('div.row.ft-row');
       node.hidden = false;
       node.style.transform = `translateY(${i * ROW_H}px)`;
       this.list.append(node);

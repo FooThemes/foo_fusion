@@ -17,6 +17,7 @@ import { toast } from './toast.js';
 import { artistFiles, artistFolder, musicArtistFolder, pictureUrl } from '../data/artistinfo.js';
 import { genreFiles, genreFolder, forgetGenreInfo } from '../data/genreinfo.js';
 import { refreshArtist } from '../data/artwork.js';
+import { openModal } from './modal.js';
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif|bmp)$/i;
 
@@ -129,10 +130,10 @@ async function edit(kind, name, dir, refresh) {
       });
       input = btn;
     } else if (f.type === 'text') {
-      input = el('textarea.dialog-input.ie-text', { spellcheck: true, rows: 7 });
+      input = el('textarea.field.ie-text', { spellcheck: true, rows: 7 });
       input.value = current.join('\n\n');
     } else {
-      input = el('input.dialog-input.ie-input' + (f.mono ? '.mono' : ''), { type: 'text', spellcheck: false, placeholder: f.placeholder || (f.type === 'list' ? 'Comma separated' : '') });
+      input = el('input.field.ie-input' + (f.mono ? '.mono' : ''), { type: 'text', spellcheck: false, placeholder: f.placeholder || (f.type === 'list' ? 'Comma separated' : '') });
       input.value = f.type === 'list' ? current.join(', ') : current[0] || '';
     }
     inputs.set(f.tag, input);
@@ -209,7 +210,7 @@ async function edit(kind, name, dir, refresh) {
         removeBtn.hidden = true;
       },
     });
-    return el('div.ie-slot', null, el('div.ie-slot-head', null, el('span.ie-label', { text: slot.label }), removeBtn), box, el('small.ie-hint', { text: slot.hint }), fileInput);
+    return el('div.ie-slot', null, el('div.ie-slot-head', null, el('span.ie-label', { text: slot.label }), removeBtn), box, el('small.hint', { text: slot.hint }), fileInput);
   });
 
   const body = el(
@@ -331,9 +332,9 @@ function toBase64(file) {
 
 function modal(title, body, footNote, onSave) {
   return new Promise((resolve) => {
-    const root = document.getElementById('overlay-root');
+    let remove = null;
     const close = (v) => {
-      back.remove();
+      remove();
       resolve(v);
     };
     const error = el('p.ie-error', { hidden: true });
@@ -351,7 +352,6 @@ function modal(title, body, footNote, onSave) {
         }
       },
     });
-    const back = el('div.dialog-back', { onmousedown: (e) => e.target === back && close(null) });
     const box = el(
       'div.dialog.ie-dialog',
       { role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
@@ -360,13 +360,10 @@ function modal(title, body, footNote, onSave) {
       error,
       el('div.dialog-buttons.ie-buttons', null, saveBtn, el('button.btn-text', { text: 'Cancel', onclick: () => close(null) }), el('span.ie-spacer'), footNote),
     );
-    back.append(box);
-    back.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close(null);
-      if (e.key === 's' && e.ctrlKey) (e.preventDefault(), saveBtn.click());
-      e.stopPropagation();
+    remove = openModal(box, {
+      cancel: () => close(null),
+      onKey: (e) => e.key === 's' && e.ctrlKey && (e.preventDefault(), saveBtn.click()),
     });
-    root.append(back);
     box.querySelector('.ie-fields input')?.focus();
     void clear;
   });

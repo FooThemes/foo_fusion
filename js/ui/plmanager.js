@@ -17,12 +17,13 @@ import { draggablePlaylist, playlistDropTarget, folderDropTarget, draggableFolde
 import { newPlaylistDialog } from './autoplaylist.js';
 import { folders } from '../data/folders.js';
 import { overlayScroll } from './oscroll.js';
+import { sheet } from './sheet.js';
 
 export function mountPlaylistManager(root, app) {
   const list = el('div.plm-list', { role: 'listbox', 'aria-label': 'Playlists', 'aria-multiselectable': 'true', tabindex: 0 });
   overlayScroll(list);
   // Filter the list by name (or folder name) as you type.
-  const search = el('input.plm-search', { type: 'search', placeholder: 'Search playlists', spellcheck: false, 'aria-label': 'Search playlists' });
+  const search = el('input.field.plm-search', { type: 'search', placeholder: 'Search playlists', spellcheck: false, 'aria-label': 'Search playlists' });
   let query = '';
   search.addEventListener('input', () => {
     query = search.value.trim().toLowerCase();
@@ -45,10 +46,8 @@ export function mountPlaylistManager(root, app) {
     }
   });
   const status = el('div.plm-status');
-  const panel = el(
-    'div.plm',
-    { role: 'dialog', 'aria-label': 'Playlist manager' },
-    el('div.plm-head', null, el('h2', { text: 'Playlists' }), el('button.btn-icon', { title: 'Close (Esc)', onclick: () => open(false) }, icon('close'))),
+  const sh = sheet(
+    { side: 'left', title: 'Playlists', className: 'plm', toggle: '[data-plm-toggle]', close: () => open(false) },
     el(
       'div.plm-tools',
       null,
@@ -64,33 +63,8 @@ export function mountPlaylistManager(root, app) {
     list,
     status,
   );
+  const panel = sh.node;
   root.append(panel);
-
-  // A click outside closes the panel, as Settings does. Not a drag, though:
-  // songs dragged from the page are dropped onto playlists here.
-  let down = null;
-  document.addEventListener(
-    'pointerdown',
-    (e) => {
-      down = null;
-      if (!panel.classList.contains('open') || panel.contains(e.target)) return;
-      if (e.target.closest?.('[data-plm-toggle], .dialog-back, .dd-layer, .mock-menu')) return;
-      down = { x: e.clientX, y: e.clientY };
-    },
-    true,
-  );
-  document.addEventListener('dragstart', () => (down = null), true);
-  document.addEventListener(
-    'pointerup',
-    (e) => {
-      const d = down;
-      down = null;
-      if (!d || !panel.classList.contains('open')) return;
-      if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 6) return; // dragged
-      open(false);
-    },
-    true,
-  );
 
   let selected = new Set(); // GUIDs
   let anchor = null;
@@ -100,7 +74,7 @@ export function mountPlaylistManager(root, app) {
     const np = isPage(view.mode);
     const playlistRow = (p, nested) => {
       const row = el(
-        'div.plm-row' + (nested ? '.nested' : ''),
+        'div.row.plm-row' + (nested ? '.nested' : ''),
         { role: 'option', tabindex: -1, dataset: { guid: p.guid }, title: `${p.name}\n${plural(p.trackCount, 'song')}${p.isAutoplaylist ? ' · autoplaylist' : ''}${p.isLocked ? ' · locked' : ''}` },
         icon(p.isAutoplaylist ? 'autoplaylist' : playlists.isSpecial(p) ? 'collection' : 'playlist'),
         el('span.plm-name.ellipsis', { text: p.name }),
@@ -229,8 +203,8 @@ export function mountPlaylistManager(root, app) {
     await call('playlist.reorderPlaylists', { newOrderGuids: [...special, ...rest].map((p) => p.guid) });
   }
 
-  function open(on = !panel.classList.contains('open')) {
-    panel.classList.toggle('open', on);
+  function open(on = !sh.isOpen) {
+    sh.set(on);
     if (on) {
       const act = playlists.activePlaylist;
       if (act && !selected.size) {
@@ -242,20 +216,20 @@ export function mountPlaylistManager(root, app) {
     }
   }
 
-  playlists.on('change', () => panel.classList.contains('open') && render());
-  folders.on('change', () => panel.classList.contains('open') && render());
-  playlists.on('active', () => panel.classList.contains('open') && render());
-  player.on('track', () => panel.classList.contains('open') && render());
-  player.on('state', () => panel.classList.contains('open') && render());
+  playlists.on('change', () => sh.isOpen && render());
+  folders.on('change', () => sh.isOpen && render());
+  playlists.on('active', () => sh.isOpen && render());
+  player.on('track', () => sh.isOpen && render());
+  player.on('state', () => sh.isOpen && render());
 
   return {
     open,
     get isOpen() {
-      return panel.classList.contains('open');
+      return sh.isOpen;
     },
   };
 }
 
 function tool(iconName, label, title, onclick) {
-  return el('button.plm-tool', { title, onclick }, icon(iconName), el('span', { text: label }));
+  return el('button.btn-soft', { title, onclick }, icon(iconName), el('span', { text: label }));
 }

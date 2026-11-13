@@ -59,8 +59,8 @@ function columns() {
 
 /** Add or change a column of your own: its name and title formatting pattern. */
 async function editColumn(existing = null) {
-  const name = el('input.dialog-input', { type: 'text', value: existing?.label || '', placeholder: 'e.g. Rating', spellcheck: false });
-  const pattern = el('input.dialog-input.pa-input', { type: 'text', value: existing?.pattern || '', placeholder: 'e.g. $if2(%rating%,-)', spellcheck: false });
+  const name = el('input.field', { type: 'text', value: existing?.label || '', placeholder: 'e.g. Rating', spellcheck: false });
+  const pattern = el('input.field.pa-input', { type: 'text', value: existing?.pattern || '', placeholder: 'e.g. $if2(%rating%,-)', spellcheck: false });
   const status = el('div.pa-status');
   const right = el('input', { type: 'checkbox', checked: !!existing?.right });
   const body = el(
@@ -356,7 +356,7 @@ export class SongList {
   }
 
   #make() {
-    const node = el('div.song-row', { role: 'option' }, ...this.cols.map((k) => el(`div.c-${k}.ellipsis${col(k).right ? '.right' : ''}`, { dataset: { col: k } })));
+    const node = el('div.row.song-row', { role: 'option' }, ...this.cols.map((k) => el(`div.c-${k}.ellipsis${col(k).right ? '.right' : ''}`, { dataset: { col: k } })));
     this.sizer.append(node);
     return node;
   }

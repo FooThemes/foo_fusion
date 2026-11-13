@@ -186,6 +186,191 @@ input {
   filter: brightness(1.1);
 }
 
+/* A small secondary button (Search again, New, Defaults, Browse …): solid,
+   so it reads as a button on any background; the accent on hover. */
+.btn-soft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--text) 9%, var(--panel-bg));
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.btn-soft:has(> .icon) {
+  padding-left: 8px;
+}
+
+.btn-soft .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-soft:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-soft:disabled {
+  opacity: 0.5;
+}
+
+/* An outlined button (the album panel's round ones, Full album, "?"):
+   filled with the accent on hover. */
+.btn-outline {
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.btn-outline:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* A menu or list floating over the page (drop-down menus, completions). */
+.popup {
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* A song in a list: the album panel's, Songs, Now playing (each lays out
+   its own columns). */
+.row {
+  height: 35px;
+  padding: 0 10px;
+  align-items: center;
+  font-size: 14px;
+  outline: none;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row.selected {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* The song playing: its title in the accent colour. */
+.tp-row.playing .tp-name,
+.song-row.playing .c-title,
+.np-row.current .np-t {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* A name in running text that opens its page (links.js). */
+.link {
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* A line of explanation under a setting or field. */
+.hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text2);
+}
+
+/* Text fields: dialogs, Settings, searches. */
+.field {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 2px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.field:focus {
+  border-color: var(--accent);
+}
+
+.field:disabled {
+  opacity: 0.6;
+}
+
+.field.mono {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 13px;
+}
+
+.field.invalid,
+.field.invalid:focus {
+  border-color: #c42b1c;
+}
+
+/* Tabs (tabs.js): one picked. Blocks, as the Collection's Albums/Artists/…
+   tabs; .small for choices in a panel; .line for pages, underlined. */
+.tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.tab {
+  height: 30px;
+  padding: 0 18px;
+  background: var(--tab-off-bg);
+  color: var(--tab-off-text);
+  font-size: 14px;
+}
+
+.tab:hover {
+  filter: brightness(1.15);
+}
+
+.tab.on {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.tabs.small .tab {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.tabs.line {
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs.line .tab {
+  height: auto;
+  padding: 6px 12px;
+  background: none;
+  color: var(--text2);
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  filter: none;
+}
+
+.tabs.line .tab:hover {
+  color: var(--text);
+}
+
+.tabs.line .tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
 /* Scrollbars. One look everywhere: an 8px bar that widens to 10px and
    brightens while the pointer is on it. Long lists and panels use Fusion's
    own (oscroll.js, drawn on top of the content so nothing reflows); small

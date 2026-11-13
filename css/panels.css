@@ -1670,12 +1670,24 @@ body.pdragging * {
   justify-content: center;
   width: 34px;
   height: 34px;
+  padding: 0;
   color: var(--text);
 }
 
+.icon-field-face {
+  display: flex;
+}
+
 .icon-field .icon {
+  display: block;
   width: 20px;
   height: 20px;
+}
+
+/* The icon dialog: as wide as its grid, not the usual dialog width. */
+.dialog:has(.icon-dialog) {
+  width: auto;
+  min-width: 0;
 }
 
 .icon-pop {

@@ -110,7 +110,7 @@ export function installGrain() {
   for (let i = 0; i < data.data.length; i += 4) {
     const v = Math.random() < 0.5 ? 0 : 255;
     data.data[i] = data.data[i + 1] = data.data[i + 2] = v;
-    data.data[i + 3] = Math.round(Math.random() * 11); // faint: it only has to break up the steps
+    data.data[i + 3] = Math.round(Math.random() * 3); // barely there: just enough to break up the steps
   }
   ctx.putImageData(data, 0, 0);
   // A data URL (not a blob: one), which any page setting allows.

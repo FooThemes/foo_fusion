@@ -10,6 +10,8 @@
 // — and rounded to the screen's levels once, with dithering of under one
 // level: the steps are spread into the picture, too fine to see as grain.
 
+import { softBackdrop } from './backdrop.js';
+
 /**
  * @param {HTMLCanvasElement} src  the small blurred cover
  * @param {HTMLCanvasElement} out  drawn at its own size on screen
@@ -104,4 +106,51 @@ export function backgroundOf(node) {
     if (a > 0) return [r, g, b];
   }
   return [34, 34, 34];
+}
+
+/**
+ * A blurred picture filling `box`, drawn as above: the small blurred copy
+ * (backdrop.js) and the full-size canvas, kept in step with the picture
+ * loading, the box's size and the theme. `img` is the picture's (hidden)
+ * <img>; artwork.js or a URL fills it as before. Options as drawSmooth's,
+ * plus blur/at for the small copy. `opacity` may be a function (per theme).
+ */
+export function smoothBackdrop(img, box, { blur = 60, at = 1600, opacity = 0.45, bleed = 140, solid = 0.25, className = '' } = {}) {
+  const full = document.createElement('canvas');
+  full.className = 'smooth-bg' + (className ? ' ' + className : '');
+  full.setAttribute('aria-hidden', 'true');
+  box.append(full);
+  let frame = 0;
+  let timer = 0;
+  const paint = () => {
+    cancelAnimationFrame(frame);
+    // Next frame: after a theme change has recoloured the page behind it.
+    frame = requestAnimationFrame(() => {
+      let ok = false;
+      try {
+        ok = drawSmooth(small, full, { bg: backgroundOf(box), opacity: typeof opacity === 'function' ? opacity() : opacity, bleed, solid, box });
+      } catch {
+        ok = false; // a picture that can't be read back: the stretched copy shows instead
+      }
+      box.classList.toggle('smooth', ok);
+      full.classList.toggle('loaded', small.classList.contains('loaded'));
+    });
+  };
+  const small = softBackdrop(img, { blur, at, onDraw: paint });
+  new MutationObserver(() => full.classList.toggle('loaded', small.classList.contains('loaded'))).observe(small, { attributes: true, attributeFilter: ['class'] });
+  const ro = new ResizeObserver(() => {
+    clearTimeout(timer);
+    timer = setTimeout(paint, 120);
+  });
+  ro.observe(box);
+  return {
+    small,
+    full,
+    repaint: paint,
+    destroy() {
+      ro.disconnect();
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+    },
+  };
 }

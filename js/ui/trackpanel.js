@@ -6,7 +6,7 @@
 // disc shows just that one with its cover in the big art slot.
 
 import { setTitle, setVersioned, versionText } from './titles.js';
-import { softBackdrop } from './backdrop.js';
+import { smoothBackdrop } from './smoothbg.js';
 import { pickVersion, parseVersions } from '../data/versions.js';
 import { albumColours } from '../data/albumcolours.js';
 import { splitValues } from '../data/view.js';
@@ -79,7 +79,7 @@ export class TrackPanel {
     this.node = el(
       'div.trackpanel',
       { hidden: true },
-      el('div.tp-bg-wrap', null, this.bg),
+      (this.bgWrap = el('div.tp-bg-wrap', null, this.bg)),
       this.topline,
       this.notch,
       el(
@@ -89,7 +89,8 @@ export class TrackPanel {
         el('div.tp-body', null, el('div.tp-head', null, this.title, this.meta, this.buttons), this.discBar, this.list),
       ),
     );
-    softBackdrop(this.bg, { blur: 40, at: 1400 });
+    // Blurred cover behind the songs, drawn without banding (smoothbg.js).
+    this.backdrop = smoothBackdrop(this.bg, this.bgWrap, { blur: 40, at: 1400, opacity: 0.55, bleed: 60, solid: 1 });
     this.selector = new RowSelector(this.list, () => this.visibleRows());
     this.offFav = favourites.on('change', ({ handles, state }) => refreshHearts(this.list, handles, state));
     draggableRows(this.list, (e) => {
@@ -183,6 +184,7 @@ export class TrackPanel {
   }
 
   destroy() {
+    this.backdrop.destroy();
     this.group = null; // pending retries and loads stop here
     this.offFav();
     window.removeEventListener('fusion:artrefresh', this.onArtRefresh);

@@ -302,6 +302,33 @@ input {
   font-size: 12px;
 }
 
+/* Blurred backgrounds drawn without banding (smoothbg.js): the picture is
+   worked out at full size with the page colour in it, so it's opaque. The
+   stretched copy (backdrop.js) shows only if that can't be done. */
+.smooth-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+  pointer-events: none;
+}
+
+.smooth > .smooth-bg {
+  display: block;
+}
+
+.smooth > .smooth-bg.loaded {
+  opacity: 1;
+}
+
+.smooth > canvas:not(.smooth-bg),
+.smooth > img {
+  display: none !important;
+}
+
 /* A song in a list: the album panel's, Songs, Now playing (each lays out
    its own columns). */
 .row {

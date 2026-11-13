@@ -230,7 +230,9 @@
 }
 
 .trackpanel[data-bg='plain'] .tp-bg,
-.trackpanel[data-bg='art'] .tp-bg {
+.trackpanel[data-bg='art'] .tp-bg,
+.trackpanel[data-bg='plain'] .smooth-bg,
+.trackpanel[data-bg='art'] .smooth-bg {
   display: none;
 }
 

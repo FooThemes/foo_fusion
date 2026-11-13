@@ -7,6 +7,8 @@ import { el } from '../core/util.js';
 import { showMenu } from './menus.js';
 import { pictureUrl } from '../data/artistinfo.js';
 import { valueLink } from './links.js';
+import { smoothBackdrop } from './smoothbg.js';
+import * as store from '../core/store.js';
 
 const GAP = 24; // between the header and the first row of albums
 
@@ -41,7 +43,7 @@ export class Hero {
     this.node = el(
       'div.artist-hero' + className,
       { hidden: true },
-      el('div.ah-back', null, this.fanart),
+      (this.back = el('div.ah-back', null, this.fanart)),
       el('div.ah-inner', null, this.pictureBox, el('div.ah-text', null, ...above, this.title, this.meta, ...details, this.assoc, this.bio, el('div.ah-foot', null, this.more, this.links))),
     );
     this.node.addEventListener('contextmenu', (e) => {
@@ -53,12 +55,35 @@ export class Hero {
     // after being hidden (the mini player hides the page). The albums move.
     this.resize = new ResizeObserver(() => !this.node.hidden && this.measure());
     this.resize.observe(this.node);
+    // A backdrop picture much smaller than the header (a genre's collage or
+    // small picture) looked pixelated stretched across it: those are shown
+    // blurred instead, drawn without banding (smoothbg.js). Real fanart
+    // stays sharp.
+    this.softImg = el('img', { alt: '' });
+    this.back.append(this.softImg);
+    this.soft = smoothBackdrop(this.softImg, this.back, { blur: 40, at: 1400, opacity: () => (store.get('dark') ? 0.35 : 0.45), bleed: 60, solid: 1 });
+    this.fanart.addEventListener('load', () => this.checkSoft());
     this.refreshEvent = refreshEvent;
     this.onRefresh = (e) => this.refresh(e);
     window.addEventListener(refreshEvent, this.onRefresh);
   }
 
+  /** Low-resolution backdrop: blurred; otherwise the picture as it is. */
+  checkSoft() {
+    const f = this.fanart;
+    const low = !!f.getAttribute('src') && f.naturalWidth > 0 && f.naturalWidth < this.back.clientWidth * 0.6;
+    if (low) {
+      if (this.softImg.src !== f.src) this.softImg.src = f.src;
+      this.softImg.classList.add('loaded');
+    } else {
+      this.back.classList.remove('smooth');
+      this.softImg.classList.remove('loaded');
+      this.softImg.removeAttribute('src');
+    }
+  }
+
   destroy() {
+    this.soft.destroy();
     this.resize.disconnect();
     window.removeEventListener(this.refreshEvent, this.onRefresh);
   }

@@ -139,7 +139,7 @@ export class FolderTree {
     if (it.dir) {
       const isOpen = open.has(it.dir.path.toLowerCase());
       delete node.dataset.row;
-      node.className = `ft-row ft-dir${isOpen ? ' open' : ''}`;
+      node.className = `row ft-row ft-dir${isOpen ? ' open' : ''}`;
       node.setAttribute('role', 'treeitem');
       node.setAttribute('aria-expanded', String(isOpen));
       node.tabIndex = -1;
@@ -149,7 +149,7 @@ export class FolderTree {
     }
     const t = this.tracks.get(it.row);
     node.dataset.row = it.row;
-    node.className = 'ft-row ft-song';
+    node.className = 'row ft-row ft-song';
     node.setAttribute('role', 'treeitem');
     node.removeAttribute('aria-expanded');
     node.tabIndex = -1;

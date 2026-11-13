@@ -78,11 +78,12 @@ export function mountHeader(root, app) {
     tools.hidden = page;
     tabs.set(view.mode);
     const sortKey = view.currentSortKey();
-    clear(sortBtn).append(el('span.sort-label', { text: 'Sort by ' }), el('span.sort-value', { text: (SORTS[sortKey]?.label || 'Album').toLowerCase() }), icon('chevronDown'));
+    // Folders are listed by name, within their folder: "folder", fixed (like
+    // Artists and Genres, which have one order each).
+    const sortLabel = view.mode === 'folders' && !view.drill ? 'folder' : (SORTS[sortKey]?.label || 'Album').toLowerCase();
+    clear(sortBtn).append(el('span.sort-label', { text: 'Sort by ' }), el('span.sort-value', { text: sortLabel }), icon('chevronDown'));
     const sortable = view.canSort();
     sortBtn.disabled = VIEW_SORTS[view.drill ? 'albums' : view.mode]?.length < 2 || !sortable;
-    // Folders are listed by name: no sort to choose (the arrow still flips them).
-    sortBtn.hidden = view.mode === 'folders';
     sortBtn.title = sortable ? '' : 'This autoplaylist keeps its own order. Change it in the autoplaylist settings.';
     dirBtn.disabled = !view.playlist;
     const desc = store.get('sortDescending');

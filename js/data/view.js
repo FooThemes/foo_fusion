@@ -10,7 +10,7 @@ import { logInfo } from '../core/log.js';
 import { Emitter } from '../core/emitter.js';
 import { debounce, serialize } from '../core/util.js';
 import * as store from '../core/store.js';
-import { SORTS } from '../core/store.js';
+import { SORTS, VIEW_SORTS } from '../core/store.js';
 import { TF, searchQuery } from './patterns.js';
 import { playlists, COLLECTION, FAVORITES, PLAYBACK } from './playlists.js';
 import { MOOD_TF, favourites } from './favourites.js';
@@ -105,8 +105,18 @@ class View extends Emitter {
       // Our own heart clicks already updated the screen.
       if (!all && favourites.ownChange(handles)) return;
       this.#contentVersion++;
-      this.#trackCache.clear();
-    this.#quickCache.clear();
+      // Only those songs are read again: clearing every song made the whole
+      // list go blank and fill in again whenever one song's play count
+      // changed (a few seconds into each song, or when Last.fm plays sync).
+      if (all) {
+        this.#trackCache.clear();
+        this.#quickCache.clear();
+      } else {
+        const gone = new Set(handles);
+        for (const cache of [this.#trackCache, this.#quickCache]) for (const [row, t] of cache) if (t && gone.has(t.handle)) cache.delete(row);
+        // The rows haven't moved: the rest of the cache stays (see load()).
+        this.#trackCacheKey = `${this.playlist?.guid}|${this.playlist?.trackCount}|${this.#contentVersion}`;
+      }
       this.#sortCache = null;
       await this.load();
       this.emit('metadata');
@@ -318,15 +328,29 @@ class View extends Emitter {
   returning = null; // set while going back, for the view to restore its place
 
   async setSort(sortKey, descending = store.get('sortDescending')) {
-    const mode = isPage(this.mode) ? 'albums' : this.mode;
-    store.update('sort', { [mode]: sortKey });
+    store.update('sort', { [this.#sortSlot()]: sortKey });
     store.set('sortDescending', descending);
     await this.load({ sort: true });
   }
 
-  currentSortKey() {
+  /**
+   * Where the tab's sort is kept. An artist's or genre's page (its albums)
+   * has a slot of its own: sorting Tame Impala's albums by year used to
+   * leave the Artists tab itself saying "Sort by year".
+   */
+  #sortSlot() {
     const mode = isPage(this.mode) ? 'albums' : this.mode;
-    return store.get('sort')[mode] || (mode === 'folders' ? 'path' : undefined);
+    return this.drill ? `${this.drill.kind}Page` : mode;
+  }
+
+  currentSortKey() {
+    const slot = this.#sortSlot();
+    const saved = store.get('sort')[slot];
+    const offered = VIEW_SORTS[this.drill ? 'albums' : slot] || [];
+    if (offered.includes(saved)) return saved;
+    // A page's albums: by year for an artist, by artist for a genre.
+    if (this.drill) return this.drill.kind === 'artists' ? 'year' : 'artist';
+    return offered[0] || (slot === 'folders' ? 'path' : undefined);
   }
 
   /** Re-read the active playlist and regroup it. */

@@ -76,7 +76,7 @@ export class Hero {
       if (this.softImg.src !== f.src) this.softImg.src = f.src;
       this.softImg.classList.add('loaded');
     } else {
-      this.back.classList.remove('smooth');
+      this.soft.cancel();
       this.softImg.classList.remove('loaded');
       this.softImg.removeAttribute('src');
     }

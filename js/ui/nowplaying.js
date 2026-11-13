@@ -3,6 +3,7 @@
 
 import { setTitle, setVersioned, versionText } from './titles.js';
 import { softBackdrop } from './backdrop.js';
+import { drawSmooth, backgroundOf } from './smoothbg.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { dragSource, dropTarget } from './dnd.js';
@@ -45,16 +46,43 @@ export class NowPlaying {
     this.wrap = el(
       'div.nowplaying',
       null,
-      el('div.np-hero', null, el('div.np-bg-wrap', null, this.bg), el('div.np-hero-inner', null, this.coverBox, el('div.np-info', null, this.title, this.artist, this.album, this.tech)), this.empty),
+      el('div.np-hero', null, (this.bgWrap = el('div.np-bg-wrap', null, this.bg, (this.full = el('canvas.np-bg-full', { 'aria-hidden': 'true' })))), el('div.np-hero-inner', null, this.coverBox, el('div.np-info', null, this.title, this.artist, this.album, this.tech)), this.empty),
       el('div.np-queue', null, this.listTitle, this.list),
     );
-    softBackdrop(this.bg, { blur: 60, at: 1600 });
+    this.small = softBackdrop(this.bg, { blur: 60, at: 1600, onDraw: () => this.#paintBg() });
+    // The full-size, banding-free picture follows the small one's "loaded"
+    // state (its fade in), and the space's size.
+    new MutationObserver(() => this.full.classList.toggle('loaded', this.small.classList.contains('loaded'))).observe(this.small, { attributes: true, attributeFilter: ['class'] });
+    this.bgResize = new ResizeObserver(() => {
+      clearTimeout(this.bgTimer);
+      this.bgTimer = setTimeout(() => this.#paintBg(), 120);
+    });
+    this.bgResize.observe(this.bgWrap);
     scroller.append(this.wrap);
     this.offs = [player.on('track', () => this.render()), player.on('queue', () => this.renderList()), player.on('state', () => this.renderState()), player.on('order', () => this.renderList())];
     this.render();
   }
 
+  /** The background at full size, without banding (smoothbg.js). */
+  #paintBg() {
+    cancelAnimationFrame(this.bgFrame);
+    // Next frame: after a theme change has recoloured the page behind it.
+    this.bgFrame = requestAnimationFrame(() => {
+      let ok = false;
+      try {
+        ok = drawSmooth(this.small, this.full, { bg: backgroundOf(this.wrap) });
+      } catch {
+        ok = false; // a cover that can't be read back: the stretched one shows instead
+      }
+      this.bgWrap.classList.toggle('smooth', ok);
+      this.full.classList.toggle('loaded', this.small.classList.contains('loaded'));
+    });
+  }
+
   destroy() {
+    this.bgResize.disconnect();
+    clearTimeout(this.bgTimer);
+    cancelAnimationFrame(this.bgFrame);
     this.offStore();
     window.removeEventListener('fusion:artrefresh', this.onArtRefresh);
     this.offs.forEach((off) => off());

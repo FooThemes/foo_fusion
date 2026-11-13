@@ -21,7 +21,6 @@ import { installLog, logInfo } from './core/log.js';
 import { VERSION } from './version.js';
 import { installDiagnostics } from './core/diag.js';
 import { installTooltips } from './ui/tooltip.js';
-import { installGrain } from './ui/backdrop.js';
 import { initArtCache } from './data/artcache.js';
 
 async function boot() {
@@ -33,7 +32,6 @@ async function boot() {
 
   installLog(VERSION);
   installTooltips();
-  installGrain();
   // foo_ui_webview2 opens its main window without a frame, expecting the theme
   // to draw one. Fusion uses the normal Windows title bar, like the original.
   tryCall('window.setFrameless', { frameless: false });

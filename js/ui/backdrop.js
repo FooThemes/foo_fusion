@@ -21,7 +21,7 @@ store.subscribe((k) => k === 'dark' && drawers.forEach((d) => d()));
 // that stretching it stays smooth (64 showed soft blocks when stretched 25x).
 const W = 160;
 
-export function softBackdrop(img, { blur = 60, at = 1600, saturate = 1.3 } = {}) {
+export function softBackdrop(img, { blur = 60, at = 1600, saturate = 1.3, onDraw = null } = {}) {
   // Its pixels are read (keepReadable): the artwork handler allows that
   // when the picture is asked for this way.
   img.crossOrigin = 'anonymous';
@@ -51,6 +51,7 @@ export function softBackdrop(img, { blur = 60, at = 1600, saturate = 1.3 } = {})
     } catch {
       /* a picture that can't be read back: shown as it is */
     }
+    onDraw?.(canvas);
   };
   drawers.add(draw);
   img.addEventListener('load', draw);
@@ -94,25 +95,4 @@ function keepReadable(ctx, w, h) {
     }
   }
   ctx.putImageData(data, 0, 0);
-}
-
-/**
- * A tile of fine noise laid over the soft backgrounds: a smooth gradient on
- * a screen has only so many shades, and shows bands between them; a little
- * grain hides the steps. Made once, as a data URL in --grain.
- */
-export function installGrain() {
-  const n = 128;
-  const c = document.createElement('canvas');
-  c.width = c.height = n;
-  const ctx = c.getContext('2d');
-  const data = ctx.createImageData(n, n);
-  for (let i = 0; i < data.data.length; i += 4) {
-    const v = Math.random() < 0.5 ? 0 : 255;
-    data.data[i] = data.data[i + 1] = data.data[i + 2] = v;
-    data.data[i + 3] = Math.round(Math.random() * 3); // barely there: just enough to break up the steps
-  }
-  ctx.putImageData(data, 0, 0);
-  // A data URL (not a blob: one), which any page setting allows.
-  document.documentElement.style.setProperty('--grain', `url(${c.toDataURL('image/png')})`);
 }

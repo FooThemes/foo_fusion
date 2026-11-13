@@ -46,10 +46,12 @@ const P = {
   fullscreen: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>',
   // Equaliser bars; they bounce (CSS) while something is playing.
   nowPlaying: '<path class="eq eq1" d="M5 18v-5"/><path class="eq eq2" d="M9 18V8"/><path class="eq eq3" d="M13 18V5"/><path class="eq eq4" d="M17 18v-7"/>',
+  stats: '<path d="M4 19h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/>',
   collection: '<path d="M5 5v14M9 5v14"/><path d="M13 5.5l3.2-.8 3.6 14.3-3.2.8z"/>',
   playlist: '<path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 18V10l3-1"/><circle cx="16.5" cy="18" r="1.5"/>',
   autoplaylist: '<path d="M4 7h11M4 12h7M4 17h7"/><path d="M17 11l1 2.2 2.3.3-1.7 1.6.4 2.4-2-1.2-2 1.2.4-2.4-1.7-1.6 2.3-.3z"/>',
   library: '<path d="M4 20V4M8 20V4M12 20V7M16.5 20l-3-13 2.9-.7 3 13z"/>',
+  mini: '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><rect x="12" y="12" width="6" height="4" rx=".5"/>',
   minimise: '<path d="M6 12h12"/>',
   open: '<path d="M4 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h7A1.5 1.5 0 0 1 20 9v1H8l-4 8z"/><path d="M4 18l3-8h15l-3 8z"/>',
   edit: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M13.5 6.5l3 3"/>',

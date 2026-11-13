@@ -6,6 +6,7 @@
 // disc shows just that one with its cover in the big art slot.
 
 import { setTitle, setVersioned, versionText } from './titles.js';
+import { softBackdrop } from './backdrop.js';
 import { pickVersion, parseVersions } from '../data/versions.js';
 import { albumColours } from '../data/albumcolours.js';
 import { splitValues } from '../data/view.js';
@@ -86,6 +87,7 @@ export class TrackPanel {
         el('div.tp-body', null, el('div.tp-head', null, this.title, this.meta, this.buttons), this.discBar, this.list),
       ),
     );
+    softBackdrop(this.bg, { blur: 40, at: 1400 });
     this.selector = new RowSelector(this.list, () => this.visibleRows());
     this.offFav = favourites.on('change', ({ handles, state }) => refreshHearts(this.list, handles, state));
     draggableRows(this.list, (e) => {

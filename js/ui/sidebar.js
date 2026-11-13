@@ -5,7 +5,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { playlists, COLLECTION, FAVORITES } from '../data/playlists.js';
 import { player } from '../data/player.js';
-import { view } from '../data/view.js';
+import { view, isPage } from '../data/view.js';
 import { playlistMenu, folderMenu } from './menus.js';
 import { folders } from '../data/folders.js';
 import { newPlaylistDialog } from './autoplaylist.js';
@@ -23,7 +23,7 @@ export function mountSidebar(root, app) {
   // Leaving Now playing for another playlist: switch tab without loading the
   // old playlist first (that briefly showed its covers).
   const leaveNowPlaying = (name) => {
-    if (view.mode !== 'nowplaying') return;
+    if (!isPage(view.mode)) return;
     view.setMode(store.get('view'), { load: playlists.activePlaylist?.name === name });
   };
   const navCollection = navItem('collection', 'Collection', () => {
@@ -36,6 +36,7 @@ export function mountSidebar(root, app) {
   });
   const queueBadge = el('span.badge', { hidden: true });
   const navNow = navItem('nowPlaying', 'Now playing', () => view.setMode('nowplaying'), queueBadge);
+  const navStats = navItem('stats', 'Listening stats', () => view.setMode('stats'));
   const newPlaylist = navItem('add', 'New playlist', () => newPlaylistDialog());
   newPlaylist.classList.add('nav-new');
   const manage = el('button.btn-icon.side-manage', { 'data-plm-toggle': '', title: 'Playlist manager (Ctrl+M)', onclick: () => app.togglePlaylistManager() }, icon('playlist'));
@@ -49,7 +50,7 @@ export function mountSidebar(root, app) {
     el('div.side-head', null, toggle, el('div.side-title', { text: 'foobar2000' })),
     searchBox,
     el('div.side-sep'),
-    el('nav.side-nav', null, navCollection, navFavorites, navNow),
+    el('nav.side-nav', null, navCollection, navFavorites, navNow, navStats),
     el('div.side-sep'),
     newRow,
     list,
@@ -58,7 +59,7 @@ export function mountSidebar(root, app) {
   // Search always looks through the whole Collection, whichever playlist
   // (or Now playing) was showing.
   const searchFor = async (text) => {
-    if (text && (view.mode === 'nowplaying' || playlists.activePlaylist?.name !== COLLECTION)) {
+    if (text && (isPage(view.mode) || playlists.activePlaylist?.name !== COLLECTION)) {
       leaveNowPlaying(COLLECTION);
       await playlists.ensureCollection();
     }
@@ -83,13 +84,14 @@ export function mountSidebar(root, app) {
 
   function render() {
     const active = playlists.active;
-    const np = view.mode === 'nowplaying';
+    const np = isPage(view.mode);
     const coll = playlists.byName(COLLECTION);
     const fav = playlists.byName(FAVORITES);
     setState(navCollection, !np && coll && coll.index === active, coll?.isPlaying);
     navFavorites.hidden = false;
     setState(navFavorites, !np && fav && fav.index === active, fav?.isPlaying);
-    setState(navNow, np, false);
+    setState(navNow, view.mode === 'nowplaying', false);
+    setState(navStats, view.mode === 'stats', false);
     navCollection.title = coll ? `${COLLECTION} - ${coll.trackCount.toLocaleString()} songs` : 'Collection';
 
     clear(list);
@@ -101,7 +103,7 @@ export function mountSidebar(root, app) {
           role: 'option',
           title: `${p.name} - ${p.trackCount.toLocaleString()} songs`,
           onclick: () => {
-            if (view.mode === 'nowplaying') view.setMode(store.get('view'), { load: p.index === playlists.active });
+            if (isPage(view.mode)) view.setMode(store.get('view'), { load: p.index === playlists.active });
             playlists.activate(p.index);
           },
           oncontextmenu: (e) => {

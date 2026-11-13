@@ -99,6 +99,17 @@ const DEFAULTS = {
   genreTiles: 'wide', // genre tiles: 'wide' (2:1, as the original) or 'square'
   artistScript: '', // path of tools/fusion-artist-info.py, to run it from Settings > Artists
   exportFolder: '', // where the artist and genre lists are exported; empty: beside the script (else the profile)
+  homeShelves: true, // rows of albums above the Collection's album grid
+  shelves: [
+    ['added', true],
+    ['played', true],
+    ['forgotten', true],
+    ['most', false],
+    ['unplayed', false],
+    ['random', false],
+  ], // [shelf, shown], in order (see ui/shelves.js)
+  miniOnTop: true, // the mini player stays above other windows
+  diagnostics: false, // Settings > More: timings and details in fusion.log
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…
   dimEditionTags: true, // grey out '(Single)', '(Deluxe Edition)'… at the end of titles
   dimWords: 'Single, EP, Deluxe, Edition, Remaster, Remastered, Live, Bonus, Expanded, Anniversary, Reissue, Demo, Acoustic, Instrumental, Mono, Version, Remix, Radio Edit',

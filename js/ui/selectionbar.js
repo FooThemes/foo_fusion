@@ -4,7 +4,7 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
-import { view } from '../data/view.js';
+import { view, isPage } from '../data/view.js';
 import { addToItems } from './menus.js';
 import { dropdown } from './dropdown.js';
 import { favourites } from '../data/favourites.js';
@@ -16,7 +16,7 @@ export function mountSelectionBar(root) {
 
   function render() {
     const rows = [...view.selection].sort((a, b) => a - b);
-    const show = store.get('selectionBar') && rows.length > 0 && view.mode !== 'nowplaying';
+    const show = store.get('selectionBar') && rows.length > 0 && !isPage(view.mode);
     bar.hidden = !show;
     if (!show) return;
     clear(bar).append(...[

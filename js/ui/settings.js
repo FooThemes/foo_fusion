@@ -1,6 +1,7 @@
 // Settings panel (slides in from the right, like the original).
 
 import { el, clear } from '../core/util.js';
+import { SHELVES } from './shelves.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { ACCENTS } from '../core/store.js';
@@ -141,6 +142,10 @@ export function mountSettings(root, app) {
         toggle('Show song counts under albums', 'showTrackCounts'),
         toggle('Sort Collection and Favourites when opened', 'sortOnOpen'),
       ]),
+      section('Home shelves', [
+        toggle('Show shelves above the Collection’s albums', 'homeShelves', 'Rows of albums at the top of the Albums tab. Uses play counts from foo_playcount (or Playcount 2003).'),
+        shelvesField(),
+      ]),
       section('Tile sizes', [range('Albums', 'tileSize', 110, 260, 10), range('Artists', 'artistTileSize', 100, 240, 10)]),
       section('Covers', [
         select('Animated GIF covers', 'gifCovers', [
@@ -222,6 +227,8 @@ export function mountSettings(root, app) {
         link('library', 'Configure media library…', foobar('config.showLibraryPreferences')),
       ]),
       section('Fusion', [
+        toggle('Mini player stays on top', 'miniOnTop', 'Alt+M, or the mini player button in the play bar, shrinks the window to just the play bar.'),
+        toggle('Diagnostics', 'diagnostics', 'Write timings and other details to fusion.log in foobar2000’s profile folder, for tracking down slowness or a fault. Warnings and errors are logged either way.'),
         link('reset', 'Reset Fusion settings', async () => {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();
         }),
@@ -372,6 +379,35 @@ export function mountSettings(root, app) {
       el('div.set-select-line', null, el('span', { text: label }), selectButton(label, key, options)),
       cur?.[2] ? el('small.set-select-hint', { text: cur[2] }) : null,
     );
+  }
+
+  // Each shelf on or off, in the order they appear (arrows move one).
+  function shelvesField() {
+    const list = el('div.shelf-order');
+    const draw = () => {
+      const cur = store.get('shelves') || [];
+      const save = (next) => (store.set('shelves', next), draw());
+      list.replaceChildren(
+        ...cur.filter(([id]) => SHELVES[id]).map(([id, on], i) => {
+          const input = el('input', { type: 'checkbox', checked: !!on, onchange: () => save(cur.map((x, k) => (k === i ? [x[0], input.checked] : x))) });
+          const move = (d) => {
+            const next = cur.slice();
+            [next[i], next[i + d]] = [next[i + d], next[i]];
+            save(next);
+          };
+          return el(
+            'div.shelf-order-row',
+            { dataset: { shelf: id } },
+            el('label.set-toggle', null, el('span.set-label', null, el('span', { text: SHELVES[id].label }), el('small', { text: SHELVES[id].hint })), input, el('span.switch')),
+            el('button.btn-icon', { title: 'Move up', disabled: i === 0, onclick: () => move(-1) }, icon('chevronDown', 'flip')),
+            el('button.btn-icon', { title: 'Move down', disabled: i === cur.length - 1, onclick: () => move(1) }, icon('chevronDown')),
+          );
+        }),
+      );
+      list.classList.toggle('off', store.get('homeShelves') === false);
+    };
+    draw();
+    return list;
   }
 
   function section(title, items) {

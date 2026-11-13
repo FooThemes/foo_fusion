@@ -30,7 +30,9 @@ let nextId = 0;
 // behind it (view loads run one at a time), so it times out instead.
 const SLOW_MS = 400;
 const TIMEOUT_MS = 20000;
-const LONG = new Set(['playlist.convertToAutoplaylist', 'playlist.removeAutoplaylist', 'audio.generateFullWaveform', 'file.read', 'metadata.writeBatch', 'menu.showNativePopup', 'misc.showPreferences']);
+const LONG = new Set(['playlist.convertToAutoplaylist', 'playlist.removeAutoplaylist', 'audio.generateFullWaveform', 'file.read', 'metadata.writeBatch', 'menu.showNativePopup', 'ui.showCustomMenu', 'misc.showPreferences']);
+// Calls that wait for the user (a menu open, a dialog): never "slow".
+const WAITS_FOR_USER = new Set(['log.write', 'menu.showNativePopup', 'ui.showCustomMenu', 'misc.showPreferences', 'dialog.openFile', 'dialog.saveFile', 'dialog.openFolder']);
 let slowHook = null;
 export function onSlowCall(fn) {
   slowHook = fn;
@@ -60,7 +62,7 @@ export async function call(method, params) {
     clearTimeout(timer);
     pending.delete(id);
     const ms = performance.now() - t0;
-    if (ms > SLOW_MS && method !== 'log.write') slowHook?.(method, ms);
+    if (ms > SLOW_MS && !WAITS_FOR_USER.has(method)) slowHook?.(method, ms);
   }
   if (res && res.success === false) {
     const e = new BridgeError(method, res.error || 'failed', res.code, res.details);

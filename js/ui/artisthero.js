@@ -238,8 +238,9 @@ export class ArtistHero {
 
   #hide() {
     this.node.hidden = true;
-    if (this.grid.top !== 16) {
-      this.grid.top = 16;
+    const rest = this.grid.restTop();
+    if (this.grid.top !== rest) {
+      this.grid.top = rest;
       this.grid.layout();
     }
   }

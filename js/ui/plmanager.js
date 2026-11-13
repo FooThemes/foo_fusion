@@ -8,7 +8,7 @@ import { el, clear, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { call } from '../core/bridge.js';
 import { playlists } from '../data/playlists.js';
-import { view } from '../data/view.js';
+import { view, isPage } from '../data/view.js';
 import { player } from '../data/player.js';
 import * as store from '../core/store.js';
 import { playlistMenu, promptText, renamePlaylist, deletePlaylists, runMainMenuAny, folderMenu } from './menus.js';
@@ -94,7 +94,7 @@ export function mountPlaylistManager(root, app) {
 
   function render() {
     clear(list);
-    const np = view.mode === 'nowplaying';
+    const np = isPage(view.mode);
     const playlistRow = (p, nested) => {
       const row = el(
         'div.plm-row' + (nested ? '.nested' : ''),
@@ -112,7 +112,7 @@ export function mountPlaylistManager(root, app) {
       row.addEventListener('mousedown', (e) => select(p, e));
       row.addEventListener('click', (e) => {
         if (e.ctrlKey || e.shiftKey) return;
-        if (view.mode === 'nowplaying') view.setMode(store.get('view'), { load: p.index === playlists.active });
+        if (isPage(view.mode)) view.setMode(store.get('view'), { load: p.index === playlists.active });
         playlists.activate(p.index);
       });
       row.addEventListener('dblclick', () => call('playlist.playTrack', { playlist: p.index, index: 0 }));

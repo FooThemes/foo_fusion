@@ -125,7 +125,7 @@ class View extends Emitter {
       this.emit('filter', '');
       // Another playlist: shown at once as it was last time (when it was),
       // else the old one stays up until the new one is ready.
-      const snap = this.mode !== 'songs' && this.mode !== 'nowplaying' ? this.#snapshots.get(this.#snapshotKey()) : null;
+      const snap = this.mode !== 'songs' && !isPage(this.mode) ? this.#snapshots.get(this.#snapshotKey()) : null;
       if (snap) {
         this.playlist = pl;
         this.groups = snap.groups;
@@ -151,10 +151,10 @@ class View extends Emitter {
 
   /** { load: false } when a playlist switch (which loads anyway) follows. */
   setMode(mode, { load = true } = {}) {
-    if (mode !== 'nowplaying') store.set('view', mode);
+    if (!isPage(mode)) store.set('view', mode);
     // Also when leaving an artist's or genre's page through its own tab:
     // back to the full list (which then returns to where it was scrolled).
-    const regroup = (mode !== this.mode || !!this.drill) && mode !== 'nowplaying';
+    const regroup = (mode !== this.mode || !!this.drill) && !isPage(mode);
     this.mode = mode;
     this.drill = null;
     this.backTo = null;
@@ -301,7 +301,7 @@ class View extends Emitter {
 
   /** Empty the page (shown as loading) before loading another one. */
   #blank() {
-    const snap = this.mode !== 'songs' && this.mode !== 'nowplaying' ? this.#snapshots.get(this.#snapshotKey()) : null;
+    const snap = this.mode !== 'songs' && !isPage(this.mode) ? this.#snapshots.get(this.#snapshotKey()) : null;
     this.groups = snap ? snap.groups : [];
     this.rows = snap ? null : [];
     this.total = snap ? snap.total : 0;
@@ -314,14 +314,14 @@ class View extends Emitter {
   returning = null; // set while going back, for the view to restore its place
 
   async setSort(sortKey, descending = store.get('sortDescending')) {
-    const mode = this.mode === 'nowplaying' ? 'albums' : this.mode;
+    const mode = isPage(this.mode) ? 'albums' : this.mode;
     store.update('sort', { [mode]: sortKey });
     store.set('sortDescending', descending);
     await this.load({ sort: true });
   }
 
   currentSortKey() {
-    const mode = this.mode === 'nowplaying' ? 'albums' : this.mode;
+    const mode = isPage(this.mode) ? 'albums' : this.mode;
     return store.get('sort')[mode] || (mode === 'folders' ? 'path' : undefined);
   }
 
@@ -448,7 +448,7 @@ class View extends Emitter {
       return this.#done(gen);
     }
 
-    if (this.mode === 'songs' || this.mode === 'nowplaying') {
+    if (this.mode === 'songs' || isPage(this.mode)) {
       this.groups = [];
       if (clientSongs) {
         const sorted = await this.#sortedRows(pl, pattern, desc);
@@ -1122,5 +1122,8 @@ function lowerBound(arr, v) {
   }
   return lo;
 }
+
+/** Now playing and Listening stats: pages of their own, not views of a playlist. */
+export const isPage = (mode) => mode === 'nowplaying' || mode === 'stats';
 
 export const view = new View();

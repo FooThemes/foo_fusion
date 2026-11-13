@@ -384,3 +384,85 @@ button.heart.pb-heart.hate {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   pointer-events: none;
 }
+
+/* Mini player (ui/mini.js): the window is just the play bar, laid out as a
+   cover on the left with the title, seek bar and controls beside it. */
+.pb-full,
+body.mini .pb-mini,
+body.mini .pb-order,
+body.mini .pb-lyrics,
+body.mini #sidebar,
+body.mini #sidebar-resizer,
+body.mini #main,
+body.mini #info-panel,
+body.mini .selection-bar {
+  display: none !important;
+}
+
+body.mini .pb-full {
+  display: flex !important;
+}
+
+body.mini #app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+body.mini #playerbar {
+  grid-row: 1;
+  grid-column: 1;
+  height: 100vh;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 1fr auto auto;
+  grid-template-areas:
+    'cover text'
+    'cover seek'
+    'cover ctl';
+  column-gap: 14px;
+  padding: 12px 10px 8px 12px;
+}
+
+body.mini .pb-now {
+  display: contents;
+}
+
+body.mini .pb-cover {
+  grid-area: cover;
+  width: calc(100vh - 20px);
+  height: calc(100vh - 20px);
+  max-width: 45vw;
+  max-height: 45vw;
+  align-self: start;
+}
+
+body.mini .pb-text {
+  grid-area: text;
+  align-self: end;
+  padding-bottom: 4px;
+}
+
+body.mini .pb-title {
+  font-size: 16px;
+}
+
+body.mini .pb-seek {
+  grid-area: seek;
+  padding: 0;
+  gap: 8px;
+}
+
+body.mini .pb-controls {
+  grid-area: ctl;
+  padding: 0;
+  gap: 0;
+  justify-content: space-between;
+}
+
+body.mini .pb-controls .btn-icon {
+  width: 36px;
+  height: 36px;
+}
+
+body.mini .pb-play {
+  transform: scale(0.85);
+}

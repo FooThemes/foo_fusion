@@ -39,6 +39,10 @@ export const TF = {
   bitrate: '[%bitrate%]',
   playCount: '[%play_count%]',
   added: '[%added%]',
+  // Play statistics from foo_playcount, else Playcount 2003.
+  addedAny: '$if2([%added%],[%2003_added%])',
+  lastPlayedAny: '$if2([%last_played%],[%2003_last_played%])',
+  playCountAny: '$if2([%play_count%],[%2003_playcount%])',
   discSubtitle: '[%discsubtitle%]',
 };
 

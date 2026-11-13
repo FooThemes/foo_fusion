@@ -6,13 +6,14 @@ import { redrawArt } from '../data/artwork.js';
 import { el, clear } from '../core/util.js';
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
-import { view } from '../data/view.js';
+import { view, isPage } from '../data/view.js';
 import { player } from '../data/player.js';
 import { playlists, COLLECTION } from '../data/playlists.js';
 import { Grid } from './grid.js';
 import { FolderTree } from './foldertree.js';
 import { SongList } from './songs.js';
 import { NowPlaying } from './nowplaying.js';
+import { StatsPage } from './stats.js';
 
 export function mountContent(root) {
   const scroller = el('div.content', { tabindex: -1 });
@@ -67,7 +68,7 @@ export function mountContent(root) {
   });
 
   function kindFor(mode) {
-    return mode === 'songs' ? 'songs' : mode === 'nowplaying' ? 'nowplaying' : mode === 'folders' ? 'folders' : 'grid';
+    return mode === 'songs' ? 'songs' : mode === 'nowplaying' ? 'nowplaying' : mode === 'stats' ? 'stats' : mode === 'folders' ? 'folders' : 'grid';
   }
 
   function ensure() {
@@ -75,7 +76,7 @@ export function mountContent(root) {
     if (kind === currentKind && current) return false;
     current?.destroy();
     scroller.scrollTop = 0;
-    current = kind === 'songs' ? new SongList(scroller) : kind === 'nowplaying' ? new NowPlaying(scroller) : kind === 'folders' ? new FolderTree(scroller) : new Grid(scroller);
+    current = kind === 'songs' ? new SongList(scroller) : kind === 'nowplaying' ? new NowPlaying(scroller) : kind === 'stats' ? new StatsPage(scroller) : kind === 'folders' ? new FolderTree(scroller) : new Grid(scroller);
     currentKind = kind;
     scroller.dataset.kind = kind;
     return true;
@@ -90,7 +91,7 @@ export function mountContent(root) {
     if (!keep && lastKey && !fresh && !blankShown) scrollMemo.set(lastKey, scroller.scrollTop);
     lastKey = key;
     if (cameBack || view.returning) pendingRestore = key;
-    if (currentKind !== 'nowplaying') current.setData(keep);
+    if (!isPage(currentKind)) current.setData(keep);
     // The page is blank while it loads; restore the place once it has content.
     if (!view.groups.length && !view.rows?.length && view.loading) {
       blankShown = !keep;
@@ -144,7 +145,7 @@ export function mountContent(root) {
 
   function renderMessage() {
     loading.hidden = !(view.loading && currentKind === 'grid' && !view.groups.length) || scroller.classList.contains('jumping');
-    if (currentKind === 'nowplaying' || view.loading) {
+    if (isPage(currentKind) || view.loading) {
       message.hidden = true;
       return;
     }
@@ -171,7 +172,7 @@ export function mountContent(root) {
   view.on('change', onChange);
   view.on('mode', () => {
     ensure();
-    if (view.mode === 'nowplaying') renderMessage();
+    if (isPage(view.mode)) renderMessage();
   });
   view.on('loading', renderMessage);
   view.on('heads', () => current?.refreshHeads?.());

@@ -5,7 +5,7 @@ import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
 import { SORTS, VIEW_SORTS } from '../core/store.js';
 import { call } from '../core/bridge.js';
-import { view } from '../data/view.js';
+import { view, isPage } from '../data/view.js';
 import { player, ORDER_LABELS } from '../data/player.js';
 import { playlists } from '../data/playlists.js';
 import { addToItems, renamePlaylist, deletePlaylist } from './menus.js';
@@ -41,9 +41,10 @@ export function mountHeader(root, app) {
   function render() {
     const pl = view.playlist;
     const np = view.mode === 'nowplaying';
-    back.hidden = !view.drill || np;
+    const page = isPage(view.mode);
+    back.hidden = !view.drill || page;
     showSide.hidden = !store.get('sidebarHidden');
-    title.textContent = np ? 'Now playing' : view.drill ? view.drill.label : view.filter ? `Results for "${view.filter}"` : pl?.name || 'No playlist';
+    title.textContent = np ? 'Now playing' : view.mode === 'stats' ? 'Listening stats' : view.drill ? view.drill.label : view.filter ? `Results for "${view.filter}"` : pl?.name || 'No playlist';
 
     clear(actions);
     if (np) {
@@ -51,6 +52,8 @@ export function mountHeader(root, app) {
         textBtn('queue', 'Clear queue', () => call('queue.clear'), !player.queueCount),
         textBtn('shuffle', `Order: ${ORDER_LABELS[player.order]}`, orderMenu),
       );
+    } else if (page) {
+      /* the stats page has its own controls */
     } else if (pl) {
       const has = pl.trackCount > 0;
       actions.append(textBtn('play', 'Play all', () => view.play(view.rowAt(0)), !has || view.total === 0));
@@ -70,7 +73,7 @@ export function mountHeader(root, app) {
       }
     }
 
-    tools.hidden = np;
+    tools.hidden = page;
     for (const t of tabs.children) {
       const on = t.dataset.mode === view.mode;
       t.classList.toggle('active', on);

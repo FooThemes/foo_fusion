@@ -2,6 +2,7 @@
 // (ui.showCustomMenu / menu.showNativePopup); text prompts are drawn in-page.
 
 import { call, tryCall } from '../core/bridge.js';
+import { toggleMini, isMini } from './mini.js';
 import { el } from '../core/util.js';
 import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
@@ -47,6 +48,7 @@ export async function showAppMenu(app) {
     '-',
     { label: 'Fullscreen', shortcut: 'F11', run: () => tryCall('window.toggleFullscreen') },
     { label: 'Always on top', shortcut: 'Alt+A', run: () => tryCall('window.toggleAlwaysOnTop') },
+    { label: 'Mini player', shortcut: 'Alt+M', checked: isMini(), run: () => toggleMini() },
     '-',
     { label: 'foobar2000', submenu: fbItems.length ? fbItems : [{ label: 'Unavailable', enabled: false }] },
     { label: 'Preferences', shortcut: 'Ctrl+P', run: () => tryCall('misc.showPreferences') },

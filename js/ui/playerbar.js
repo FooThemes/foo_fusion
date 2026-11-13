@@ -1,6 +1,7 @@
 // Bottom bar: now-playing art and text, seek bar, transport, volume, menu.
 
 import { setVersioned } from './titles.js';
+import { toggleMini, isMini } from './mini.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import { el, formatTime, clamp } from '../core/util.js';
 import { tryCall } from '../core/bridge.js';
@@ -72,7 +73,14 @@ export function mountPlayerBar(root, app) {
   markLyrics();
   // The original's "…" opened the settings panel; right-click keeps the menu.
   const more = el('button.btn-icon', { 'data-settings-toggle': '', title: 'Settings (right-click for the menu)', onclick: () => app.toggleSettings(), oncontextmenu: (e) => (e.preventDefault(), mainMenu()) }, icon('more'));
-  const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, more);
+  const miniBtn = el('button.btn-icon.pb-mini', { title: 'Mini player (Alt+M)', onclick: () => toggleMini() }, icon('mini'));
+  const fullBtn = el('button.btn-icon.pb-full', { title: 'Back to the full window (Alt+M)', onclick: () => toggleMini(false) }, icon('fullscreen'));
+  const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, miniBtn, fullBtn, more);
+  // The mini player shows a bigger cover: fetch one that size.
+  window.addEventListener('fusion:mini', () => {
+    artTrack = undefined;
+    renderTrack();
+  });
 
   const volFill = el('div.vol-fill');
   const volTrack = el('div.vol-track', null, volFill);
@@ -159,7 +167,7 @@ export function mountPlayerBar(root, app) {
     if (key === artTrack) return;
     artTrack = key;
     cover.classList.remove('loaded');
-    const url = on ? await nowPlayingUrl(64, 'front', t?.handle) : null;
+    const url = on ? await nowPlayingUrl(isMini() ? 200 : 64, 'front', t?.handle) : null;
     if (artTrack !== key) return;
     if (url) {
       cover.onload = () => cover.classList.add('loaded');

@@ -2,6 +2,7 @@
 // playback queue (or, when the queue is empty, what plays next).
 
 import { setTitle, setVersioned, versionText } from './titles.js';
+import { softBackdrop } from './backdrop.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { dragSource, dropTarget } from './dnd.js';
@@ -47,6 +48,7 @@ export class NowPlaying {
       el('div.np-hero', null, el('div.np-bg-wrap', null, this.bg), el('div.np-hero-inner', null, this.coverBox, el('div.np-info', null, this.title, this.artist, this.album, this.tech)), this.empty),
       el('div.np-queue', null, this.listTitle, this.list),
     );
+    softBackdrop(this.bg, { blur: 60, at: 1600 });
     scroller.append(this.wrap);
     this.offs = [player.on('track', () => this.render()), player.on('queue', () => this.renderList()), player.on('state', () => this.renderState()), player.on('order', () => this.renderList())];
     this.render();

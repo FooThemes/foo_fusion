@@ -144,6 +144,17 @@ function tfEval(pattern, t) {
   if (pattern === TF.codec) return t.codec || '';
   if (pattern === TF.bitrate) return String(t.bitrate || '');
   if (pattern === TF.playCount) return String((t.added * 7) % 23);
+  // Home shelves / listening stats: a made-up listening history.
+  if (pattern === TF.addedAny) return `202${4 + (t.added % 3)}-${String(1 + (t.added % 12)).padStart(2, '0')}-1${t.added % 9} 10:00:00`;
+  if (pattern === TF.playCountAny) return String((t.added * 7) % 23 > 15 ? 0 : (t.added * 7) % 23);
+  if (pattern === TF.lastPlayedAny) return (t.added * 7) % 23 > 15 ? '' : `202${3 + (t.added % 4)}-${String(1 + ((t.added * 5) % 12)).padStart(2, '0')}-0${1 + (t.added % 9)} 2${t.added % 4}:00:00`;
+  // foo_enhanced_playcount's play times (off with window.__mockNoTimes).
+  if (pattern === '[%played_times_js%]') {
+    if (window.__mockNoTimes) return '';
+    const n = (t.added * 7) % 23 > 15 ? 0 : (t.added * 7) % 23;
+    return JSON.stringify(Array.from({ length: n }, (_, i) => Date.now() - ((t.added * 977 + i * 7919) % 700) * 864e5 - ((t.added + i) % 24) * 36e5));
+  }
+  if (pattern === '[%lastfm_played_times_js%]') return '';
   if (pattern === TF.added) return '2025-0' + (1 + (t.added % 9)) + '-1' + (t.added % 9) + ' 10:00:00';
   // Sort patterns: approximate with the leading field.
   const lead = pattern.split('|')[0];

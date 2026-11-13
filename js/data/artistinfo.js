@@ -12,6 +12,7 @@
 
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
+import { cachedUrl, storeCover, knownListing, rememberListing } from './artcache.js';
 
 const PICTURE = ['artist', 'folder', 'thumb', 'poster', 'photo'];
 const FANART = ['fanart', 'backdrop', 'background'];
@@ -46,17 +47,87 @@ export function musicArtistFolder(name, handle) {
 
 const listing = new Map(); // folder (lower case) -> Promise<{ dir, picture, fanart, hasNfo }>
 
+// --- Folder listings, remembered between sessions ---------------------------
+// Listing a folder and checking for its .nfo costs two calls, and on a slow
+// or busy drive those take up to a second each, so the Artists and Genres
+// tabs waited on hundreds of them every start. The art cache remembers each
+// folder's picture files; a start uses that at once and lists each folder it
+// uses again in the background, one at a time, for next time.
+
+const relisted = new Set();
+const relistQueue = [];
+let relisting = false;
+
+async function listNow(dir, nfoName, names, webp, background = false) {
+  const [res, nfo] = await Promise.all([tryCall('artwork.getFolderImages', { directory: dir }), tryCall('file.exists', { path: `${dir}\\${nfoName}` })]);
+  if (!res) return null; // no answer: don't remember anything
+  const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
+  const images = (res.images || []).filter((im) => names.includes(base(im.name))).map((im) => [im.name, im.size || 0]);
+  // A WebP picture (Melodigging's) foobar2000 may not list as an image.
+  if (webp && !images.length && (await tryCall('file.exists', { path: `${dir}\\folder.webp` }))?.exists) images.push(['folder.webp', 0]);
+  const value = { ...knownListing(dir), i: images, n: nfo?.exists ? 1 : 0 };
+  // An artist's English/romanised names (artist tiles show them) come from
+  // the .nfo; refreshed here too, so tiles never wait on reading it.
+  if (background && nfoName === 'artist.nfo') {
+    const info = value.n ? await tryCall('file.read', { path: `${dir}\\artist.nfo` }).then((r) => (r?.content ? parseNfo(r.content) : null)) : null;
+    value.nv = info && (info.nameEn || info.nameRom) ? [info.nameEn, info.nameRom] : 0;
+  }
+  rememberListing(dir, value);
+  return value;
+}
+
+function relist(job) {
+  relistQueue.push(job);
+  if (relisting) return;
+  relisting = true;
+  const next = () => {
+    const j = relistQueue.shift();
+    if (!j) return (relisting = false);
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 200));
+    idle(() => listNow(...j, true).finally(next), { timeout: 3000 });
+  };
+  setTimeout(next, 3000); // after the start's own calls
+}
+
+/**
+ * The picture files (by base name) and .nfo of an information folder:
+ * { images: [{ name, path, size }], hasNfo }. Remembered from the last
+ * session when possible (and checked again in the background).
+ */
+export async function folderListing(dir, nfoName, names, { webp = false } = {}) {
+  const key = dir.toLowerCase();
+  let v = knownListing(dir);
+  if (v && !relisted.has(key)) {
+    relisted.add(key);
+    relist([dir, nfoName, names, webp]);
+  }
+  if (!v) {
+    relisted.add(key);
+    v = (await listNow(dir, nfoName, names, webp)) || { i: [], n: 0 };
+  }
+  return { images: v.i.map(([name, size]) => ({ name, size, path: `${dir}\\${name}` })), hasNfo: !!v.n };
+}
+
+/** First file whose base name is in `names` (in that order of preference). */
+export function pickNamed(images, names) {
+  const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
+  return names.map((n) => images.find((im) => base(im.name) === n)).find(Boolean) || null;
+}
+
+const ARTIST_NAMES = [...PICTURE, ...FANART, ...LOGO];
+
 function readFolder(dir) {
   const key = dir.toLowerCase();
   if (!listing.has(key)) {
     listing.set(
       key,
-      Promise.all([tryCall('artwork.getFolderImages', { directory: dir }), tryCall('file.exists', { path: `${dir}\\artist.nfo` })]).then(([res, nfo]) => {
-        const images = res?.images || [];
-        const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
-        const pick = (names) => names.map((n) => images.find((im) => base(im.name) === n)).find(Boolean) || null;
-        return { dir, picture: pick(PICTURE), fanart: pick(FANART), logo: pick(LOGO), hasNfo: !!nfo?.exists };
-      }),
+      folderListing(dir, 'artist.nfo', ARTIST_NAMES).then(({ images, hasNfo }) => ({
+        dir,
+        picture: pickNamed(images, PICTURE),
+        fanart: pickNamed(images, FANART),
+        logo: pickNamed(images, LOGO),
+        hasNfo,
+      })),
     );
   }
   return listing.get(key);
@@ -198,7 +269,7 @@ export function pictureUrl(file, px, { trim = false } = {}) {
     pictures.set(key, p);
     return p;
   }
-  p = makePictureUrl(file, px, trim);
+  p = diskPicture(file, px, trim) || makePictureUrl(file, px, trim).then((u) => (u && keepOnDisk(file, px, trim, u), u));
   pictures.set(key, p);
   p.then((u) => u || pictures.delete(key));
   // Room for every artist and genre tile at once (they're small), so going
@@ -211,6 +282,20 @@ export function pictureUrl(file, px, { trim = false } = {}) {
   return p;
 }
 
+// Scaled pictures are also kept on disk (in the art cache, beside the album
+// covers), so the next session doesn't read the full-size files again. Only
+// files whose size is known: the size is how a replaced file is noticed.
+const diskKey = (px, trim) => (trim ? `${px}t` : px);
+function diskPicture(file, px, trim) {
+  if (!px || !file.size) return null;
+  const url = cachedUrl({ path: file.path, size: file.size }, diskKey(px, trim), false);
+  return url ? Promise.resolve(url) : null;
+}
+function keepOnDisk(file, px, trim, url) {
+  if (!px || !file.size) return;
+  storeCover({ path: file.path, size: file.size, name: file.name }, diskKey(px, trim), url, /\.(png|gif|webp)$/i.test(file.name));
+}
+
 // A picture dropped from the cache: its memory is freed (a blob URL holds
 // the image's bytes until it is revoked), and whoever remembered the URL is
 // told to forget it. Pictures already on screen stay as they are.
@@ -220,7 +305,7 @@ export function onPictureRevoked(fn) {
 }
 function release(promise) {
   promise.then((url) => {
-    if (!url) return;
+    if (!url?.startsWith('blob:')) return;
     for (const fn of revokeListeners) fn(url);
     URL.revokeObjectURL(url);
   });
@@ -275,7 +360,13 @@ async function makePictureUrl(file, px, trim) {
 
 /** An artist's name versions from their artist.nfo, or null. */
 export async function artistNameVersions(name, handle = null) {
+  const files = await artistFiles(name, handle);
+  if (!files?.hasNfo) return null;
+  const known = knownListing(files.dir)?.nv;
+  if (known !== undefined) return known ? { orig: name, en: known[0], rom: known[1] } : null;
   const info = await artistDetails(name, handle);
+  const l = knownListing(files.dir);
+  if (l) rememberListing(files.dir, { ...l, nv: info && (info.nameEn || info.nameRom) ? [info.nameEn, info.nameRom] : 0 });
   if (!info || (!info.nameEn && !info.nameRom)) return null;
   return { orig: name, en: info.nameEn, rom: info.nameRom };
 }

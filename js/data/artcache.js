@@ -92,6 +92,7 @@ const SIZES = [96, 160, 240, 320, 480, 640, 960, 1400]; // artwork.js buckets
 function bestKey(pick, px) {
   const exact = keyFor(pick, px);
   if (index.files[exact]) return exact;
+  if (typeof px !== 'number') return null; // a trimmed copy ("320t"): only its own
   for (const s of SIZES) {
     if (s <= px) continue;
     const k = keyFor(pick, s);
@@ -159,7 +160,7 @@ async function make({ key, px, url, alpha }) {
   im.crossOrigin = 'anonymous';
   im.src = url;
   await im.decode();
-  const scale = Math.min(1, px / Math.max(im.naturalWidth, im.naturalHeight));
+  const scale = Math.min(1, parseInt(px, 10) / Math.max(im.naturalWidth, im.naturalHeight));
   const w = Math.max(1, Math.round(im.naturalWidth * scale));
   const h = Math.max(1, Math.round(im.naturalHeight * scale));
   const canvas = new OffscreenCanvas(w, h);
@@ -195,6 +196,25 @@ async function save() {
   await tryCall('file.write', { path: `${base}\\index.json`, content: JSON.stringify(index), atomic: true });
 }
 
+// Artist and genre information folders: what each held last time (its
+// picture, fanart and logo files, whether it has an .nfo), so a start shows
+// artist and genre tiles without listing hundreds of folders first. Each
+// folder used is listed again once per session, quietly, in the background.
+
+/** Remembered listing of an information folder, or undefined. */
+export function knownListing(dir) {
+  return index.info?.[dir.toLowerCase()];
+}
+
+export function rememberListing(dir, value) {
+  if (!base) return;
+  index.info ||= {};
+  const k = dir.toLowerCase();
+  if (JSON.stringify(index.info[k]) === JSON.stringify(value)) return;
+  index.info[k] = value;
+  scheduleSave();
+}
+
 /** Refresh one folder's (or artist's) cover: forget its pick and copies. */
 export function forgetDir(dir) {
   const pick = knownCover(dir);
@@ -207,7 +227,7 @@ export function forgetDir(dir) {
 export async function clearArtCache() {
   if (!base) return;
   const old = `${base}\\${index.gen}`;
-  index = { v: 1, gen: index.gen + 1, dirs: {}, files: {} };
+  index = { v: 1, gen: index.gen + 1, dirs: {}, files: {}, info: {} };
   dirty = true;
   await save();
   const list = await tryCall('file.list', { path: old });

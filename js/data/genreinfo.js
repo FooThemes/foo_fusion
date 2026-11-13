@@ -9,7 +9,7 @@
 
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
-import { forgetPictures } from './artistinfo.js';
+import { forgetPictures, folderListing, pickNamed } from './artistinfo.js';
 
 const PICTURE = ['folder', 'genre', 'thumb', 'poster', 'cover'];
 const FANART = ['fanart', 'backdrop', 'background'];
@@ -38,20 +38,9 @@ export function genreFiles(name) {
       key,
       !dir
         ? Promise.resolve(null)
-        : Promise.all([tryCall('artwork.getFolderImages', { directory: dir }), tryCall('file.exists', { path: `${dir}\\genre.nfo` })]).then(([res, nfo]) => {
-            const images = res?.images || [];
-            const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
-            const pick = (names) => names.map((n) => images.find((im) => base(im.name) === n)).find(Boolean) || null;
-            const out = { dir, picture: pick(PICTURE), fanart: pick(FANART), hasNfo: !!nfo?.exists };
+        : folderListing(dir, 'genre.nfo', [...PICTURE, ...FANART], { webp: true }).then(({ images, hasNfo }) => {
+            const out = { dir, picture: pickNamed(images, PICTURE), fanart: pickNamed(images, FANART), hasNfo };
             return out.picture || out.fanart || out.hasNfo ? out : null;
-          })
-          // A WebP picture (Melodigging's) foobar2000 may not list as an image.
-          .then(async (out) => {
-            if (out?.picture || !dir) return out;
-            const webp = `${dir}\\folder.webp`;
-            const has = await tryCall('file.exists', { path: webp });
-            if (!has?.exists) return out;
-            return { ...(out || { dir, fanart: null, hasNfo: false }), picture: { name: 'folder.webp', path: webp } };
           }),
     );
   }

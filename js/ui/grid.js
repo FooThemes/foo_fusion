@@ -16,6 +16,7 @@ import { player } from '../data/player.js';
 import { bindArt, albumArtTypes, warmArt, refreshArtist } from '../data/artwork.js';
 import { ArtistHero } from './artisthero.js';
 import { GenreHero } from './genrehero.js';
+import { Shelves } from './shelves.js';
 import { musicArtistFolder, onPictureRevoked } from '../data/artistinfo.js';
 import { trackContextMenu, handlesOf, refreshAlbums } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
@@ -73,6 +74,9 @@ export class Grid {
     this.hero = new ArtistHero(this);
     this.genreHero = new GenreHero(this);
     this.layer.append(this.hero.node, this.genreHero.node);
+    // Home shelves above the Collection's albums (outside the tile layer, so
+    // the grid's own clicks and drags never see them).
+    this.shelves = new Shelves(this, this.sizer);
 
     // Genre pictures or information changed (the script ran, the folder moved).
     window.addEventListener(
@@ -163,6 +167,7 @@ export class Grid {
     clearTimeout(this.warmTimer);
     this.hero.destroy();
     this.genreHero.destroy();
+    this.shelves.destroy();
     this.panel.destroy();
     this.sizer.remove();
   }
@@ -191,6 +196,7 @@ export class Grid {
     this.kind = kind;
     this.tiles.clear();
     this.#showHero();
+    this.shelves.update();
     // The open album stays open by key (a re-sort moves it to another index),
     // and where it was on screen.
     const openOffset = keepScroll && this.expanded >= 0 && this.rowCount != null ? this.rowTop(this.expandedRow) - this.scroller.scrollTop : null;
@@ -237,6 +243,7 @@ export class Grid {
     this.layer.style.setProperty('--tile-w', this.tileW + 'px');
     this.layer.style.setProperty('--art', art + 'px');
     this.layer.style.setProperty('--art-h', artH + 'px');
+    this.shelves?.layout(true); // may move this.top (the albums start below the shelves)
     this.rowCount = Math.ceil(view.groups.length / this.cols);
     this.panel.layout(w);
     this.#updateHeight();
@@ -429,6 +436,7 @@ export class Grid {
   /** Text/art arrived for groups [from, to). */
   refreshHeads() {
     this.#warm();
+    this.shelves.refreshHeads();
     if (view.drill) this.#showHero();
     for (const [i, node] of this.tiles) this.#fill(node, i);
     if (this.expanded >= 0) this.panel.refreshHead(view.groups[this.expanded]);
@@ -439,7 +447,13 @@ export class Grid {
     if (this.expanded >= 0) this.panel.reload();
   }
 
+  /** Where the albums start with no artist or genre header: below the shelves. */
+  restTop() {
+    return this.shelves?.shown ? this.shelves.height : 16;
+  }
+
   refreshPlaying() {
+    this.shelves.refreshPlaying();
     for (const [i, node] of this.tiles) node.classList.toggle('playing', this.#isPlaying(view.groups[i]));
     this.panel.refreshPlaying();
   }

@@ -1746,3 +1746,18 @@ body.pdragging * {
   white-space: pre;
   overflow-x: auto;
 }
+
+/* Settings > Library > Home shelves: each shelf on/off, with arrows to reorder. */
+.shelf-order-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.shelf-order-row .set-toggle {
+  flex: 1;
+}
+
+.icon.flip {
+  transform: rotate(180deg);
+}

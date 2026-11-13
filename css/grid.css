@@ -224,13 +224,17 @@
   display: none;
 }
 
+/* The <img> only loads the cover; a small pre-blurred canvas shows it (backdrop.js). */
+.tp-bg.backdrop-src {
+  display: none;
+}
+
 .tp-bg {
   position: absolute;
   inset: -60px;
   width: calc(100% + 120px);
   height: calc(100% + 120px);
   object-fit: cover;
-  filter: blur(40px) saturate(1.3);
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -883,4 +887,71 @@
 /* A new artist's / genre's page waits (briefly) for its header. */
 .grid-layer.await-hero {
   visibility: hidden;
+}
+
+/* Home shelves: rows of albums above the Collection's grid (ui/shelves.js).
+   Their tiles look like the grid's but sit in a scrolling row. */
+.shelves {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 0 0;
+}
+
+.shelf {
+  margin-bottom: 8px;
+}
+
+.shelf-head,
+.shelf-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 32px 12px 40px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.shelf-head h3 {
+  margin: 0;
+  font: inherit;
+}
+
+.shelf-all {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.shelf-arrows {
+  display: flex;
+  gap: 4px;
+}
+
+.shelf-arrow:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.shelf-row {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 32px 0;
+  scroll-padding: 0 32px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.shelf-row::-webkit-scrollbar {
+  display: none;
+}
+
+.tile.shelf-tile {
+  position: relative;
+  flex: 0 0 var(--tile-w);
+  transform: none;
+  will-change: auto;
+  scroll-snap-align: start;
 }

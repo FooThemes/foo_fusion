@@ -1,6 +1,7 @@
 // Keyboard shortcuts, matching the original Fusion list where it made sense.
 
 import { tryCall } from '../core/bridge.js';
+import { toggleMini } from './mini.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { runSelectionCommand } from './menus.js';
@@ -62,6 +63,7 @@ export function mountKeyboard(app) {
       F5: () => view.load(),
       F11: () => tryCall('window.toggleFullscreen'),
       'Alt+A': () => tryCall('window.toggleAlwaysOnTop'),
+      'Alt+M': () => toggleMini(),
       Escape: () => app.escape(),
     }[key === 'Shift+ ' ? ' ' : key];
     if (!handled) return;

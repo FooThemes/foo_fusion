@@ -16,9 +16,11 @@ import { playlistMenu, promptText, renamePlaylist, deletePlaylists, runMainMenuA
 import { draggablePlaylist, playlistDropTarget, folderDropTarget, draggableFolder } from './dnd.js';
 import { newPlaylistDialog } from './autoplaylist.js';
 import { folders } from '../data/folders.js';
+import { overlayScroll } from './oscroll.js';
 
 export function mountPlaylistManager(root, app) {
   const list = el('div.plm-list', { role: 'listbox', 'aria-label': 'Playlists', 'aria-multiselectable': 'true', tabindex: 0 });
+  overlayScroll(list);
   // Filter the list by name (or folder name) as you type.
   const search = el('input.plm-search', { type: 'search', placeholder: 'Search playlists', spellcheck: false, 'aria-label': 'Search playlists' });
   let query = '';

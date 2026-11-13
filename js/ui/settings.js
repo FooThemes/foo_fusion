@@ -18,6 +18,7 @@ import { toast } from './toast.js';
 import { VERSION } from '../version.js';
 import { TEXT_KINDS } from '../data/versions.js';
 import { setVersioned } from './titles.js';
+import { overlayScroll } from './oscroll.js';
 
 const VERSION_CHOICES = [
   ['orig', 'Original'],
@@ -42,6 +43,7 @@ const LANGUAGE_KINDS = [
 
 export function mountSettings(root, app) {
   const body = el('div.set-body');
+  overlayScroll(body);
   const panel = el('div.settings', { role: 'dialog', 'aria-label': 'Settings' }, el('div.set-head', null, el('h2', { text: 'Settings' }), el('button.btn-icon', { title: 'Close', onclick: () => app.toggleSettings(false) }, icon('close'))), body);
   root.append(panel);
   panel.addEventListener('keydown', (e) => {

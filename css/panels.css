@@ -47,10 +47,8 @@
 .set-body {
   flex: 1;
   overflow-y: auto;
-  /* Room for the scrollbar is kept whether or not it shows, so nothing
-     changes width when a page gets long enough to scroll. */
-  scrollbar-gutter: stable;
-  padding: 0 12px 30px 18px;
+  /* Room on the right for the scrollbar, drawn on top (oscroll.js). */
+  padding: 0 26px 30px 18px;
 }
 
 .set-quick {
@@ -407,10 +405,9 @@
   bottom: 0;
   width: 350px;
   overflow-y: auto;
-  /* Room for the scrollbar is always kept, so nothing resizes with it. */
-  scrollbar-gutter: stable;
-  /* No top padding: the tabs stick right at the top edge. */
-  padding: 0 12px 30px 24px;
+  /* No top padding: the tabs stick right at the top edge. Room on the
+     right for the scrollbar, drawn on top (oscroll.js). */
+  padding: 0 26px 30px 24px;
 }
 
 /* The tabs (and lyric buttons) stick to the top once the cover has gone. */

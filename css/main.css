@@ -119,9 +119,6 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* The native scrollbar is hidden; Fusion draws a slim one on top (below),
-     so content runs to the window's edge and never reflows for it. */
-  scrollbar-width: none;
   overflow-x: hidden;
   outline: none;
 }
@@ -215,46 +212,6 @@
   to {
     transform: translateX(340%);
   }
-}
-
-.content::-webkit-scrollbar {
-  display: none;
-}
-
-.oscroll {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  z-index: 6;
-}
-
-/* The thumb reaches the full width of the rail for grabbing; what shows is
-   the slim bar drawn inside it. */
-.oscroll-thumb {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 16px;
-  border-radius: 6px;
-  background: none;
-}
-
-.oscroll-thumb::after {
-  content: '';
-  position: absolute;
-  inset: 0 3px 0 auto;
-  width: 8px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--text) 32%, transparent);
-  transition: width 0.12s, background-color 0.12s;
-}
-
-.oscroll:hover .oscroll-thumb::after,
-.oscroll.dragging .oscroll-thumb::after {
-  width: 10px;
-  right: 3px;
-  background: color-mix(in srgb, var(--text) 50%, transparent);
 }
 
 /* Going to an album: hidden until the Collection has settled (see content.js). */

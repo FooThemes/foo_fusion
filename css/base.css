@@ -186,8 +186,53 @@ input {
   filter: brightness(1.1);
 }
 
-/* Scrollbars: slim and theme-coloured */
-/* (A wider grab area than it looks: the thumb is drawn inside a clear border.) */
+/* Scrollbars. One look everywhere: an 8px bar that widens to 10px and
+   brightens while the pointer is on it. Long lists and panels use Fusion's
+   own (oscroll.js, drawn on top of the content so nothing reflows); small
+   popups keep the browser's, styled the same here. */
+:root {
+  --sb-thumb: color-mix(in srgb, var(--text) 32%, transparent);
+  --sb-thumb-hot: color-mix(in srgb, var(--text) 50%, transparent);
+}
+
+.oscrolled {
+  scrollbar-width: none;
+}
+
+.oscrolled::-webkit-scrollbar {
+  display: none;
+}
+
+/* The rail is 16px wide for grabbing; what shows is the bar inside it. */
+.oscroll {
+  position: absolute;
+  width: 16px;
+  z-index: 6;
+}
+
+.oscroll-thumb {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+}
+
+.oscroll-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0 3px 0 auto;
+  width: 8px;
+  border-radius: 4px;
+  background: var(--sb-thumb);
+  transition: width 0.12s, background-color 0.12s;
+}
+
+.oscroll:hover .oscroll-thumb::after,
+.oscroll.dragging .oscroll-thumb::after {
+  width: 10px;
+  background: var(--sb-thumb-hot);
+}
+
 ::-webkit-scrollbar {
   width: 14px;
   height: 14px;
@@ -195,14 +240,15 @@ input {
 
 ::-webkit-scrollbar-thumb {
   min-height: 40px;
-  background: rgba(127, 127, 127, 0.45);
+  background-color: var(--sb-thumb);
   border: 3px solid transparent;
-  background-clip: content-box;
+  background-clip: padding-box;
   border-radius: 7px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(127, 127, 127, 0.7);
+  background-color: var(--sb-thumb-hot);
+  border-width: 2px;
 }
 
 ::-webkit-scrollbar-track {

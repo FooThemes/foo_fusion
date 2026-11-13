@@ -11,6 +11,7 @@ import { playlistMenu, folderMenu } from './menus.js';
 import { folders } from '../data/folders.js';
 import { newPlaylistDialog } from './autoplaylist.js';
 import { draggablePlaylist, playlistDropTarget, folderDropTarget, draggableFolder } from './dnd.js';
+import { overlayScroll } from './oscroll.js';
 
 export function mountSidebar(root, app) {
   const search = el('input.search-input', {
@@ -45,6 +46,7 @@ export function mountSidebar(root, app) {
   const newRow = el('div.side-newrow', null, newPlaylist, manage);
 
   const list = el('div.pl-list', { role: 'listbox', 'aria-label': 'Playlists' });
+  overlayScroll(list);
 
   const toggle = el('button.btn-icon.side-toggle', { title: 'Collapse or expand the left panel', onclick: () => store.set('sidebarCollapsed', !store.get('sidebarCollapsed')) }, icon('menu'));
 

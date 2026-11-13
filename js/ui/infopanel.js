@@ -10,6 +10,7 @@ import { bindArt } from '../data/artwork.js';
 import { icon } from '../core/icons.js';
 import { lyricsFor, forgetLyrics, lineAt } from '../data/lyrics.js';
 import { runHandlesCommand, hasHandlesCommand } from './menus.js';
+import { overlayScroll } from './oscroll.js';
 
 export function mountInfoPanel(root) {
   const img = el('img', { alt: '' });
@@ -39,6 +40,7 @@ export function mountInfoPanel(root) {
   // cover scrolls away); the lyric buttons wait at the bottom right.
   const bar = el('div.info-bar', null, heading, tabs);
   const scroller = el('div.info-scroll', null, art, bar, table, tags, tech, lyr, empty, lyrTools);
+  overlayScroll(scroller);
   root.append(close, scroller);
 
   const render = debounce(async () => {

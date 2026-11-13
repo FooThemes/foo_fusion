@@ -5,6 +5,9 @@
   flex-direction: column;
   background: var(--side-bg);
   color: var(--side-text);
+  /* Its scrollbar in the sidebar's own colours. */
+  --sb-thumb: color-mix(in srgb, var(--side-text) 32%, transparent);
+  --sb-thumb-hot: color-mix(in srgb, var(--side-text) 50%, transparent);
   min-height: 0;
   overflow: hidden;
 }
@@ -165,10 +168,6 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 12px;
-}
-
-.pl-list::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Collapsed: icons only */

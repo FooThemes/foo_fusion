@@ -86,7 +86,9 @@ export function mountPlaylistManager(root, app) {
       if (p.guid === playingGuid()) {
         row.classList.add('playing');
         row.title += '\nPlaying';
+        row.querySelector('.plm-count').before(icon('nowPlaying', 'plm-eq')); // moves while playing (base.css)
       }
+      if (row.classList.contains('active')) row.title += '\nShowing';
       row.classList.toggle('selected', selected.has(p.guid));
       row.setAttribute('aria-selected', String(selected.has(p.guid)));
       draggablePlaylist(row, p);
@@ -208,10 +210,9 @@ export function mountPlaylistManager(root, app) {
     sh.set(on);
     if (on) {
       const act = playlists.activePlaylist;
-      if (act && !selected.size) {
-        selected = new Set([act.guid]);
-        anchor = act.guid;
-      }
+      // Nothing selected on opening (the playlist on show has its own mark);
+      // keyboard selection starts from it.
+      if (act && !selected.size) anchor = act.guid;
       render();
       setTimeout(() => list.focus({ preventScroll: true }), 230);
     }

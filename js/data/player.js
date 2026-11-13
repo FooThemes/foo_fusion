@@ -82,7 +82,15 @@ class Player extends Emitter {
       this.emit('track', null);
     });
     on('playback:time', (d) => {
-      this.#setPosition(d.position);
+      // The once-a-second report lands a little early or late; snapping to
+      // it made the seek bar twitch back and forth each second. Close enough
+      // (a quarter second): the running clock is kept; further out it's taken.
+      const drift = Math.abs((d.position || 0) - this.now());
+      if (this.state !== 'playing' || drift > 0.25) this.#setPosition(d.position);
+      else if (drift > 0.05) {
+        // Eased towards it instead, over the next second.
+        this.position += ((d.position || 0) - this.now()) * 0.5;
+      }
       this.emit('time');
     });
     on('playback:seeked', (d) => {

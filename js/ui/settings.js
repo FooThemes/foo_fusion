@@ -149,6 +149,7 @@ export function mountSettings(root, app) {
         select('Artists without a picture', 'artistNoPicture', [
           ['cover', 'Album cover', 'One of their album covers stands in'],
           ['placeholder', 'Coloured silhouette', 'A silhouette on a colour of their own'],
+          ['plain', 'Plain silhouette', 'A grey silhouette, the same for everyone'],
         ]),
         toggle('Hide placeholder artists', 'hidePlaceholderArtists', 'No artist tiles for MusicBrainz placeholder credits like [unknown], [dialogue] and [traditional]. Their songs stay in albums, Songs and search.'),
       ]),
@@ -210,13 +211,24 @@ export function mountSettings(root, app) {
       section('Fusion', [
         toggle('Mini player stays on top', 'miniOnTop', 'Alt+M, or the mini player button in the play bar, shrinks the window to just the play bar.'),
         toggle('Diagnostics', 'diagnostics', 'Write timings and other details to fusion.log in foobar2000’s profile folder, for tracking down slowness or a fault. Warnings and errors are logged either way.'),
+        link('info', 'Open the log file', openLog),
         link('reset', 'Reset Fusion settings', async () => {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();
         }),
-        about(),
       ]),
+      about(),
     ],
   };
+
+  /** fusion.log, in foobar2000's profile folder: opened, or shown in Explorer. */
+  async function openLog() {
+    const res = await tryCall('misc.getProfilePath');
+    const dir = (typeof res === 'string' ? res : res?.path || res?.profilePath || res?.directory || '').replace(/[\\/]$/, '');
+    if (!dir) return toast("Couldn't find foobar2000's profile folder");
+    const path = `${dir}\\fusion.log`;
+    const opened = await tryCall('shell.openExternal', { url: 'file:///' + path.replace(/\\/g, '/') });
+    if (!opened) await tryCall('shell.showInExplorer', { path });
+  }
 
   // Before the script runs: where it is, and where it writes (the folder
   // these pages show), asked for when they're not set yet.
@@ -306,19 +318,24 @@ export function mountSettings(root, app) {
     );
   }
 
-  // Fusion's version, and foobar2000's and its WebView2 component's.
+  // Fusion's version, and foobar2000's and its WebView2 component's, a
+  // line each, under the last section.
   let hostVersions = null;
   function about() {
     const line = el('p.set-about', { text: `Fusion ${VERSION}` });
-    const host = el('p.set-about');
+    const fb = el('p.set-about');
+    const plugin = el('p.set-about');
     const fill = (v) => {
       if (!v) return;
-      const fb = [`foobar2000 ${v.version || ''}`.trim(), [v.is64bit ? '64-bit' : '32-bit', v.isPortable ? 'portable' : ''].filter(Boolean).join(', ')].join(' · ');
-      host.textContent = fb + (v.plugin?.version ? ` · ${v.plugin.name || 'foo_ui_webview2'} ${v.plugin.version}` : '');
+      // The version can come with the name already ("foobar2000 v2.26.2").
+      const ver = String(v.version || '').replace(/^foobar2000\s*/i, '');
+      fb.textContent = [`foobar2000 ${ver}`.trim(), [v.is64bit ? '64-bit' : '32-bit', v.isPortable ? 'portable' : ''].filter(Boolean).join(', ')].join(' · ');
+      plugin.textContent = v.plugin?.version ? `${v.plugin.name || 'foo_ui_webview2'} ${String(v.plugin.version).replace(new RegExp(`^${v.plugin.name || 'foo_ui_webview2'}\\s*`, 'i'), '')}` : '';
+      plugin.hidden = !plugin.textContent;
     };
     if (hostVersions) fill(hostVersions);
     else tryCall('config.getVersionInfo').then((v) => fill((hostVersions = v)));
-    return el('div', null, line, host);
+    return el('div.set-versions', null, line, fb, plugin);
   }
 
   // One kind of text: which version shows, what follows it, and how that looks.
@@ -538,11 +555,14 @@ export function mountSettings(root, app) {
     const shade = el('input.shade', { type: 'range', min: 25, max: 65, step: 1, value: Math.round(clampN(hsl.l, 25, 65)), 'aria-label': 'Lightness' });
     const picker = el('input.set-picker', { type: 'color', value: cur, title: 'Pick any colour' });
     const hex = el('input.field.set-hex', { type: 'text', value: cur.toUpperCase(), maxLength: 7, spellcheck: false, 'aria-label': 'Hex colour' });
-    const preview = el('span.set-colour-preview', { style: { background: cur } });
+    // Picked like the swatches above: ringed, with a tick, when it's the colour in use.
+    const custom = (c) => !ACCENTS.some((a) => a.toLowerCase() === c.toLowerCase());
+    const preview = el('span.set-colour-preview' + (custom(cur) ? '.on' : ''), { style: { background: cur } }, icon('check'));
     let timer = 0;
     const apply = (c, from) => {
       c = c.toUpperCase();
       preview.style.background = c;
+      preview.classList.toggle('on', custom(c));
       if (from !== 'hex') hex.value = c;
       if (from !== 'picker') picker.value = c.toLowerCase();
       if (from !== 'slider') {

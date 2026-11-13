@@ -420,7 +420,7 @@ export class Grid {
   #types(g) {
     // Artists: their picture, foobar2000's artist art, then (unless that's
     // turned off) one of their album covers.
-    if (this.kind === 'artists') return store.get('artistNoPicture') === 'placeholder' ? [`info:${g.key}`, 'artist'] : [`info:${g.key}`, 'artist', 'front'];
+    if (this.kind === 'artists') return store.get('artistNoPicture') === 'cover' ? [`info:${g.key}`, 'artist', 'front'] : [`info:${g.key}`, 'artist'];
     if (this.kind === 'albums') return albumArtTypes(store.get('separateDiscs'));
     return ['front'];
   }
@@ -529,6 +529,7 @@ export class Grid {
       t1.textContent = g.key;
       t2.textContent = albums;
       art.classList.add('round', 'ph-artist');
+      art.classList.toggle('ph-plain', store.get('artistNoPicture') === 'plain');
       node.tipCard = null;
       // Each artist's own colour, so pictureless artists don't all look alike.
       art.style.setProperty('--ph-hue', hueOf(g.key));

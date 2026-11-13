@@ -274,25 +274,16 @@ input {
 
 /* An album's card: its cover beside the details. */
 .tip.card {
-  padding: 8px;
-  max-width: 380px;
+  padding: 8px 12px 9px;
+  max-width: 340px;
+  border-left: 3px solid var(--accent);
 }
 
-.tip-album {
-  display: flex;
-  gap: 11px;
-  align-items: center;
-}
-
-.tip-cover {
-  flex: none;
-  width: 72px;
-  height: 72px;
-}
-
-.tip-album-text {
-  min-width: 0;
-  padding-right: 4px;
+/* The details under the artist, set off by a hairline. */
+.tip-details:not(:empty) {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .tip-head {

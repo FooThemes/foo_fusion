@@ -82,7 +82,7 @@ export async function trackContextMenu(rows, extra = [], { select = true } = {})
  * so with `extra` the same commands are shown in Fusion's menu instead and
  * run through foobar2000.
  */
-export async function contextMenu(target, extra = []) {
+export async function contextMenu(target, extra = [], { hoist = [] } = {}) {
   if (!extra.length && target.mode !== 'handles') return tryCall('menu.showNativePopup', target);
   const res = await tryCall('menu.getContextMenu', { ...target, withAvailability: false });
   const conv = (nodes) =>
@@ -105,8 +105,14 @@ export async function contextMenu(target, extra = []) {
             }),
         };
       });
-  const fb = conv(res?.items);
-  return showMenu(fb.length ? [...extra, '-', ...fb] : extra);
+  // foobar2000's own items Fusion already offers above ("Play") aren't
+  // listed twice; `hoist`ed ones move up beside Fusion's first item.
+  const ours = new Set(extra.filter((x) => x && x !== '-').map((x) => x.label));
+  let fb = conv(res?.items).filter((it) => it === '-' || !ours.has(it.label));
+  const lifted = fb.filter((it) => it !== '-' && hoist.includes(it.label));
+  fb = fb.filter((it) => !lifted.includes(it));
+  const mine = lifted.length ? [extra[0], ...lifted, ...extra.slice(1)] : extra;
+  return showMenu(fb.length ? [...mine, '-', ...fb] : mine);
 }
 
 /**

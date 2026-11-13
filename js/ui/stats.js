@@ -217,7 +217,6 @@ export class StatsPage {
     return albumCard({
       title: a.title,
       artist: a.artist,
-      handle: a.handle,
       facts: [songs[0]?.genres.slice(0, 3).join(', '), plural(songs.length, 'song')],
       notes: [`${plural(a.n, 'play')}${this.period === 'all' ? '' : ' in this period'}`, last ? `Last played ${formatDay(last)}` : null],
     });
@@ -329,7 +328,7 @@ export class StatsPage {
       artistItems.length === 1 ? { label: 'Go to artist', run: artistItems[0].run } : artistItems.length ? { label: 'Go to artist', submenu: artistItems } : null,
       t.genres.length === 1 ? { label: 'Go to genre', run: () => openValue('genres', t.genres[0]) } : t.genres.length ? { label: 'Go to genre', submenu: t.genres.map((g) => ({ label: g, run: () => openValue('genres', g) })) } : null,
     ];
-    Promise.resolve(contextMenu({ mode: 'handles', handles: [t.handle] }, extra)).finally(() => row.classList.remove('menu-open'));
+    Promise.resolve(contextMenu({ mode: 'handles', handles: [t.handle] }, extra, { hoist: ['Add to playback queue'] })).finally(() => row.classList.remove('menu-open'));
   }
 
   /** The most played songs: click one to play it. */

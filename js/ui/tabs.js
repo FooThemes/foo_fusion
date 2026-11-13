@@ -15,11 +15,12 @@ import { el } from '../core/util.js';
 export function tabBar(items, { onPick, picked, className = '', label } = {}) {
   const node = el('div.tabs' + (className ? '.' + className.split(' ').join('.') : ''), { role: 'tablist', 'aria-label': label });
   for (const [id, text] of items) {
-    node.append(el('button.tab', { type: 'button', role: 'tab', dataset: { id }, text, onclick: (e) => onPick(id, e) }));
+    node.append(el('button.tab', { type: 'button', role: 'tab', dataset: { id: String(id) }, text, onclick: (e) => onPick(id, e) }));
   }
+  // Ids can be true/false (Light/Dark): compared as text.
   const set = (id) => {
     for (const b of node.children) {
-      const on = b.dataset.id === id;
+      const on = b.dataset.id === String(id);
       b.classList.toggle('on', on);
       b.setAttribute('aria-selected', String(on));
     }

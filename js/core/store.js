@@ -91,7 +91,7 @@ const DEFAULTS = {
   thenArtists: 'auto',
   versionTooltips: true, // list every version in tooltips
   gifCovers: 'large', // animate GIF covers: 'large' (open album, Now Playing), 'everywhere' or 'never'
-  artistNoPicture: 'cover', // artists without a picture: 'cover' (an album's) or 'placeholder'
+  artistNoPicture: 'cover', // artists without a picture: 'cover' (an album's), 'placeholder' (coloured silhouette) or 'plain'
   customColumns: [], // your own Songs view columns: [{ id, label, pattern, right }]
   playlistIcons: {}, // icons picked for playlists: { [guid]: icon name } (see ui/plicon.js)
   songColumns: null, // Songs view columns in order (null: the defaults, see songs.js)

@@ -238,10 +238,29 @@
 }
 
 .set-colour-preview {
+  display: grid;
+  place-items: center;
   width: 22px;
   height: 22px;
   border-radius: 50%;
+  color: #fff;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.set-colour-preview .icon {
+  display: none;
+  width: 13px;
+  height: 13px;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.5));
+}
+
+/* A colour of your own in use: ringed and ticked, like a picked swatch. */
+.set-colour-preview.on {
+  box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent);
+}
+
+.set-colour-preview.on .icon {
+  display: block;
 }
 
 .set-custom input[type='range'] {
@@ -356,8 +375,13 @@
   color: var(--accent);
 }
 
+/* Versions: under the last section, a line each. */
+.set-versions {
+  margin: 18px 4px 0;
+}
+
 .set-about {
-  margin-top: 28px;
+  margin: 0 0 2px;
   font-size: 12px;
   color: var(--text2);
 }
@@ -565,8 +589,22 @@
   color: var(--text2);
 }
 
+/* The playlist on show: a bar of the accent down its left edge and bold
+   (the page is showing it). The one playing: the accent colour and the
+   moving bars. Selected rows have their own background, so the three
+   never look alike. */
+.plm-row.active {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .plm-row.active .plm-name {
   font-weight: 600;
+}
+
+.plm-eq {
+  flex: none;
+  width: 16px !important;
+  height: 16px !important;
   color: var(--accent);
 }
 
@@ -579,7 +617,7 @@
   color: var(--accent);
 }
 
-.plm-row.playing:not(.active) .plm-name {
+.plm-row.playing .plm-name {
   color: var(--accent);
 }
 

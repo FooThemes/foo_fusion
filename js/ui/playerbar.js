@@ -232,20 +232,26 @@ export function mountPlayerBar(root, app) {
   // --- time: interpolate between the host's 1 Hz updates ------------------
   let dragging = false;
   let lastQuarter = -1;
-  // Called every animation frame while playing; only touches the DOM when the
-  // shown value can change (4 times a second).
+  // Called every animation frame while playing. The bar moves whenever its
+  // edge would move by a fraction of a pixel (smooth, not in quarter-second
+  // steps); the times change when the shown second can.
+  let lastPx = -1;
   function renderTime(force = false) {
     if (dragging) return;
-    const q = Math.floor(player.now() * 4);
-    if (q === lastQuarter && !force) return;
-    lastQuarter = q;
     const d = player.duration;
     const p = player.now();
+    const px = d ? Math.round((p / d) * seek.clientWidth * 4) : 0;
+    if (px !== lastPx || force) {
+      lastPx = px;
+      setSeek(d ? p / d : 0);
+    }
+    const q = Math.floor(p * 4);
+    if (q === lastQuarter && !force) return;
+    lastQuarter = q;
     elapsed.textContent = player.active ? formatTime(p) : '';
     const remaining = store.get('showRemaining');
     length.textContent = player.active ? (d ? (remaining ? '-' + formatTime(Math.max(0, d - p)) : formatTime(d)) : '') : '';
     length.title = remaining ? 'Time remaining (click for the total)' : 'Total time (click for the time remaining)';
-    setSeek(d ? p / d : 0);
   }
   function setSeek(frac) {
     frac = clamp(frac, 0, 1);

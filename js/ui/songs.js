@@ -316,8 +316,15 @@ export class SongList {
       if (!drag) return;
       const dx = e.clientX - drag.x;
       if (!drag.moved && Math.abs(dx) < 6) return;
-      if (!drag.moved) this.wrap.classList.add('col-moving');
+      if (!drag.moved) {
+        this.wrap.classList.add('col-moving');
+        // One highlight for the whole column, moving with it.
+        const w = this.wrap.getBoundingClientRect();
+        drag.ghost = el('div.col-ghost', { style: { left: `${drag.rect.left - w.left}px`, width: `${drag.rect.width}px`, height: `${this.wrap.offsetHeight}px` } });
+        this.wrap.append(drag.ghost);
+      }
       drag.moved = true;
+      drag.ghost.style.transform = `translateX(${dx}px)`;
       drag.cell.classList.add('dragging');
       for (const c of cellsOf(drag.key)) {
         c.classList.add('col-drag');
@@ -332,6 +339,7 @@ export class SongList {
       const d = drag;
       drag = null;
       d.cell.classList.remove('dragging');
+      d.ghost?.remove();
       this.wrap.classList.remove('col-moving');
       for (const c of this.wrap.querySelectorAll('[data-col]')) {
         c.style.transform = '';

@@ -691,7 +691,11 @@
   min-width: 0;
 }
 
-.plm-playing .icon {
+.plm-row.playing .icon {
+  color: var(--accent);
+}
+
+.plm-row.playing:not(.active) .plm-name {
   color: var(--accent);
 }
 
@@ -1727,20 +1731,27 @@ body.pdragging * {
   line-height: 1.6;
 }
 
+/* Lyric buttons: a bar along the bottom of the panel (over the scroller's
+   bottom padding), solid, on the panel's own colour. */
 .lyr-tools {
   position: sticky;
-  bottom: 12px;
+  bottom: -30px;
+  z-index: 2;
   display: flex;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 12px;
-  pointer-events: none;
+  margin: 12px -12px -30px -24px;
+  padding: 10px 12px 10px 24px;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--line);
 }
 
-.lyr-tools > * {
-  pointer-events: auto;
-  background: var(--panel-bg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+.lyr-tools .lyr-btn {
+  background: color-mix(in srgb, var(--text) 9%, var(--panel-bg));
+}
+
+.lyr-tools .lyr-btn:hover {
+  background: color-mix(in srgb, var(--text) 15%, var(--panel-bg));
 }
 
 .info-bar .info-heading {
@@ -1790,7 +1801,11 @@ body.pdragging * {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 420px;
+}
+
+/* Room for a long pattern (same padding both sides as every dialog). */
+.dialog:has(.col-dialog) {
+  width: min(560px, calc(100vw - 40px));
 }
 
 .dialog-label {

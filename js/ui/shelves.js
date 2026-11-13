@@ -11,13 +11,12 @@
 import { el, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
-import { tryCall } from '../core/bridge.js';
 import { view } from '../data/view.js';
 import { player } from '../data/player.js';
 import { bindArt, albumArtTypes } from '../data/artwork.js';
 import { pickVersion } from '../data/versions.js';
 import { setTitle, versionText } from './titles.js';
-import { TF } from '../data/patterns.js';
+import { listening, listeningData, knownData } from '../data/listening.js';
 import { trackContextMenu } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
 
@@ -33,15 +32,10 @@ const PER_SHELF = 24;
 const FORGOTTEN_DAYS = 182;
 const GAP = 16;
 
-let stats = null; // { key, groups: [{ added, last, plays }] }
-let statsPromise = null;
-let staleAt = 0; // a song started since the statistics were read
 let reroll = 0; // "Random picks" picked again this many times
 // The shelves stay drawn between visits (a new grid takes them over), so
 // coming back to the Collection shows them, covers and all, at once.
 let kept = null; // { node, sig }
-
-player.on?.('track', () => (staleAt = Date.now()));
 
 /** foobar2000 date text for `days` ago ("2026-05-01 12:00:00"), comparable as text. */
 function daysAgo(days) {
@@ -50,45 +44,37 @@ function daysAgo(days) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-const statsKey = () => `${view.playlist.guid}|${view.playlist.trackCount}|${view.groups.length}|${store.get('separateDiscs')}`;
-
-/** The statistics already read for this list, if still good (no waiting). */
-function cachedStats() {
-  return stats?.key === statsKey() && !(staleAt > stats.at && Date.now() - stats.at > 30000) ? stats : null;
+// Each album's added date, last play and plays, from every song's statistics
+// (data/listening.js, shared with Listening stats and kept on disk).
+let memo = { tracks: null, key: '', stats: null };
+function statsFrom(tracks) {
+  const key = `${view.groups.length}|${store.get('separateDiscs')}|${view.playlist?.guid}`;
+  if (memo.tracks === tracks && memo.key === key) return memo.stats;
+  const disc = !!store.get('separateDiscs');
+  const byKey = new Map();
+  for (const t of tracks) {
+    const k = disc ? t.discKey : t.albumKey;
+    const g = byKey.get(k) || { added: '', last: '', plays: 0, songs: 0 };
+    if (t.added > g.added) g.added = t.added;
+    if (t.last > g.last) g.last = t.last;
+    g.plays += t.plays;
+    g.songs++;
+    byKey.set(k, g);
+  }
+  const stats = { groups: view.groups.map((g) => byKey.get(g.key) || { added: '', last: '', plays: 0, songs: 0 }) };
+  memo = { tracks, key, stats };
+  return stats;
 }
 
-/** Added date, last played and play count of each album, from every song. */
+/** The statistics already read (no waiting), or null. */
+function cachedStats() {
+  const tracks = view.playlist && knownData(view.playlist);
+  return tracks ? statsFrom(tracks) : null;
+}
+
 async function readStats() {
-  const pl = view.playlist;
-  const groups = view.groups;
-  const key = statsKey();
-  if (cachedStats()) return stats;
-  if (statsPromise?.key === key) return statsPromise.promise;
-  const promise = (async () => {
-    const rowGroup = new Int32Array(pl.trackCount).fill(-1);
-    groups.forEach((g, i) => {
-      for (const r of view.groupRows(g)) if (r < rowGroup.length) rowGroup[r] = i;
-    });
-    const out = groups.map(() => ({ added: '', last: '', plays: 0 }));
-    const formats = { a: TF.addedAny, l: TF.lastPlayedAny, c: TF.playCountAny };
-    for (let from = 0; from < pl.trackCount; from += 2000) {
-      const rows = Array.from({ length: Math.min(2000, pl.trackCount - from) }, (_, i) => from + i);
-      const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows, fields: ['handle'], formats });
-      if (!res || view.playlist?.guid !== pl.guid) return null;
-      for (const t of res.tracks) {
-        const g = out[rowGroup[t.index]];
-        if (!g) continue;
-        const f = t.formats || {};
-        if (f.a > g.added) g.added = f.a;
-        if (f.l > g.last) g.last = f.l;
-        g.plays += parseInt(f.c, 10) || 0;
-      }
-    }
-    stats = { key, at: Date.now(), groups: out };
-    return stats;
-  })().finally(() => (statsPromise = null));
-  statsPromise = { key, promise };
-  return promise;
+  const tracks = await listeningData(view.playlist);
+  return tracks ? statsFrom(tracks) : null;
 }
 
 /** Group indexes for a shelf, best first. */
@@ -102,9 +88,8 @@ function pick(id, s) {
       return top(all.filter((g) => g.last), (a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
     case 'forgotten': {
       const cut = daysAgo(FORGOTTEN_DAYS);
-      // "A lot": at least a play per song, and at least 3 in all.
-      const len = (i) => view.groupRows(view.groups[i]).length;
-      return top(all.filter((g) => g.last && g.last < cut && g.plays >= Math.max(3, len(g.i))), (a, b) => b.plays - a.plays);
+      // "A lot": at least a play for every other song, and 3 in all.
+      return top(all.filter((g) => g.last && g.last < cut && g.plays >= Math.max(3, Math.ceil(g.songs / 2))), (a, b) => b.plays - a.plays);
     }
     case 'most':
       return top(all.filter((g) => g.plays > 0), (a, b) => b.plays - a.plays);
@@ -161,10 +146,13 @@ export class Shelves {
     this.offStore = store.subscribe((k) => {
       if (k === 'shelves' || k === 'homeShelves') this.update(true);
     });
+    // Songs played (or new ones read): "Recently played" and the rest move.
+    this.offListening = listening.on('change', () => this.update());
   }
 
   destroy() {
     this.offStore();
+    this.offListening();
     this.ac.abort();
     this.#closePanel(false);
     this.panel.destroy();
@@ -236,7 +224,7 @@ export class Shelves {
 
   #reroll() {
     reroll++;
-    const s = cachedStats() || stats;
+    const s = cachedStats();
     const shelf = this.shelves?.find((x) => x.id === 'random');
     if (!s || !shelf) return;
     shelf.items = pick('random', s);
@@ -304,9 +292,12 @@ export class Shelves {
     this.node.style.setProperty('--art', this.grid.artSize + 'px');
     if (this.openKey) {
       this.panel.layout(this.grid.scroller.clientWidth);
-      this.panelBox.style.height = this.panel.height + 'px';
+      this.#sizeBox(this.panel.height);
     }
-    const top = this.node.offsetHeight + GAP;
+    // While the open album slides, the albums below go straight to where
+    // they'll be (gliding there with it), not to where the slide is now.
+    const sliding = this.panelBox.isConnected ? (this.boxTarget ?? 0) - this.panelBox.offsetHeight : 0;
+    const top = this.node.offsetHeight + sliding + GAP;
     if (top === this.grid.top) return;
     this.grid.top = top;
     if (!fromGrid) this.grid.layout();
@@ -374,7 +365,14 @@ export class Shelves {
     this.openKey = g.key;
     tile.classList.add('expanded');
     const shelf = tile.closest('.shelf');
-    shelf.after(this.panelBox);
+    clearTimeout(this.closeTimer);
+    if (this.panelBox.previousElementSibling !== shelf) {
+      // Starts shut, under its shelf, and slides open.
+      this.panelBox.style.height = '0px';
+      this.boxTarget = 0;
+      shelf.after(this.panelBox);
+      void this.panelBox.offsetHeight;
+    }
     this.panel.layout(this.grid.scroller.clientWidth);
     this.panel.open(g, 0);
     this.#panelResized();
@@ -397,15 +395,44 @@ export class Shelves {
     this.openTile?.classList.remove('expanded');
     this.openTile = null;
     this.offRowScroll?.();
-    this.panel.close();
-    this.panelBox.remove();
-    if (relayout) this.layout();
+    const box = this.panelBox;
+    const panel = this.panel;
+    if (!relayout || !box.isConnected) {
+      panel.close();
+      box.remove();
+      this.boxTarget = 0;
+      return;
+    }
+    // Slides shut (as the grid's own album list does), then goes.
+    this.#sizeBox(0);
+    this.layout();
+    clearTimeout(this.closeTimer);
+    this.closeTimer = setTimeout(() => {
+      if (this.openKey) return; // opened again meanwhile
+      panel.close();
+      box.remove();
+      this.layout();
+    }, 240);
+  }
+
+  /** The open album's space: animated, with the albums below gliding along. */
+  #sizeBox(h) {
+    if (this.boxTarget === h) return;
+    this.boxTarget = h;
+    this.panelBox.classList.add('sliding');
+    this.panelBox.style.height = h + 'px';
+    this.grid.layer.classList.add('animating');
+    clearTimeout(this.slideTimer);
+    this.slideTimer = setTimeout(() => {
+      this.panelBox.classList.remove('sliding');
+      this.grid.layer.classList.remove('animating');
+    }, 260);
   }
 
   /** The open album changed height (songs arrived, a disc picked). */
   #panelResized() {
     if (!this.openKey) return;
-    this.panelBox.style.height = this.panel.height + 'px';
+    this.#sizeBox(this.panel.height);
     this.layout();
     // Show it all, if it isn't (the songs arrive a moment after opening).
     const sc = this.grid.scroller;

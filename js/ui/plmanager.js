@@ -9,6 +9,7 @@ import { icon } from '../core/icons.js';
 import { call } from '../core/bridge.js';
 import { playlists } from '../data/playlists.js';
 import { view, isPage } from '../data/view.js';
+import { playingGuid } from '../data/playing.js';
 import { player } from '../data/player.js';
 import * as store from '../core/store.js';
 import { playlistMenu, promptText, renamePlaylist, deletePlaylists, runMainMenuAny, folderMenu } from './menus.js';
@@ -101,10 +102,14 @@ export function mountPlaylistManager(root, app) {
         { role: 'option', tabindex: -1, dataset: { guid: p.guid }, title: `${p.name}\n${plural(p.trackCount, 'song')}${p.isAutoplaylist ? ' · autoplaylist' : ''}${p.isLocked ? ' · locked' : ''}` },
         icon(p.isAutoplaylist ? 'autoplaylist' : playlists.isSpecial(p) ? 'collection' : 'playlist'),
         el('span.plm-name.ellipsis', { text: p.name }),
-        p.isPlaying ? el('span.plm-playing', { title: 'Playing' }, icon('nowPlaying')) : null,
         el('span.plm-count', { text: p.trackCount.toLocaleString() }),
       );
       row.classList.toggle('active', !np && p.index === playlists.active);
+      // Playing from it: its icon in the accent colour (as in the sidebar).
+      if (p.guid === playingGuid()) {
+        row.classList.add('playing');
+        row.title += '\nPlaying';
+      }
       row.classList.toggle('selected', selected.has(p.guid));
       row.setAttribute('aria-selected', String(selected.has(p.guid)));
       draggablePlaylist(row, p);
@@ -112,7 +117,7 @@ export function mountPlaylistManager(root, app) {
       row.addEventListener('mousedown', (e) => select(p, e));
       row.addEventListener('click', (e) => {
         if (e.ctrlKey || e.shiftKey) return;
-        if (isPage(view.mode)) view.setMode(store.get('view'), { load: p.index === playlists.active });
+        if (isPage(view.mode)) view.setMode(isPage(store.get('view')) ? 'albums' : store.get('view'), { load: p.index === playlists.active });
         playlists.activate(p.index);
       });
       row.addEventListener('dblclick', () => call('playlist.playTrack', { playlist: p.index, index: 0 }));
@@ -239,6 +244,7 @@ export function mountPlaylistManager(root, app) {
   folders.on('change', () => panel.classList.contains('open') && render());
   playlists.on('active', () => panel.classList.contains('open') && render());
   player.on('track', () => panel.classList.contains('open') && render());
+  player.on('state', () => panel.classList.contains('open') && render());
 
   return {
     open,

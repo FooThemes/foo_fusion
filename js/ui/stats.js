@@ -7,82 +7,15 @@
 // Playback Statistics (foo_enhanced_playcount) records; without it the page
 // says so and shows the library's growth instead.
 
-import { el, plural, formatDuration, debounce } from '../core/util.js';
+import { el, plural, formatDuration, formatTime } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { tryCall, call, on } from '../core/bridge.js';
-import { TF } from '../data/patterns.js';
 import { playlists, COLLECTION } from '../data/playlists.js';
 import { bindArt } from '../data/artwork.js';
 import { view } from '../data/view.js';
+import { listening, listeningData, knownData, playSong } from '../data/listening.js';
 
 const TOP = 10;
 const FORGOTTEN_DAYS = 182;
-// Every play's time, from foo_enhanced_playcount (its own plays, and the
-// scrobbles it fetched from Last.fm). Empty without that component.
-const TIMES = '[%played_times_js%]';
-const LASTFM_TIMES = '[%lastfm_played_times_js%]';
-
-let cache = null; // { key, data }
-
-/** A play time from Enhanced Playback Statistics: ms, seconds or a date. */
-function toMs(v) {
-  if (typeof v === 'number') return v > 1e11 ? v : v * 1000;
-  const t = Date.parse(String(v).replace(' ', 'T'));
-  return Number.isNaN(t) ? 0 : t;
-}
-
-function parseTimes(text) {
-  if (!text || text[0] !== '[') return [];
-  try {
-    return JSON.parse(text).map(toMs).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-const FORMATS = { ar: TF.artistsMulti, aa: TF.albumArtist, al: TF.albumTitle, k: TF.albumKey, gn: TF.genre, c: TF.playCountAny, l: TF.lastPlayedAny, a: TF.addedAny, pt: TIMES, lt: LASTFM_TIMES };
-const FIELDS = ['handle', 'title', 'duration'];
-
-function toTrack(t) {
-  const f = t.formats || {};
-  // Its own plays and Last.fm's, once each (the same play in both counts once).
-  const own = parseTimes(f.pt);
-  const lfm = parseTimes(f.lt).filter((x) => !own.some((o) => Math.abs(o - x) < 120000));
-  const times = own.concat(lfm);
-  return {
-    row: t.index,
-    handle: t.handle,
-    title: t.title,
-    duration: t.duration || 0,
-    artists: (f.ar || '').split('|||').filter(Boolean),
-    albumArtist: f.aa,
-    album: f.al,
-    albumKey: f.k,
-    genres: (f.gn || '').split('|||').filter(Boolean),
-    // The play counter, or every play known (with Last.fm's history the
-    // times can go back further than the counter does).
-    plays: Math.max(parseInt(f.c, 10) || 0, times.length),
-    last: f.l || '',
-    added: f.a || '',
-    times,
-  };
-}
-
-async function readAll(pl, onProgress, fresh = false) {
-  const key = `${pl.guid}|${pl.trackCount}`;
-  if (cache?.key === key && !fresh) return cache.data;
-  const formats = FORMATS;
-  const tracks = [];
-  for (let from = 0; from < pl.trackCount; from += 2000) {
-    const rows = Array.from({ length: Math.min(2000, pl.trackCount - from) }, (_, i) => from + i);
-    const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows, fields: FIELDS, formats });
-    if (!res) return null;
-    for (const t of res.tracks) tracks.push(toTrack(t));
-    onProgress?.(Math.min(1, (from + 2000) / pl.trackCount));
-  }
-  cache = { key, at: Date.now(), data: tracks };
-  return tracks;
-}
 
 const PERIODS = [
   ['all', 'All time', 0],
@@ -95,25 +28,17 @@ export class StatsPage {
     this.wrap = el('div.stats');
     this.period = 'all';
     this.scroller = scroller;
+    this.openAlbum = null; // album key shown open under Top albums
     scroller.append(this.wrap);
-    // Played or retagged songs: only those are read again, and the page
-    // redrawn where it is (not read from scratch).
-    const changed = new Set();
-    const refresh = debounce(() => {
-      const handles = [...changed];
-      changed.clear();
-      this.#refresh(handles);
-    }, 1500);
-    this.offTags = on('metadb:changed', (d) => {
-      for (const h of d.handles || []) changed.add(h);
-      if (changed.size) refresh();
-    });
+    // Played or retagged songs are read again on their own (listening.js):
+    // the page is redrawn where it is.
+    this.offChange = listening.on('change', () => this.#update());
     this.load();
   }
 
   destroy() {
     this.dead = true;
-    this.offTags?.();
+    this.offChange();
     this.wrap.remove();
   }
 
@@ -122,18 +47,12 @@ export class StatsPage {
     if (this.tracks) this.#draw();
   }
 
-  async #refresh(handles) {
-    if (this.dead || !this.tracks || !handles.length) return;
-    const byHandle = new Map(this.tracks.map((t, i) => [t.handle, i]));
-    const idx = handles.map((h) => byHandle.get(h)).filter((i) => i != null);
-    if (!idx.length) return;
-    const res = await tryCall('playlist.getTracksAt', { playlist: this.pl.index, rows: idx.map((i) => this.tracks[i].row), fields: FIELDS, formats: FORMATS });
-    if (this.dead || !res) return;
-    for (const t of res.tracks) {
-      const i = byHandle.get(t.handle);
-      if (i != null) this.tracks[i] = toTrack(t);
-    }
-    this.hasTimes = this.tracks.some((t) => t.times.length);
+  #update() {
+    if (this.dead || !this.pl) return;
+    const tracks = knownData(this.pl);
+    if (!tracks) return;
+    this.tracks = tracks;
+    this.hasTimes = tracks.some((t) => t.times.length);
     const top = this.scroller.scrollTop;
     this.#draw();
     this.scroller.scrollTop = top;
@@ -142,26 +61,21 @@ export class StatsPage {
   async load() {
     const pl = playlists.byName(COLLECTION);
     if (!pl) return this.wrap.replaceChildren(el('p.stats-note', { text: 'Listening stats are worked out from the Collection, which isn’t there yet.' }));
-    const bar = el('div.stats-progress', null, el('span'));
-    this.wrap.replaceChildren(el('p.stats-note', { text: `Reading ${pl.trackCount.toLocaleString()} songs…` }), bar);
-    const tracks = await readAll(pl, (f) => (bar.firstChild.style.width = `${Math.round(f * 100)}%`));
+    this.pl = pl;
+    let tracks = knownData(pl);
+    if (!tracks) {
+      const bar = el('div.stats-progress', null, el('span'));
+      this.wrap.replaceChildren(
+        el('p.stats-note', { text: `Reading ${pl.trackCount.toLocaleString()} songs… The first time takes a while; after that it’s kept, and only new or played songs are read again.` }),
+        bar,
+      );
+      tracks = await listeningData(pl, (f) => (bar.firstChild.style.width = `${Math.round(f * 100)}%`));
+    }
     if (this.dead) return;
     if (!tracks) return this.wrap.replaceChildren(el('p.stats-note', { text: 'Couldn’t read the Collection.' }));
-    this.pl = pl;
     this.tracks = tracks;
     this.hasTimes = tracks.some((t) => t.times.length);
     this.#draw();
-    // Shown from what was read last time; read again quietly if that was a
-    // while ago (songs played meanwhile), and redrawn in place.
-    if (Date.now() - cache.at > 60000) {
-      const again = await readAll(pl, null, true);
-      if (this.dead || !again) return;
-      this.tracks = again;
-      this.hasTimes = again.some((t) => t.times.length);
-      const top = this.scroller.scrollTop;
-      this.#draw();
-      this.scroller.scrollTop = top;
-    }
   }
 
   /** Plays of a song in the chosen period (all of them without play times). */
@@ -192,7 +106,7 @@ export class StatsPage {
     for (const t of played) {
       const n = plays.get(t);
       for (const a of t.artists) add(artists, a, n);
-      add(albums, t.albumKey, n, { title: t.album, artist: t.albumArtist, handle: t.handle, row: t.row });
+      add(albums, t.albumKey, n, { title: t.album, artist: t.albumArtist, handle: t.handle });
       for (const g of t.genres) add(genres, g, n);
     }
     const top = (m) => [...m.values()].sort((a, b) => b.n - a.n).slice(0, TOP);
@@ -226,7 +140,7 @@ export class StatsPage {
     } else {
       sections.push(
         el('div.stats-cols', null, barList('Top artists', top(artists), (e) => openValue('artists', e.key)), barList('Top genres', top(genres), (e) => openValue('genres', e.key))),
-        this.#albums(top(albums)),
+        this.#albums(top(albums), plays),
         this.#songs(played.sort((a, b) => plays.get(b) - plays.get(a)).slice(0, TOP), plays),
       );
     }
@@ -236,27 +150,92 @@ export class StatsPage {
     this.wrap.replaceChildren(head, tiles, ...sections);
   }
 
-  #albums(list) {
+  /** The most played albums: click one to open its songs right there. */
+  #albums(list, plays) {
     if (!list.length) return el('div');
+    const grid = el('div.stats-albums');
+    const open = (a, tile) => {
+      const was = grid.querySelector('.stats-album-panel');
+      const same = this.openAlbum === a.key;
+      grid.querySelectorAll('.stats-album.open').forEach((n) => n.classList.remove('open'));
+      if (was) closePanel(was);
+      this.openAlbum = same ? null : a.key;
+      if (same) return;
+      tile.classList.add('open');
+      // After the last tile of the clicked tile's row, across the whole grid.
+      const tiles = [...grid.querySelectorAll('.stats-album')];
+      const rowEnd = tiles.filter((t) => t.offsetTop === tile.offsetTop).pop();
+      const panel = this.#albumPanel(a, plays);
+      rowEnd.after(panel);
+      slideOpen(panel);
+    };
+    list.forEach((a, i) => {
+      const img = el('img', { alt: '', decoding: 'async' });
+      bindArt(img, a.handle, 160, ['front']);
+      const tile = el(
+        'button.stats-album',
+        { title: a.title, onclick: () => open(a, tile) },
+        el('span.stats-rank', { text: String(i + 1) }),
+        el('div.art.ph-album', null, img),
+        el('span.stats-album-t1.ellipsis', { text: a.title }),
+        el('span.stats-album-t2.ellipsis', { text: `${a.artist} · ${plural(a.n, 'play')}` }),
+      );
+      grid.append(tile);
+      // Open before the redraw (a song played): open again, without sliding.
+      if (this.openAlbum === a.key) {
+        tile.classList.add('open');
+        queueMicrotask(() => {
+          const tiles = [...grid.querySelectorAll('.stats-album')];
+          tiles.filter((t) => t.offsetTop === tile.offsetTop).pop()?.after(this.#albumPanel(a, plays));
+        });
+      }
+    });
+    return el('section.stats-section', null, el('h3', { text: 'Top albums' }), grid);
+  }
+
+  /** An album's songs with their plays: click a song to play it. */
+  #albumPanel(a, plays) {
+    const songs = this.tracks.filter((t) => t.albumKey === a.key).sort((x, y) => (x.discKey || '').localeCompare(y.discKey || '') || (parseInt(x.number, 10) || 0) - (parseInt(y.number, 10) || 0));
+    const img = el('img', { alt: '', decoding: 'async' });
+    bindArt(img, a.handle, 200, ['front']);
+    const playAll = () => songs[0] && playSong(this.pl, songs[0]);
+    const goTo = async () => view.goTo('albums', await view.albumKeyOf(a.handle));
     return el(
-      'section.stats-section',
+      'div.stats-album-panel',
       null,
-      el('h3', { text: 'Top albums' }),
       el(
-        'div.stats-albums',
+        'div.sap-inner',
         null,
-        ...list.map((a, i) => {
-          const img = el('img', { alt: '', decoding: 'async' });
-          bindArt(img, a.handle, 120, ['front']);
-          return el(
-            'button.stats-album',
-            { title: `Open ${a.title}`, onclick: async () => view.goTo('albums', await view.albumKeyOf(a.handle)) },
-            el('span.stats-rank', { text: String(i + 1) }),
-            el('div.art.ph-album', null, img),
-            el('span.stats-album-t1.ellipsis', { text: a.title }),
-            el('span.stats-album-t2.ellipsis', { text: `${a.artist} · ${plural(a.n, 'play')}` }),
-          );
-        }),
+        el('div.art.ph-album.sap-cover', null, img),
+        el(
+          'div.sap-body',
+          null,
+          el(
+            'div.sap-head',
+            null,
+            el('div', null, el('h4.ellipsis', { text: a.title }), el('div.sap-meta.ellipsis', { text: `${a.artist} · ${plural(songs.length, 'song')} · ${plural(a.n, 'play')}` })),
+            el(
+              'div.sap-buttons',
+              null,
+              el('button.btn-icon.round', { title: 'Play the album', onclick: playAll }, icon('play')),
+              el('button.btn-icon.round', { title: 'Show it in the Collection', onclick: goTo }, icon('collection')),
+            ),
+          ),
+          el(
+            'div.sap-songs',
+            null,
+            ...songs.map((t) =>
+              el(
+                'button.sap-song',
+                { title: `Play ${t.title}`, onclick: () => playSong(this.pl, t) },
+                el('span.sap-n', { text: t.number || '' }),
+                el('span.ellipsis', { text: t.title }),
+                el('span.sap-plays', { text: plays.get(t) ? plural(plays.get(t), 'play') : '' }),
+                el('span.sap-len', { text: formatTime(t.duration) }),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -275,7 +254,7 @@ export class StatsPage {
         ...list.map((t) =>
           el(
             'button.stats-bar.stats-bar-song',
-            { title: `Play ${t.title}`, onclick: () => call('playlist.playTrack', { playlist: this.pl.index, index: t.row }) },
+            { title: `Play ${t.title}`, onclick: () => playSong(this.pl, t) },
             el('span.stats-bar-name.ellipsis', null, el('span', { text: t.title }), el('span.dim', { text: ` · ${t.artists.join(', ')}` })),
             el('span.stats-bar-track', null, el('span.stats-bar-fill', { style: { width: `${(plays.get(t) / max) * 100}%` } })),
             el('span.stats-bar-n', { text: plays.get(t).toLocaleString() }),
@@ -348,7 +327,7 @@ export class StatsPage {
         ...list.map((t) =>
           el(
             'button.stats-song',
-            { title: 'Play', onclick: () => call('playlist.playTrack', { playlist: this.pl.index, index: t.row }) },
+            { title: 'Play', onclick: () => playSong(this.pl, t) },
             icon('play'),
             el('span.ellipsis', { text: t.title }),
             el('span.ellipsis.dim', { text: t.artists.join(', ') }),
@@ -358,6 +337,27 @@ export class StatsPage {
       ),
     );
   }
+}
+
+/** Grow from nothing to its height (then let it size itself). */
+function slideOpen(node) {
+  const h = node.scrollHeight;
+  node.style.height = '0px';
+  node.style.overflow = 'hidden';
+  requestAnimationFrame(() => {
+    node.style.height = h + 'px';
+    node.addEventListener('transitionend', () => ((node.style.height = ''), (node.style.overflow = '')), { once: true });
+  });
+}
+
+function closePanel(node) {
+  node.style.height = node.scrollHeight + 'px';
+  node.style.overflow = 'hidden';
+  requestAnimationFrame(() => {
+    node.style.height = '0px';
+    node.addEventListener('transitionend', () => node.remove(), { once: true });
+    setTimeout(() => node.remove(), 400);
+  });
 }
 
 /** An artist's or genre's page in the Collection (Back returns here). */

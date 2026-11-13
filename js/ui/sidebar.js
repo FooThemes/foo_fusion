@@ -6,6 +6,7 @@ import * as store from '../core/store.js';
 import { playlists, COLLECTION, FAVORITES } from '../data/playlists.js';
 import { player } from '../data/player.js';
 import { view, isPage } from '../data/view.js';
+import { playingGuid } from '../data/playing.js';
 import { playlistMenu, folderMenu } from './menus.js';
 import { folders } from '../data/folders.js';
 import { newPlaylistDialog } from './autoplaylist.js';
@@ -24,7 +25,8 @@ export function mountSidebar(root, app) {
   // old playlist first (that briefly showed its covers).
   const leaveNowPlaying = (name) => {
     if (!isPage(view.mode)) return;
-    view.setMode(store.get('view'), { load: playlists.activePlaylist?.name === name });
+    const tab = store.get('view');
+    view.setMode(isPage(tab) ? 'albums' : tab, { load: playlists.activePlaylist?.name === name });
   };
   const navCollection = navItem('collection', 'Collection', () => {
     leaveNowPlaying(COLLECTION);
@@ -87,9 +89,10 @@ export function mountSidebar(root, app) {
     const np = isPage(view.mode);
     const coll = playlists.byName(COLLECTION);
     const fav = playlists.byName(FAVORITES);
-    setState(navCollection, !np && coll && coll.index === active, coll?.isPlaying);
+    const pg = playingGuid();
+    setState(navCollection, !np && coll && coll.index === active, coll && coll.guid === pg);
     navFavorites.hidden = false;
-    setState(navFavorites, !np && fav && fav.index === active, fav?.isPlaying);
+    setState(navFavorites, !np && fav && fav.index === active, fav && fav.guid === pg);
     setState(navNow, view.mode === 'nowplaying', false);
     setState(navStats, view.mode === 'stats', false);
     navCollection.title = coll ? `${COLLECTION} - ${coll.trackCount.toLocaleString()} songs` : 'Collection';
@@ -103,7 +106,7 @@ export function mountSidebar(root, app) {
           role: 'option',
           title: `${p.name} - ${p.trackCount.toLocaleString()} songs`,
           onclick: () => {
-            if (isPage(view.mode)) view.setMode(store.get('view'), { load: p.index === playlists.active });
+            if (isPage(view.mode)) view.setMode(isPage(store.get('view')) ? 'albums' : store.get('view'), { load: p.index === playlists.active });
             playlists.activate(p.index);
           },
           oncontextmenu: (e) => {
@@ -115,7 +118,7 @@ export function mountSidebar(root, app) {
         el('span.label.ellipsis', { text: p.name }),
         showCounts ? el('span.count', { text: p.trackCount.toLocaleString() }) : null,
       );
-      setState(row, !np && p.index === active, p.isPlaying);
+      setState(row, !np && p.index === active, p.guid === pg);
       row.setAttribute('aria-selected', String(!np && p.index === active));
       draggablePlaylist(row, p);
       playlistDropTarget(row, () => playlists.list.find((x) => x.guid === p.guid));
@@ -137,7 +140,7 @@ export function mountSidebar(root, app) {
         icon(f.collapsed ? 'chevronRight' : 'chevronDown', 'chev'),
         icon('folder'),
         el('span.label.ellipsis', { text: f.name }),
-        node.members.some((m) => m.isPlaying) ? el('span.dot') : null,
+        node.members.some((m) => m.guid === pg) ? el('span.dot') : null,
       );
       head.style.setProperty('--depth', node.depth);
       draggableFolder(head, f);
@@ -159,6 +162,10 @@ export function mountSidebar(root, app) {
   }
 
   playlists.on('change', render);
+  // The playing playlist's mark follows playback itself.
+  const renderSoon = debounce(render, 50);
+  player.on('track', renderSoon);
+  player.on('state', renderSoon);
   folders.on('change', render);
   playlists.on('active', render);
   view.on('mode', render);

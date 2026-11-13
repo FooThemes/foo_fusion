@@ -84,7 +84,8 @@ class View extends Emitter {
     // The playback copy grows as playback gets near its ends (see #playSorted).
     player.on('track', () => this.#extendPlayback());
     player.on('order', (o) => SHUFFLED.has(o) && this.#extendPlayback(true));
-    this.mode = store.get('view');
+    // (A page — Now playing, Listening stats — is never the remembered tab.)
+    this.mode = isPage(store.get('view')) ? 'albums' : store.get('view');
     const reload = debounce(() => this.load(), 120);
     const reloadIfActive = (d) => {
       this.#contentVersion++; // rows moved or changed: cached runs are stale
@@ -151,6 +152,7 @@ class View extends Emitter {
 
   /** { load: false } when a playlist switch (which loads anyway) follows. */
   setMode(mode, { load = true } = {}) {
+    if (!mode) mode = 'albums';
     if (!isPage(mode)) store.set('view', mode);
     // Also when leaving an artist's or genre's page through its own tab:
     // back to the full list (which then returns to where it was scrolled).
@@ -286,7 +288,9 @@ class View extends Emitter {
       const b = this.backTo;
       this.backTo = null;
       this.returning = b;
-      store.set('view', b.mode);
+      // Back to Listening stats (an artist opened from there) is a page:
+      // the tab to return to later stays the one it was.
+      if (!isPage(b.mode)) store.set('view', b.mode);
       this.mode = b.mode;
       this.drill = b.drill;
       this.emit('mode', b.mode);
@@ -759,6 +763,11 @@ class View extends Emitter {
   }
 
   #playbackKey = null; // what the playback playlist currently holds
+
+  /** The playlist (GUID) the hidden playback playlist was filled from. */
+  get playbackSource() {
+    return this.#playbackKey ? this.#playbackKey.split('|')[0] : null;
+  }
   #playbackFrom = 0; // rows[] index of its first song
   #playbackTo = 0; // rows[] index after its last song
   #playbackRows = null; // the list it was cut from

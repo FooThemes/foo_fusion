@@ -129,3 +129,14 @@ export function queryString(v) {
 export function tfLiteral(v) {
   return "'" + String(v).replace(/'/g, "''") + "'";
 }
+
+/**
+ * A Windows path as typed or pasted: quotes off, "/" turned into "\\",
+ * doubled separators made single (a network path's leading "\\\\" kept).
+ */
+export function winPath(text) {
+  const t = String(text || '').trim().replace(/^"|"$/g, '').replace(/\//g, '\\');
+  const unc = t.startsWith('\\\\');
+  const body = t.replace(/\\{2,}/g, '\\');
+  return unc ? '\\' + body : body;
+}

@@ -187,16 +187,18 @@ input {
 }
 
 /* Scrollbars: slim and theme-coloured */
+/* (A wider grab area than it looks: the thumb is drawn inside a clear border.) */
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 ::-webkit-scrollbar-thumb {
+  min-height: 40px;
   background: rgba(127, 127, 127, 0.45);
   border: 3px solid transparent;
   background-clip: content-box;
-  border-radius: 6px;
+  border-radius: 7px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

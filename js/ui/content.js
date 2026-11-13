@@ -219,7 +219,7 @@ function mountOverlayScrollbar(scroller, rail, thumb) {
     const show = total > view + 1;
     rail.hidden = !show;
     if (!show) return;
-    const h = Math.max(36, (view / total) * view);
+    const h = Math.max(48, (view / total) * view);
     const y = (scroller.scrollTop / (total - view)) * (view - h);
     thumb.style.height = h + 'px';
     thumb.style.transform = `translateY(${y}px)`;

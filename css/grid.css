@@ -935,6 +935,12 @@
 .shelf-panel {
   position: relative;
   margin: 4px 0 28px;
+  transition: height 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Clipped while it slides (its pointer shows again once it's open). */
+.shelf-panel.sliding {
+  overflow: hidden;
 }
 
 .shelf-arrows {

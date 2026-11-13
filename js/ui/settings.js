@@ -1,6 +1,6 @@
 // Settings panel (slides in from the right, like the original).
 
-import { el, clear } from '../core/util.js';
+import { el, clear, winPath } from '../core/util.js';
 import { SHELVES } from './shelves.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
@@ -273,15 +273,21 @@ export function mountSettings(root, app) {
   }
 
   // A path box with a Browse button (the system's picker).
-  function pathField(label, key, hint, placeholder, { folder = true, filter = null, onSet = (v) => store.set(key, v) } = {}) {
+  function pathField(label, key, hint, placeholder, { folder = true, filter = null, onSet: set = (v) => store.set(key, v), startIn = null } = {}) {
     const input = el('input.set-hex.set-path', { type: 'text', value: store.get(key) || '', placeholder, spellcheck: false, 'aria-label': label });
-    input.addEventListener('change', () => onSet(input.value.trim().replace(/^"|"$/g, '')));
+    // Either slash will do; the path is kept the Windows way.
+    const onSet = (v) => {
+      const path = winPath(v);
+      input.value = path;
+      set(path);
+    };
+    input.addEventListener('change', () => onSet(input.value));
     const browse = el('button.set-mini.set-browse', {
       type: 'button',
       text: 'Browse…',
       onclick: async (e) => {
         e.preventDefault();
-        const start = input.value.trim().replace(/^"|"$/g, '');
+        const start = winPath(input.value) || startIn?.() || '';
         const res = folder
           ? await tryCall('dialog.openFolder', { title: label, defaultPath: start })
           : await tryCall('dialog.openFile', { title: label, defaultPath: start.replace(/[\\/][^\\/]*$/, ''), ...(filter ? { filters: [filter] } : {}) });
@@ -295,7 +301,12 @@ export function mountSettings(root, app) {
   // Where "Export artist list" and "Export genre list" write (and where the
   // script is told to read them from).
   function exportFolderField() {
-    return pathField('Export folder', 'exportFolder', 'Where the artist and genre lists are saved for the script. Empty: beside the script, or the foobar2000 profile folder if the script isn’t set.', 'Beside the script', { onSet: (v) => (store.set('exportFolder', v), render()) });
+    // Browse starts in the script's folder, when the script is set.
+    const scriptDir = () => winPath(store.get('artistScript')).replace(/\\[^\\]*$/, '');
+    return pathField('Export folder', 'exportFolder', 'Where the artist and genre lists are saved for the script. Empty: beside the script, or the foobar2000 profile folder if the script isn’t set.', 'Beside the script', {
+      onSet: (v) => (store.set('exportFolder', v), render()),
+      startIn: scriptDir,
+    });
   }
 
   // Characters that separate genres within one tag.
@@ -426,6 +437,7 @@ export function mountSettings(root, app) {
   }
 
   function setFolder(key, value) {
+    value = winPath(value);
     store.set(key, value);
     forgetArtistInfo();
     forgetGenreInfo();

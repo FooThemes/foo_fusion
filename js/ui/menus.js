@@ -3,7 +3,7 @@
 
 import { call, tryCall } from '../core/bridge.js';
 import { toggleMini, isMini } from './mini.js';
-import { el } from '../core/util.js';
+import { el, winPath } from '../core/util.js';
 import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { toast } from './toast.js';
@@ -17,8 +17,17 @@ import { refreshArt } from '../data/artwork.js';
 export async function showMenu(items) {
   const actions = new Map();
   let n = 0;
+  // No separator first, last or twice in a row (a menu ending in a line
+  // looks unfinished), at every level.
+  const tidy = (list) =>
+    list.filter(Boolean).reduce((out, it) => {
+      const sep = it === '-' || it.type === 'separator';
+      if (sep && (!out.length || out[out.length - 1] === '-')) return out;
+      out.push(sep ? '-' : it);
+      return out;
+    }, []).filter((it, i, a) => !(it === '-' && i === a.length - 1));
   const convert = (list) =>
-    list.map((it) => {
+    tidy(list).map((it) => {
       if (it === '-' || it.type === 'separator') return { type: 'separator' };
       const id = it.id || `m${n++}`;
       if (it.run) actions.set(id, it.run);
@@ -380,7 +389,7 @@ export function promptPath(title, hint, { value = '', placeholder = '', folder =
     type: 'button',
     text: 'Browse…',
     onclick: async () => {
-      const start = input.value.trim().replace(/^"|"$/g, '');
+      const start = winPath(input.value);
       const res = folder
         ? await tryCall('dialog.openFolder', { title, defaultPath: start })
         : await tryCall('dialog.openFile', { title, defaultPath: start.replace(/[\\/][^\\/]*$/, ''), ...(filter ? { filters: [filter] } : {}) });
@@ -391,7 +400,7 @@ export function promptPath(title, hint, { value = '', placeholder = '', folder =
   });
   const body = el('div', null, hint ? el('p', { text: hint }) : null, el('div.dialog-path', null, input, browse));
   return dialog(title, body, (close) => {
-    const done = () => close(input.value.trim().replace(/^"|"$/g, '') || null);
+    const done = () => close(winPath(input.value) || null);
     input.addEventListener('keydown', (e) => e.key === 'Enter' && done());
     return [el('button.btn-primary', { text: okLabel, onclick: done }), el('button.btn-text', { text: 'Cancel', onclick: () => close(null) })];
   });

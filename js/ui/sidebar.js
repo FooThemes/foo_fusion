@@ -175,7 +175,7 @@ export function mountSidebar(root, app) {
   player.on('queue', renderQueue);
   store.subscribe((k) => {
     if (k === 'sidebarCollapsed' || k === 'sidebarWidth' || k === 'sidebarHidden') applyWidth();
-    if (k === 'showPlaylistCounts') render();
+    if (k === 'showPlaylistCounts' || k === 'playlistIcons') render();
   });
   applyWidth();
   render();

@@ -24,6 +24,7 @@ import { genreFiles, forgetGenreInfo } from '../data/genreinfo.js';
 import { editArtist, editGenre } from './infoeditor.js';
 import { genrePictureUrl, collageUrl, forgetCollages } from './collage.js';
 import { draggableRows } from './dnd.js';
+import { groupCard } from './tipcards.js';
 
 const genreTiles = new Map(); // genre|size -> picture or collage URL (null: none)
 // Those pictures, decoded and held (their own store, so browsing albums
@@ -518,12 +519,17 @@ export class Grid {
       const year = store.get('showAlbumYear') && head?.year ? ` · ${head.year}` : '';
       t2.textContent = (pick?.other ? `${pick.other} · ` : '') + who + year + (store.get('showTrackCounts') ? ` · ${plural(g.count, 'song')}` : '');
       art.classList.add('ph-album');
-      node.title = `${t1.textContent}\n${who}` + (pick?.tip ? `\n\n${pick.tip}` : '');
+      // Hover: the album's card (cover, year, genre, songs); text for screen readers.
+      node.removeAttribute('title');
+      node.dataset.tip = `${t1.textContent}\n${who}` + (pick?.tip ? `\n\n${pick.tip}` : '');
+      const title = t1.textContent;
+      node.tipCard = () => groupCard(g, { title, artist: who, alt: pick?.tip });
     } else if (this.kind === 'artists') {
       const albums = plural(g.albumCount || g.sub?.length || 1, 'album');
       t1.textContent = g.key;
       t2.textContent = albums;
       art.classList.add('round', 'ph-artist');
+      node.tipCard = null;
       // Each artist's own colour, so pictureless artists don't all look alike.
       art.style.setProperty('--ph-hue', hueOf(g.key));
       node.title = g.key;

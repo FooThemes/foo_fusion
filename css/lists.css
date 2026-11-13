@@ -154,11 +154,22 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 620px;
+  height: max(760px, 85vh);
   overflow: hidden;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, #000 35%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 35%, transparent 100%);
+  /* Eased, not a straight ramp: a straight one ends in a visible edge where
+     the slope stops. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 1.000) 25.0%, rgba(0, 0, 0, 0.972) 32.5%, rgba(0, 0, 0, 0.896) 40.0%, rgba(0, 0, 0, 0.784) 47.5%, rgba(0, 0, 0, 0.648) 55.0%, rgba(0, 0, 0, 0.500) 62.5%, rgba(0, 0, 0, 0.352) 70.0%, rgba(0, 0, 0, 0.216) 77.5%, rgba(0, 0, 0, 0.104) 85.0%, rgba(0, 0, 0, 0.028) 92.5%, rgba(0, 0, 0, 0.000) 100.0%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 1.000) 25.0%, rgba(0, 0, 0, 0.972) 32.5%, rgba(0, 0, 0, 0.896) 40.0%, rgba(0, 0, 0, 0.784) 47.5%, rgba(0, 0, 0, 0.648) 55.0%, rgba(0, 0, 0, 0.500) 62.5%, rgba(0, 0, 0, 0.352) 70.0%, rgba(0, 0, 0, 0.216) 77.5%, rgba(0, 0, 0, 0.104) 85.0%, rgba(0, 0, 0, 0.028) 92.5%, rgba(0, 0, 0, 0.000) 100.0%);
+}
+
+/* Grain over it, so the gradient shows no bands (backdrop.js). */
+.np-bg-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--grain, none);
+  pointer-events: none;
 }
 
 .nowplaying.idle .np-bg-wrap {

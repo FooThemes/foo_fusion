@@ -1573,3 +1573,77 @@ body.pdragging * {
   margin-top: 8px;
   font-size: 13px;
 }
+
+/* Playlist icons (iconpicker.js): a grid of choices, on its own in a dialog
+   or dropped down from the button beside a playlist's name. */
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 40px);
+  gap: 4px;
+}
+
+.icon-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  color: var(--text);
+}
+
+.icon-choice .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.icon-choice:hover {
+  background: var(--hover);
+}
+
+.icon-choice.on {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* "Default": the playlist's own icon, set apart by a dashed edge. */
+.icon-choice.default:not(.on) {
+  border: 1px dashed color-mix(in srgb, var(--text) 35%, transparent);
+}
+
+.icon-dialog {
+  margin: 4px 0 6px;
+}
+
+.ap-name-row {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.icon-field-box {
+  position: relative;
+  flex: none;
+}
+
+.icon-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--text);
+}
+
+.icon-field .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
+  padding: 8px;
+}

@@ -29,17 +29,22 @@ export function mountPlayerBar(root, app) {
   heart.classList.add('pb-heart');
   const nowBox = el('div.pb-now', null, coverBox, el('div.pb-text', null, title, artist));
   // The title opens the song's album, the artist their page (both from the Collection).
+  // In the mini player the page isn't showing: the window grows back first.
   titleText.addEventListener('click', async () => {
     const t = player.track;
     const key = t && (await view.albumKeyOf(t.handle));
-    if (key) view.goTo('albums', key);
+    if (!key) return;
+    if (isMini()) await toggleMini(false);
+    view.goTo('albums', key);
   });
   artistText.addEventListener('click', async () => {
     const t = player.track;
     if (!t) return;
     const v = await trackVersions(t);
     const name = artistPage(t, v);
-    if (name) view.goTo('artists', name);
+    if (!name) return;
+    if (isMini()) await toggleMini(false);
+    view.goTo('artists', name);
   });
 
   const elapsed = el('span.pb-time');

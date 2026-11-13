@@ -14,6 +14,7 @@ import * as store from '../core/store.js';
 import { player } from '../data/player.js';
 import { refreshArt } from '../data/artwork.js';
 import { openModal } from './modal.js';
+import { changeIconDialog } from './iconpicker.js';
 
 /** Show a native menu built from [{ id, label, checked, enabled, submenu, run }]. */
 export async function showMenu(items) {
@@ -205,6 +206,7 @@ export function playlistMenu(p, targets = [p]) {
     { label: 'Show', run: () => playlists.activate(p.index) },
     '-',
     { label: 'Rename…', enabled: !special && !many, shortcut: 'F2', run: () => renamePlaylist(p) },
+    { label: 'Change icon…', enabled: !special && !many, run: () => changeIconDialog(p) },
     { label: many ? `Duplicate ${targets.length} playlists` : 'Duplicate', run: async () => {
       for (const t of [...targets].reverse()) await tryCall('playlist.duplicate', { playlistGuid: t.guid });
     } },

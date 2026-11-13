@@ -7,7 +7,12 @@ import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
 
 const SIZE = { width: 480, height: 200 };
-const MIN = { width: 340, height: 150 };
+const MIN = { width: 400, height: 180 }; // the window, as foobar2000 measures it
+// The least the page itself needs (cover, two lines, the controls). If the
+// window still gets smaller than this (foobar2000 counts in device pixels on
+// a scaled display, or its frame takes more), the minimum grows to fit.
+const NEED = { width: 360, height: 128 };
+let floor = { ...MIN }; // the minimum set now (grows if the page doesn't fit)
 let saved = null; // the window as it was: bounds, maximised, on top, min size
 let busy = false;
 
@@ -28,10 +33,13 @@ export async function toggleMini(on = !isMini()) {
       if (saved.max) await tryCall('window.restore');
       document.body.classList.add('mini');
       window.dispatchEvent(new CustomEvent('fusion:mini', { detail: true }));
-      await tryCall('window.setMinSize', MIN);
+      floor = { ...MIN };
+      await tryCall('window.setMinSize', floor);
       await tryCall('window.setSize', SIZE);
+      window.addEventListener('resize', keepMin);
       if (store.get('miniOnTop') !== false) await tryCall('window.setAlwaysOnTop', { enabled: true });
     } else {
+      window.removeEventListener('resize', keepMin);
       document.body.classList.remove('mini');
       window.dispatchEvent(new CustomEvent('fusion:mini', { detail: false }));
       const s = saved || {};
@@ -46,4 +54,21 @@ export async function toggleMini(on = !isMini()) {
   } finally {
     busy = false;
   }
+}
+
+/** Too small after all: raise the minimum by what's missing, and grow to it. */
+let keepTimer = 0;
+function keepMin() {
+  clearTimeout(keepTimer);
+  keepTimer = setTimeout(() => {
+    if (!isMini()) return;
+    const dw = NEED.width - innerWidth;
+    const dh = NEED.height - innerHeight;
+    if (dw <= 0 && dh <= 0) return;
+    const r = window.devicePixelRatio || 1;
+    if (dw > 0) floor.width += Math.ceil(dw * r);
+    if (dh > 0) floor.height += Math.ceil(dh * r);
+    tryCall('window.setMinSize', floor);
+    tryCall('window.setSize', { width: Math.max(floor.width, Math.round(innerWidth * r)), height: Math.max(floor.height, Math.round(innerHeight * r)) });
+  }, 150);
 }

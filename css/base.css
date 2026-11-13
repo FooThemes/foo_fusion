@@ -253,6 +253,64 @@ input {
   pointer-events: none;
 }
 
+.tip-line {
+  color: #bbb;
+}
+
+.tip-gap {
+  height: 6px;
+}
+
+/* A shortcut: after the words, quieter and slanted ("Close  Esc"). */
+.tip-key {
+  margin-left: 4px;
+  color: #999;
+  font-style: italic;
+}
+
+.tip-note {
+  color: #999;
+}
+
+/* An album's card: its cover beside the details. */
+.tip.card {
+  padding: 8px;
+  max-width: 380px;
+}
+
+.tip-album {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+}
+
+.tip-cover {
+  flex: none;
+  width: 72px;
+  height: 72px;
+}
+
+.tip-album-text {
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.tip-head {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: #fff;
+}
+
+.tip-alt {
+  color: #ccc;
+  font-size: 12px;
+}
+
+.tip-meta {
+  color: #999;
+  font-size: 12px;
+}
+
 /* A song in a list: the album panel's, Songs, Now playing (each lays out
    its own columns). */
 .row {

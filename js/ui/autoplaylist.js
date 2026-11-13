@@ -17,6 +17,8 @@ import { toast } from './toast.js';
 import { attachAssist } from './patternassist.js';
 import { tabBar } from './tabs.js';
 import { openModal } from './modal.js';
+import { iconField } from './iconpicker.js';
+import { pickedIcon, setPickedIcon } from './plicon.js';
 
 const HELP = {
   query: { file: 'Query Syntax Help.html', title: 'Query syntax' },
@@ -90,7 +92,9 @@ export async function newPlaylistDialog(tab = 'playlist') {
   const def = await showDialog({ title: 'New', tabs: true, tab, name: '', query: '', sort: '', keepSorted: false });
   if (!def) return;
   if (def.kind === 'playlist') {
-    await playlists.create(def.name || 'New playlist');
+    const res = await playlists.create(def.name || 'New playlist');
+    const guid = res?.guid || playlists.list.find((p) => p.index === res?.index)?.guid;
+    if (guid && def.icon) setPickedIcon(guid, def.icon);
     return;
   }
   await createAuto(def);
@@ -104,6 +108,7 @@ async function createAuto(def) {
   const res = await tryCall('playlist.createAutoplaylist', { name: def.name || def.query, query: def.query, sort: def.sort, keepSorted: def.keepSorted });
   if (!res) return toast("foobar2000 didn't accept that query");
   remember(res.guid, def);
+  if (def.icon) setPickedIcon(res.guid, def.icon);
   await playlists.refresh();
   playlists.activate(res.index);
 }
@@ -120,10 +125,12 @@ export async function editAutoplaylist(p) {
     keepSorted: known?.keepSorted ?? false,
     unknown: !known,
     playlist: p,
+    icon: pickedIcon(p.guid),
   });
   if (!def) return;
   const pl = playlists.list.find((x) => x.guid === p.guid);
   if (!pl) return;
+  if (!playlists.isSpecial(pl)) setPickedIcon(pl.guid, def.icon || '');
   if (def.name && def.name !== pl.name && !playlists.isSpecial(pl)) await tryCall('playlist.rename', { playlistGuid: pl.guid, name: def.name });
   // Re-create the autoplaylist on the same playlist with the new definition.
   const released = await tryCall('playlist.removeAutoplaylist', { playlistGuid: pl.guid });
@@ -200,9 +207,11 @@ function showDialog(opts) {
       query.classList.remove('invalid');
       queryError.hidden = true;
     });
+    // The playlist's icon, beside its name (not for Collection and Favourites).
+    const iconBox = opts.nameLocked ? null : iconField(opts.icon || '', mode === 'auto' ? 'autoplaylist' : 'playlist');
     let checking = false;
     const ok = async () => {
-      if (mode === 'playlist') return close({ kind: 'playlist', name: name.value.trim() });
+      if (mode === 'playlist') return close({ kind: 'playlist', name: name.value.trim(), icon: iconBox?.value() ?? '' });
       const q = query.value.trim();
       if (!q) return bad('Enter a query.');
       if (checking) return;
@@ -219,10 +228,11 @@ function showDialog(opts) {
         }
         checking = false;
       }
-      close({ kind: 'auto', name: name.value.trim(), query: q, sort: sort.value.trim(), keepSorted: forced.checked });
+      close({ kind: 'auto', name: name.value.trim(), query: q, sort: sort.value.trim(), keepSorted: forced.checked, icon: iconBox?.value() ?? '' });
     };
     const field = (label, input, helpKey) =>
-      el('label.ap-field', null, el('span.ap-label', { text: label }), input, helpKey ? el('button.btn-icon.btn-outline.ap-q', { type: 'button', title: `${HELP[helpKey].title} help`, onclick: (e) => (e.preventDefault(), showHelp(helpKey)) }, '?') : el('span.ap-q-gap'));
+      // A label around a plain box (clicking the words focuses it); not around the icon button.
+      el(input.tagName === 'INPUT' ? 'label.ap-field' : 'div.ap-field', null, el('span.ap-label', { text: label }), input, helpKey ? el('button.btn-icon.btn-outline.ap-q', { type: 'button', title: `${HELP[helpKey].title} help`, onclick: (e) => (e.preventDefault(), showHelp(helpKey)) }, '?') : el('span.ap-q-gap'));
 
     // A link in one help page to the other (e.g. title formatting from the query page).
     function showHelpFile(file) {
@@ -276,6 +286,7 @@ function showDialog(opts) {
         box.classList.remove('with-help');
       }
       name.placeholder = k === 'auto' ? 'Uses the query if left empty' : 'New playlist';
+      iconBox?.setFallback(k === 'auto' ? 'autoplaylist' : 'playlist');
       tabs?.set(k);
       (k === 'auto' && name.value ? query : name).focus();
     }
@@ -286,7 +297,7 @@ function showDialog(opts) {
         'div.ap-main',
         null,
         tabs?.node || el('h2', { text: opts.title }),
-        field('Name', name),
+        field('Name', iconBox ? el('span.ap-name-row', null, iconBox, name) : name),
         autoPart,
         opts.unknown
           ? el(

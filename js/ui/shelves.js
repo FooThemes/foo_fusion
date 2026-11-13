@@ -19,6 +19,7 @@ import { setTitle, versionText } from './titles.js';
 import { listening, listeningData, knownData } from '../data/listening.js';
 import { trackContextMenu } from './menus.js';
 import { InlineAlbum } from './inlinealbum.js';
+import { groupCard } from './tipcards.js';
 
 export const SHELVES = {
   added: { label: 'Recently added', hint: 'Newest in your library first' },
@@ -254,7 +255,9 @@ export class Shelves {
     const who = versionText(head?.artist || artist, head?.versions?.albumArtist, 'artists');
     setTitle(t1, pv ? pv.lead + (head.albumSuffix || '') : head?.title || album);
     t2.textContent = (pv?.other ? `${pv.other} · ` : '') + who;
-    node.title = `${t1.textContent}\n${who}\n${plural(g.count ?? view.groupRows(g).length, 'song')}`;
+    node.dataset.tip = `${t1.textContent}\n${who}\n${plural(g.count ?? view.groupRows(g).length, 'song')}`;
+    const title = t1.textContent;
+    node.tipCard = () => groupCard(g, { title, artist: who, alt: pv?.tip });
     const img = node.querySelector('img');
     if (head?.handle && img.dataset.handle !== head.handle) {
       img.dataset.handle = head.handle;

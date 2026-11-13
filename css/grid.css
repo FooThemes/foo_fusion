@@ -251,7 +251,8 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--list-bg) 55%, transparent);
+  /* Grain against banding (backdrop.js), over the tint. */
+  background: var(--grain, none), color-mix(in srgb, var(--list-bg) 55%, transparent);
 }
 
 /* The pointer's outline: the panel's top border runs up and over it. */

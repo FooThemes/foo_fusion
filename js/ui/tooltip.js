@@ -27,7 +27,10 @@ export function installTooltips() {
   const show = () => {
     const text = target?.isConnected && target.dataset.tip;
     if (!text) return (tip.hidden = true);
-    tip.textContent = text;
+    // A tile's card (the album's cover and details), else the text styled.
+    const card = typeof target.tipCard === 'function' ? target.tipCard() : null;
+    tip.classList.toggle('card', !!card);
+    tip.replaceChildren(card || styled(text));
     tip.hidden = false;
     const r = target.getBoundingClientRect();
     const w = tip.offsetWidth;
@@ -77,4 +80,22 @@ export function installTooltips() {
   document.addEventListener('pointerout', (e) => target && !target.contains(e.relatedTarget) && hide(), true);
   for (const ev of ['pointerdown', 'wheel', 'keydown', 'contextmenu']) document.addEventListener(ev, hide, { capture: true, passive: true });
   window.addEventListener('blur', hide);
+}
+
+// "Playlist manager (Ctrl+M)", "Close (Esc)": the keys set apart; other
+// endings in brackets ("(right-click for the menu)") dimmed as a note.
+const KEYS = /^(?:(?:Ctrl|Alt|Shift|Win)\+)*(?:[A-Z0-9]|F\d{1,2}|Esc|Enter|Space|Tab|Del|Delete|Backspace|Home|End|Page ?Up|Page ?Down|Up|Down|Left|Right|[,.\/\-=+\[\]])(?:\s*(?:,|or|\/)\s*(?:(?:Ctrl|Alt|Shift)\+)*\S+)*$/;
+
+/** The text: its first line as is, the lines after it quieter. */
+function styled(text) {
+  const box = document.createDocumentFragment();
+  text.split('\n').forEach((line, i) => {
+    const row = el(i ? 'div.tip-line' : 'div.tip-first');
+    if (!line.trim()) row.classList.add('tip-gap');
+    const m = /^(.*?)\s*\(([^()]+)\)\s*$/.exec(line);
+    if (m && m[1]) row.append(m[1], ' ', el(KEYS.test(m[2].trim()) ? 'span.tip-key' : 'span.tip-note', { text: m[2].trim() }));
+    else row.textContent = line;
+    box.append(row);
+  });
+  return box;
 }

@@ -15,8 +15,9 @@ import { view } from '../data/view.js';
 import { listening, listeningData, knownData, playSong, currentRows } from '../data/listening.js';
 import { InlineAlbum } from './inlinealbum.js';
 import { contextMenu, refreshAlbums } from './menus.js';
-import { loadLocale, formatHour, formatMonth, formatMonthLong } from '../core/locale.js';
+import { loadLocale, formatHour, formatMonth, formatMonthLong, formatDay } from '../core/locale.js';
 import { tabBar } from './tabs.js';
+import { albumCard } from './tipcards.js';
 
 const TOP = 10;
 const TOP_ALBUMS_MAX = 40; // ten or more: enough to fill the last row
@@ -191,12 +192,13 @@ export class StatsPage {
       bindArt(img, a.handle, 160, ['front']);
       const tile = el(
         'button.stats-album',
-        { title: a.title, dataset: { key: a.key }, onclick: () => this.#openAlbum(a, tile), oncontextmenu: (e) => this.#albumMenu(e, a) },
+        { dataset: { key: a.key, tip: `${a.title}\n${a.artist}\n${plural(a.n, 'play')}` }, onclick: () => this.#openAlbum(a, tile), oncontextmenu: (e) => this.#albumMenu(e, a) },
         el('span.stats-rank', { text: String(i + 1) }),
         el('div.art.ph-album', null, img),
         el('span.stats-album-t1.ellipsis', { text: a.title }),
         el('span.stats-album-t2.ellipsis', { text: `${a.artist} · ${plural(a.n, 'play')}` }),
       );
+      tile.tipCard = () => this.#albumCard(a);
       grid.append(tile);
     });
     this.albumGrid = grid;
@@ -206,6 +208,19 @@ export class StatsPage {
     // before the page is shown, so it doesn't flicker shut.
     if (reopen) this.pendingOpen = reopen;
     return this.albumsNode;
+  }
+
+  /** An album tile's hover card: its plays, songs and when it was last played. */
+  #albumCard(a) {
+    const songs = this.#songsOf(a);
+    const last = songs.reduce((m, t) => (t.last > m ? t.last : m), '');
+    return albumCard({
+      title: a.title,
+      artist: a.artist,
+      handle: a.handle,
+      facts: [songs[0]?.genres.slice(0, 3).join(', '), plural(songs.length, 'song')],
+      notes: [`${plural(a.n, 'play')}${this.period === 'all' ? '' : ' in this period'}`, last ? `Last played ${formatDay(last)}` : null],
+    });
   }
 
   /** Show at least ten albums, and as many more as fill the last row. */

@@ -83,3 +83,17 @@ export function formatMonthLong(d) {
   }
   return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
+
+/** A day ("13 Nov 2026", or as the system writes it) from a date or "yyyy-mm-dd …". */
+export function formatDay(value) {
+  const d = value instanceof Date ? value : new Date(String(value).slice(0, 10) + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+  if (tag) {
+    try {
+      return d.toLocaleDateString(tag, { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+      /* the default below */
+    }
+  }
+  return `${d.getDate()} ${fallbackMonths[d.getMonth()]} ${d.getFullYear()}`;
+}

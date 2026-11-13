@@ -49,12 +49,17 @@ export class Hero {
       e.preventDefault();
       showMenu(this.menuItems());
     });
+    // Its height changes on its own too: the window resized, or shown again
+    // after being hidden (the mini player hides the page). The albums move.
+    this.resize = new ResizeObserver(() => !this.node.hidden && this.measure());
+    this.resize.observe(this.node);
     this.refreshEvent = refreshEvent;
     this.onRefresh = (e) => this.refresh(e);
     window.addEventListener(refreshEvent, this.onRefresh);
   }
 
   destroy() {
+    this.resize.disconnect();
     window.removeEventListener(this.refreshEvent, this.onRefresh);
   }
 

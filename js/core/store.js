@@ -93,6 +93,7 @@ const DEFAULTS = {
   gifCovers: 'large', // animate GIF covers: 'large' (open album, Now Playing), 'everywhere' or 'never'
   artistNoPicture: 'cover', // artists without a picture: 'cover' (an album's) or 'placeholder'
   customColumns: [], // your own Songs view columns: [{ id, label, pattern, right }]
+  playlistIcons: {}, // icons picked for playlists: { [guid]: icon name } (see ui/plicon.js)
   songColumns: null, // Songs view columns in order (null: the defaults, see songs.js)
   songColumnWidths: {}, // Songs view column -> width in px (sized by hand)
   genreInfoFolder: '', // one folder per genre: genre.nfo, folder.jpg, fanart.jpg

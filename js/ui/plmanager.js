@@ -222,6 +222,7 @@ export function mountPlaylistManager(root, app) {
   playlists.on('active', () => sh.isOpen && render());
   player.on('track', () => sh.isOpen && render());
   player.on('state', () => sh.isOpen && render());
+  store.subscribe((k) => k === 'playlistIcons' && sh.isOpen && render());
 
   return {
     open,

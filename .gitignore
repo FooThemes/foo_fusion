@@ -9,3 +9,4 @@ tools/picard/dist/
 __pycache__/
 *.pyc
 dist/
+shots/

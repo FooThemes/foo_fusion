@@ -1,152 +1,214 @@
 # Fusion for foobar2000
 
-A Groove-style interface for foobar2000 v2 (64-bit), built as a theme for the
-[foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2) component.
+Fusion is a foobar2000 skin that puts your library first: albums as covers,
+artists and genres with their own pages, and a player bar along the bottom.
+It's a theme for the [foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2)
+component and runs on foobar2000 v2, 64-bit included.
 
-Fusion 3 is a from-scratch rewrite of NadirP's
-[Fusion](https://www.deviantart.com/nadirp) skin (v2.4.1.1, 2015), which needed
-WSH Panel Mod and UI Hacks. Neither exists for 64-bit foobar2000. The layout,
-colours and behaviour follow the original. The code, icons and artwork are all
-new.
+![Albums](docs/screenshots/albums.jpg)
 
-## Features
+It started as a rebuild of [Fusion v2.4.1.1 by NadirP](https://web.archive.org/web/20150926162833/http://nadirp.deviantart.com/art/Fusion-v2-4-1-1-Discontinued-Project-464482526),
+which was discontinued in 2015 and needed WSH Panel Mod and UI Hacks, neither of
+which exists for 64-bit foobar2000. Version 3 keeps the original's look and
+layout, but it's written from scratch and has grown a fair bit since.
 
-- **Albums, Artists, Genres and Songs** views of any playlist. The Collection
-  autoplaylist shows the whole media library.
-- **Expand in place**: click an album to open its track list under the row,
-  over a blurred copy of the cover.
-- Artists and Genres open into their albums. Search filters the current view.
-- **Now playing** with large artwork and the playback queue (or what's up next).
-- Player bar with seek, volume, playback order, and a menu that replaces the
-  hidden foobar2000 menu bar (the full foobar2000 menu is still there).
-- **Multi-disc albums**: a disc bar with each disc's own cover and DISCSUBTITLE,
-  shown as separate sections or one disc at a time.
-- **Like / dislike**: the heart on each song cycles nothing → Like it (heart) →
-  Hate it (broken heart) → nothing, in the `MOOD` tag, the same as the original
-  skin; the Favorites autoplaylist lists the liked ones.
-- **Playlist manager** (Ctrl+M), standing in for foobar2000's Default UI panel:
-  reorder by dragging, multi-select, rename, duplicate, delete, load and save,
-  and create or edit autoplaylists.
-- **Playlist folders** in the left panel and the playlist manager, and a New
-  playlist dialog with Playlist / Autoplaylist tabs.
-- **Multi-value tags**: Artists uses ARTISTS (so featured artists get a tile)
-  and Genres splits GENRE on `;`. Box-set covers are found in the folder above
-  `CD1`, `Disc 2`… folders.
-- Optional **waveform seek bar** (Settings → Layout).
-- **Artist information folder** (Settings → Library): Kodi-style folders
-  (`<folder>\<Artist>\artist.nfo`, `artist.jpg`, `fanart.jpg`) give artist
-  tiles their picture and artist pages a header with biography and fanart.
-- Covers are cached on disk as small WebP copies (`art-cache` in the theme
-  folder), so they load instantly after the first time.
-- Accent colour from the presets or any custom colour.
-- Drag albums or songs onto a playlist to add them.
-- Track info panel, a pop-up bar for selected songs, light and dark themes, and
-  21 accent colours.
-- foobar2000's own context menu on tracks and albums (right-click).
-- Keyboard shortcuts: Space, Enter, Delete, Ctrl+A/I/F/M/N/P/O, F5,
-  Ctrl+Shift+F5 (reload the skin), F11, Alt+A and Esc.
+## What's in it
 
-### Performance
+### Albums
 
-- Grouping runs inside foobar2000 (`playlist.getGroupRuns`), off the UI
-  thread. The page never downloads the whole library.
-- The grid and the song list are virtualised. Only rows near the viewport
-  exist, and their nodes are reused while scrolling.
-- Artwork loads through `fb2k://artwork/` URLs that the component scales on
-  request, batched up to 100 per call and cached for the session.
-- The seek bar repaints at most 4 times a second, and stops when nothing is
-  playing.
+Every album in the playlist you're viewing, as a grid of covers. Click one and
+it opens in place, with its songs laid out over a blurred copy of the cover.
+Multi-disc albums get a disc bar with each disc's own cover and subtitle.
+
+Above the grid are shelves: recently added, recently played, most played,
+albums you haven't heard in a while, never played, and a daily random pick.
+You choose which ones show, and in what order.
+
+![An album opened in the grid](docs/screenshots/album-open.jpg)
+
+### Artists and genres
+
+Artists get a tile each, using the ARTISTS tag, so featured artists show up
+too. An artist's page has their picture, logo, biography and a backdrop, then
+their albums.
+
+Genres work the same way, split on `;`. A genre's page shows a picture or a
+collage of its biggest albums, a description, the genre it belongs to and what
+it influenced.
+
+The pictures and text come from Kodi-style folders (`artist.nfo`, `artist.jpg`,
+`fanart.jpg`, `logo.png`). The included `fusion-artist-info.py` script fills
+them in for your whole library from MusicBrainz, Wikipedia, TheAudioDB and
+fanart.tv. You can also edit an artist or genre yourself in Fusion, and paste
+or drop pictures straight in.
+
+| | |
+|---|---|
+| ![Artists](docs/screenshots/artists.jpg) | ![An artist's page](docs/screenshots/artist-page.jpg) |
+
+![A genre's page](docs/screenshots/genre-page.jpg)
+
+### Folders and songs
+
+Folders shows your music the way it's stored on disk, as a tree. Songs is a
+plain sortable list with the columns you want, including your own title
+formatting patterns.
+
+| | |
+|---|---|
+| ![Folders](docs/screenshots/folders.jpg) | ![Songs](docs/screenshots/songs.jpg) |
+
+### Now playing and lyrics
+
+Now playing shows the cover large, over the album's colours, with the queue or
+what's coming up next underneath.
+
+The track info panel on the right has the song's details, its tags, the
+technical details and ReplayGain, and lyrics.
+Lyrics come from foo_openlyrics; timed lyrics follow along line by line, and
+clicking a line jumps there.
+
+| | |
+|---|---|
+| ![Now playing](docs/screenshots/nowplaying.jpg) | ![Lyrics in the info panel](docs/screenshots/lyrics.jpg) |
+
+### Listening stats
+
+Your plays at a glance: totals, top artists, genres, albums and songs, plays
+by month and by time of day, and favourites you've stopped listening to. It
+reads foo_playcount, and foo_enhanced_playcount if you have it (that's where
+the time-of-day chart comes from). Everything on the page can be clicked
+through to, or right-clicked.
+
+![Listening stats](docs/screenshots/stats.jpg)
+
+### Playlists
+
+A playlist manager (Ctrl+M) stands in for the Default UI one. Drag to reorder,
+group playlists into folders, give them icons, and drop albums or songs onto
+one to add them. The autoplaylist editor suggests field names, operators and
+values from your library as you type, and shows how many songs match.
+
+| | |
+|---|---|
+| ![Playlist manager](docs/screenshots/playlists.jpg) | ![Autoplaylist editor](docs/screenshots/autoplaylist.jpg) |
+
+### Settings
+
+Light or dark, any accent colour, tile sizes, which shelves to show,
+the background behind an opened album (blurred cover, album colours or plain),
+and a waveform seek bar if you'd like one.
+
+| | |
+|---|---|
+| ![Settings](docs/screenshots/settings.jpg) | ![Light theme](docs/screenshots/light.jpg) |
+
+### And also
+
+- A mini player (Alt+M) that stays on top if you want it to.
+- Likes and dislikes: the heart on each song cycles through Like it, Hate it
+  and nothing, stored in the `MOOD` tag as the original skin did. Favourites
+  lists the liked songs.
+- Original, English and romanised titles, for music tagged that way (the
+  included Language Variants plugin for Picard writes those tags). Pick which
+  one Fusion shows.
+- Search across whatever page you're on.
+- foobar2000's own context menu on songs and albums, and its main menu (the
+  menu bar is hidden).
+- Covers are cached on disk as small WebP files, so they load instantly after
+  the first time.
 
 ## Requirements
 
-- Windows 10 or 11 with the Microsoft Edge WebView2 Runtime (preinstalled on
-  both)
-- foobar2000 v2.0 or later; the 64-bit build is recommended
+- Windows 10 or 11 (the WebView2 runtime comes with both)
+- foobar2000 v2.0 or later
 - foo_ui_webview2 v2.1 or later
+
+Optional:
+
+- foo_playcount for play counts, the shelves and Listening stats
+- foo_enhanced_playcount for the time-of-day chart
+- foo_openlyrics for lyrics
 
 ## Install
 
 1. Install foo_ui_webview2: **File → Preferences → Components → Install…**,
    pick the `.fb2k-component` file, then restart foobar2000.
-2. Download `fusion-<version>.zip` from the
-   [Releases](../../releases) page and extract its `fusion` folder into
-   `<foobar2000 profile>\webview-ui\`, so you have
-   `<foobar2000 profile>\webview-ui\fusion\index.html`.
+2. Download `fusion-<version>.zip` from [Releases](../../releases) and extract
+   the `fusion` folder into your profile's `webview-ui` folder, so you end up
+   with `webview-ui\fusion\index.html`.
    - Portable install: `<foobar2000 folder>\profile\webview-ui\fusion\`
    - Standard install: `%APPDATA%\foobar2000-v2\webview-ui\fusion\`
 3. **Preferences → Display → Default User Interface**: choose **WebView2 UI**.
-4. **Preferences → Display → WebView2 UI**: set the template to **fusion**
-   and click **Apply**.
+4. **Preferences → Display → WebView2 UI**: set the template to **fusion** and
+   click **Apply**.
 
-The first time Fusion opens it creates a **Collection** autoplaylist (the
-whole library) if you don't have one. **Favorites** is created when you first
-click it. It holds tracks tagged `MOOD` = `Like it`, the same as the original
-skin.
+The first time it runs, Fusion creates a **Collection** autoplaylist (your
+whole library) if you don't already have one.
+
+`fusion-tools-<version>.zip` on the same page has the artist info script and
+the Picard plugins (Language Variants, Genre Tidy and Only These Tags).
 
 ## Updating
 
-**foobar2000 updates do not touch Fusion.** The theme lives in your profile's
-`webview-ui` folder, which neither foobar2000's installer nor the component's
-installer writes to. Your settings are stored in the profile as well.
+Updating foobar2000 or foo_ui_webview2 doesn't touch Fusion or its settings;
+both live in your profile.
 
-To update Fusion itself, replace the files in `webview-ui\fusion\`, then press
-**Ctrl+Shift+F5** in Fusion or restart foobar2000. Each file reference in
-`index.html` carries a content hash (written by `dev/tools/stamp.py`), so
-WebView2 never mixes cached old files with new ones. To update
-foo_ui_webview2, install the new `.fb2k-component` in the usual way.
-
-The artist/genre information script and the Picard plugins are in
-`fusion-tools-<version>.zip` on the same page.
+To update Fusion, extract the new zip over `webview-ui\fusion\`, replacing the
+files (don't delete the folder first: the cover cache is in there), then press
+**Ctrl+Shift+F5** or restart foobar2000.
 
 ## Troubleshooting
 
-- Warnings and errors are written to `fusion.log` in the profile folder.
-- For the browser dev tools: **Preferences → Display → WebView2 UI →
-  Developer**.
-- **Settings → Reset Fusion settings** restores the defaults. Playlists and the
-  library are not affected.
+- Fusion writes warnings and errors to `fusion.log` in your profile folder.
+  **Settings → More → Open the log file** opens it.
+- **Settings → More → Reset Fusion settings** puts everything back to the
+  defaults. Your playlists and library aren't affected.
+- Browser dev tools can be turned on in **Preferences → Display → WebView2 UI
+  → Developer**.
 
 ## Development
 
-No build step: plain ES modules, loaded directly by WebView2.
+There's no build step. It's plain ES modules that WebView2 loads directly.
 
 ```
 index.html
-css/          base (tokens), sidebar, main, grid, lists, playerbar, panels
-js/core/      bridge wrapper, settings store, icons, helpers, log
-js/data/      player, playlists, view model (grouping/selection), artwork, TF patterns
-js/ui/        one module per panel
-dev/          browser mock of the foobar2000 bridge, with a generated library
+css/          styles
+js/core/      bridge to foobar2000, settings, icons, helpers
+js/data/      player, playlists, the library view, artwork, title formatting
+js/ui/        one module per part of the window
+dev/          a mock of the foobar2000 bridge with a made-up library
+tools/        the artist info script and the Picard plugins
 ```
 
-To work on it in a browser, serve the folder (for example
-`python -m http.server`) and open `index.html`. When `window.fb2k` is missing,
-`dev/mock-bridge.js` provides a fake library. Like the real host, the mock
-rejects undeclared parameters. The list comes from the component's docs:
+To work on it in a browser, serve the folder (`python -m http.server`) and
+open `index.html`. Without foobar2000 there, `dev/mock-bridge.js` stands in
+with a fake library. Like the real component, the mock rejects parameters the
+API doesn't have; the list comes from the component's docs:
 
 ```
 python dev/tools/extract-api.py <foo_ui_webview2>/docs/vitepress/api > dev/api-params.json
 ```
 
-For live reloading inside foobar2000, point the component's development-server
-setting at your local server.
+The screenshots above were taken this way, with a library of Creative Commons
+albums; see [the credits](docs/screenshots/CREDITS.md).
 
 ## Releasing
 
-Set the version in `js/version.js`, commit, then tag and push it:
+Set the version in `js/version.js`, commit, then tag and push:
 
 ```
 git tag v3.0.0
 git push origin v3.0.0
 ```
 
-The Release workflow (`.github/workflows/release.yml`) builds the two zips
-with `python dev/tools/release.py` and publishes them as a GitHub release. A
-tag with a `-` (`v3.0.0-beta.2`) is marked pre-release. To build the zips
-locally instead, run the same script; they go into `dist/`.
+The Release workflow builds both zips with `python dev/tools/release.py` and
+publishes them. Tags with a `-` in them (`v3.0.0-beta.2`) are marked as
+pre-releases. Running the script yourself puts the zips in `dist/`.
 
 ## Credits and licence
 
-Original Fusion design by NadirP. This rewrite is released under the MIT
-licence (see `LICENSE`). It contains none of the original skin's code or
-images.
+The original Fusion design is NadirP's. This version is released under the
+MIT licence (see `LICENSE`) and contains none of the original skin's code or
+images. The Language Variants plugin bundles pykakasi (GPL-3.0-or-later),
+jaconv and pypinyin (MIT).

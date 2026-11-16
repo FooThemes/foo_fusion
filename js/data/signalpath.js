@@ -142,6 +142,11 @@ async function build() {
   const outRate = num(o.output_samplerate);
   const outCh = num(o.output_channels);
   const exclusive = /asio|exclusive|kernel streaming|\bks\b/i.test(`${module} ${device}`);
+  // foobar2000's own output is called "Default": it's WASAPI, exclusive for
+  // devices marked [exclusive], else shared (through Windows' mixer).
+  const builtIn = !module || /^default$/i.test(module);
+  const outTitle = builtIn ? (exclusive ? 'WASAPI (exclusive)' : 'WASAPI (shared)') : /asio/i.test(module) ? 'ASIO' : module;
+  const deviceName = device.replace(/\s*\[exclusive\]\s*$/i, '');
   const outDsd = outRate && outRate >= 2822400;
   const fmtOut = [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
   if (outputInfo && src.rate && outRate && outRate !== src.rate && !dspList.some((n) => /resampl/i.test(n))) changes.push('sample rate');
@@ -155,8 +160,8 @@ async function build() {
   stages.push({
     kind: 'output',
     icon: 'output',
-    title: module || 'Output',
-    detail: [device && device !== module ? device : '', fmtOut || (outputInfo ? '' : 'format: install Output Info to see it')].filter(Boolean).join(' · '),
+    title: outTitle,
+    detail: [deviceName && deviceName !== module ? deviceName : '', fmtOut || (outputInfo ? '' : 'format: install Output Info to see it')].filter(Boolean).join(' · '),
     grade: truncated || dsdToPcm ? 'high' : pcmToDsd ? 'enhanced' : 'lossless',
     note: dsdToPcm
       ? 'The DSD file is converted to PCM before it goes out.'
@@ -170,7 +175,7 @@ async function build() {
   });
 
   // 6. Shared mode: Windows' mixer converts to the device's own format.
-  if (!exclusive && module) {
+  if (!exclusive) {
     changes.push('Windows mixer');
     stages.push({ kind: 'mixer', icon: 'windows', title: 'Windows mixer', detail: 'Shared mode: may convert to the device’s own format', grade: 'high', note: 'Windows mixes all programs’ sound and converts it to the format set for the device (Sound settings → device properties → Advanced). For bit-perfect output, use an [exclusive] WASAPI device or ASIO.' });
   }

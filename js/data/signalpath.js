@@ -97,7 +97,7 @@ async function build() {
   // shows" (dsdOut setting) settles it; by default the rate decides.
   const earlyRate = num(o.output_samplerate);
   const dopRate = src.dsd && src.rate ? src.rate / 16 : 0;
-  const nativeOut = !!earlyRate && earlyRate >= 2822400;
+  const nativeOut = !!earlyRate && earlyRate >= 1411200;
   const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
   const told = store.get('dsdOut') || 'auto';
   const dsdKept = src.dsd && (told === 'dsd' || (told === 'auto' && (nativeOut || looksDop)));
@@ -168,7 +168,7 @@ async function build() {
   const builtIn = !module || /^default$/i.test(module);
   const outTitle = builtIn ? (exclusive ? 'WASAPI (exclusive)' : 'WASAPI (shared)') : /asio/i.test(module) ? 'ASIO' : module;
   const deviceName = device.replace(/\s*\[exclusive\]\s*$/i, '');
-  const outDsd = outRate && outRate >= 2822400;
+  const outDsd = outRate && outRate >= 1411200;
   const fmtOut = dsdKept
     ? [dsd(src.rate), outDsd ? 'native DSD' : looksDop || told === 'dsd' ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
     : [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
@@ -247,7 +247,8 @@ const num = (s) => {
 };
 const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2);
 const khz = (hz) => (hz ? `${+(hz / 1000).toFixed(hz % 1000 ? 1 : 0)} kHz` : '');
-// DSD rates as multiples of 44.1 kHz (DSD64 = 2.8224 MHz).
+// DSD rates as multiples of 44.1 kHz (DSD64 = 2.8224 MHz). Anything from
+// DSD32 (1.4112 MHz) up is DSD: PCM stops at 768 kHz.
 const dsd = (hz) => (hz ? `DSD${Math.round(hz / 44100)}` : '');
 const chans = (n) => (!n ? '' : n === 1 ? 'mono' : n === 2 ? 'stereo' : `${n} ch`);
 

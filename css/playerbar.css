@@ -679,3 +679,24 @@ body.mini .sp-chip {
 .sp-stage.idle .sp-detail {
   opacity: 0.55;
 }
+
+/* DSD songs: what the DAC shows, to tell DoP from a conversion to PCM. */
+.sp-dsd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 10px 50px;
+  font-size: 12.5px;
+  color: #bbb;
+}
+
+.sp-dsd .btn-soft {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.sp-dsd .btn-soft.on {
+  background: var(--accent);
+  color: #fff;
+}

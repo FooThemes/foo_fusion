@@ -12,6 +12,7 @@ import { Emitter } from '../core/emitter.js';
 import { debounce } from '../core/util.js';
 import { logInfo } from '../core/log.js';
 import { player } from './player.js';
+import * as store from '../core/store.js';
 
 // Output Info's fields, read in one go ("?" when it isn't installed).
 const OUT = ['output_samplerate', 'output_bitdepth', 'output_channels', 'output_device', 'output_dsps', 'output_dsp_preset', 'output_volume', 'output_rg_mode', 'output_rg_source', 'output_rg_gain', 'output_buffer_length'];
@@ -83,10 +84,24 @@ async function build() {
     kind: 'source',
     icon: src.lossless ? 'lossless' : 'lossy',
     title: 'Source',
-    detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? dsd(src.rate) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, chans(src.channels), !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
+    detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? (dsd(src.rate).toLowerCase() === src.codec.toLowerCase() ? '' : dsd(src.rate)) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, chans(src.channels), !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
     grade: src.lossless ? 'lossless' : 'low',
     note: src.lossless ? 'Lossless: every sample of the original is there.' : 'Lossy: compressed by discarding parts of the sound judged inaudible.',
   });
+
+  // DSD reaching the DAC as DSD: natively (output at the DSD rate) or as DoP
+  // (DSD packed into PCM frames at 1/16 of its rate: DSD64 = 176.4 kHz). Then
+  // foobar2000's PCM processing (ReplayGain, DSP, volume) is bypassed; if it
+  // weren't, the packing would break and the DAC couldn't show DSD. A real
+  // conversion to PCM at that rate looks the same from here, so "Your DAC
+  // shows" (dsdOut setting) settles it; by default the rate decides.
+  const earlyRate = num(o.output_samplerate);
+  const dopRate = src.dsd && src.rate ? src.rate / 16 : 0;
+  const nativeOut = !!earlyRate && earlyRate >= 2822400;
+  const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
+  const told = store.get('dsdOut') || 'auto';
+  const dsdKept = src.dsd && (told === 'dsd' || (told === 'auto' && (nativeOut || looksDop)));
+  const bypassed = (stage) => ({ ...stage, detail: 'Not applied: DSD passes through untouched', note: 'foobar2000’s PCM processing doesn’t touch DSD sent to the DAC as DSD.', grade: 'lossless', idle: true });
 
   // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
   // "auto" follows foobar2000's own playback order: track gain when it
@@ -101,7 +116,8 @@ async function build() {
     const tagGain = num(which === 'album' ? rgAlbum || rgTrack : rgTrack || rgAlbum);
     const pre = tagGain != null ? num(rgPre?.withRg) : num(rgPre?.withoutRg);
     const gain = applied ?? (tagGain != null ? tagGain + (pre || 0) : pre || null);
-    if (gain == null || Math.abs(gain) >= 0.005) {
+    if (dsdKept) stages.push(bypassed({ kind: 'rg', icon: 'gain', title: 'ReplayGain' }));
+    else if (gain == null || Math.abs(gain) >= 0.005) {
       changes.push('ReplayGain');
       stages.push({ kind: 'rg', icon: 'gain', title: 'ReplayGain', detail: gain != null ? `${which} gain, ${signed(gain)} dB` : `${which} gain (no gain in this song's tags)`, grade: gain == null ? 'lossless' : 'enhanced', note: 'Volume levelled between songs: the samples are scaled.' });
     }
@@ -115,6 +131,10 @@ async function build() {
   const outRateEarly = num(o.output_samplerate);
   for (const name of dspList) {
     const act = dspActs(name, src, outRateEarly);
+    if (dsdKept) {
+      stages.push(bypassed({ kind: 'dsp', icon: /resampl/i.test(name) ? 'resample' : 'dsp', title: name }));
+      continue;
+    }
     if (act.acts) changes.push(name);
     stages.push({
       kind: 'dsp',
@@ -129,7 +149,8 @@ async function build() {
 
   // 4. Volume: anything below 0 dB scales the samples.
   const dB = o.output_volume && o.output_volume !== '-inf' ? num(o.output_volume) : num(vol?.volume);
-  if (dB != null && dB < -0.005) {
+  if (dB != null && dB < -0.005 && dsdKept) stages.push(bypassed({ kind: 'volume', icon: 'volume', title: 'Volume' }));
+  else if (dB != null && dB < -0.005) {
     changes.push('volume');
     stages.push({ kind: 'volume', icon: 'volume', title: 'Volume', detail: `${dB.toFixed(1)} dB`, grade: 'enhanced', note: 'foobar2000’s volume is digital: below full volume the samples are scaled down. For bit-perfect output, leave it at 0 dB and set the volume on your amplifier or DAC.' });
   }
@@ -148,14 +169,16 @@ async function build() {
   const outTitle = builtIn ? (exclusive ? 'WASAPI (exclusive)' : 'WASAPI (shared)') : /asio/i.test(module) ? 'ASIO' : module;
   const deviceName = device.replace(/\s*\[exclusive\]\s*$/i, '');
   const outDsd = outRate && outRate >= 2822400;
-  const fmtOut = [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
-  if (outputInfo && src.rate && outRate && outRate !== src.rate && !dspList.some((n) => /resampl/i.test(n))) changes.push('sample rate');
+  const fmtOut = dsdKept
+    ? [dsd(src.rate), outDsd ? 'native DSD' : looksDop || told === 'dsd' ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
+    : [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
+  if (!src.dsd && outputInfo && src.rate && outRate && outRate !== src.rate && !dspList.some((n) => /resampl/i.test(n))) changes.push('sample rate');
   // DSD turned into PCM on the way, or PCM into DSD (a DSD processor or the output).
-  const dsdToPcm = outputInfo && src.dsd && outRate && !outDsd;
+  const dsdToPcm = (outputInfo || told === 'pcm') && src.dsd && !dsdKept && (told === 'pcm' || (outRate && !outDsd));
   const pcmToDsd = outputInfo && !src.dsd && outDsd;
   if (dsdToPcm) changes.push('DSD to PCM');
   if (pcmToDsd) changes.push('PCM to DSD');
-  const truncated = !src.dsd && !outDsd && src.bits && outBits && outBits < src.bits;
+  const truncated = !src.dsd && !dsdKept && !outDsd && src.bits && outBits && outBits < src.bits;
   if (truncated) changes.push('bit depth');
   stages.push({
     kind: 'output',
@@ -163,8 +186,12 @@ async function build() {
     title: outTitle,
     detail: [deviceName && deviceName !== module ? deviceName : '', fmtOut || (outputInfo ? '' : 'format: install Output Info to see it')].filter(Boolean).join(' · '),
     grade: truncated || dsdToPcm ? 'high' : pcmToDsd ? 'enhanced' : 'lossless',
-    note: dsdToPcm
-      ? 'The DSD file is converted to PCM before it goes out.'
+    note: dsdKept
+      ? outDsd
+        ? 'DSD goes to the DAC as it is, natively.'
+        : 'DSD goes to the DAC as it is, packed in PCM frames (DoP); the DAC unpacks it.'
+      : dsdToPcm
+        ? 'The DSD file is converted to PCM before it goes out.'
       : pcmToDsd
         ? 'Converted to DSD before it goes out.'
         : truncated
@@ -185,7 +212,7 @@ async function build() {
   else if (['Windows mixer', 'bit depth', 'sample rate', 'DSD to PCM'].some((c) => changes.includes(c))) quality = 'high';
   else if (changes.length) quality = 'enhanced';
   else quality = 'lossless';
-  return { quality, stages, outputInfo, changes };
+  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept, dsdTold: told };
 }
 
 /**

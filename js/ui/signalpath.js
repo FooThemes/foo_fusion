@@ -5,6 +5,7 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { signalPath, QUALITY } from '../data/signalpath.js';
+import * as store from '../core/store.js';
 
 // Small symbols for the stages (drawn here: not in the icon set).
 const GLYPH = {
@@ -58,6 +59,30 @@ export function mountSignalPath(controls, root) {
     if (pop.hidden) return;
     clear(pop);
     const foot = p.outputInfo ? [] : [el('p.sp-foot', null, icon('info'), el('span', { text: 'Install the Output Info component (foo_outinfo) to see the format going out and the ReplayGain actually applied.' }))];
+    // DSD: what the DAC says it's getting settles DoP vs a conversion to PCM.
+    const dsdPick = p.dsd
+      ? [
+          el(
+            'div.sp-dsd',
+            null,
+            el('span', { text: 'Your DAC shows:' }),
+            ...[
+              ['auto', 'Work it out'],
+              ['dsd', 'DSD'],
+              ['pcm', 'PCM'],
+            ].map(([v, label]) =>
+              el('button.btn-soft' + ((p.dsdTold || 'auto') === v ? '.on' : ''), {
+                type: 'button',
+                text: label,
+                onclick: () => {
+                  store.set('dsdOut', v);
+                  signalPath.refresh();
+                },
+              }),
+            ),
+          ),
+        ]
+      : [];
     pop.append(
       el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })),
       el('p.sp-sub', { text: q.note }),
@@ -73,6 +98,7 @@ export function mountSignalPath(controls, root) {
           ),
         ),
       ),
+      ...dsdPick,
       ...foot,
     );
   }

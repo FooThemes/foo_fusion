@@ -297,7 +297,7 @@ export class TrackPanel {
   }
 
   #refreshItems(rows) {
-    return [{ label: 'Refresh album', run: () => refreshAlbums(rows) }];
+    return [{ label: 'Refresh album information', run: () => refreshAlbums(rows) }];
   }
 
   #renderCover() {

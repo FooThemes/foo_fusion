@@ -144,7 +144,7 @@ export class FolderTree {
       node.setAttribute('aria-expanded', String(isOpen));
       node.tabIndex = -1;
       node.title = it.dir.path;
-      node.append(el('span.ft-chev', null, icon('chevronRight')), el('span.ft-icon', null, icon('folder')), el('span.ft-name', { text: it.dir.label || it.dir.name }), el('span.ft-meta', { text: plural(it.dir.count, 'song') }));
+      node.append(el('span.ft-chev', null, icon('chevronRight')), el('span.ft-icon', null, icon(isOpen ? 'folderOpen' : 'folder')), el('span.ft-name', { text: it.dir.label || it.dir.name }), el('span.ft-meta', { text: plural(it.dir.count, 'song') }));
       return;
     }
     const t = this.tracks.get(it.row);

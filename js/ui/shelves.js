@@ -17,7 +17,7 @@ import { bindArt, albumArtTypes } from '../data/artwork.js';
 import { pickVersion } from '../data/versions.js';
 import { setTitle, versionText } from './titles.js';
 import { listening, listeningData, knownData } from '../data/listening.js';
-import { trackContextMenu } from './menus.js';
+import { trackContextMenu, refreshAlbums } from './menus.js';
 import { InlineAlbum } from './inlinealbum.js';
 import { groupCard } from './tipcards.js';
 
@@ -142,7 +142,9 @@ export class Shelves {
         e.preventDefault();
         const tile = e.target.closest('.shelf-tile');
         tile.classList.add('menu-open');
-        Promise.resolve(trackContextMenu(view.groupRows(g), [], { select: false })).finally(() => tile.classList.remove('menu-open'));
+        const rows = view.groupRows(g);
+        const extra = [{ label: 'Refresh album information', run: () => refreshAlbums(rows) }];
+        Promise.resolve(trackContextMenu(rows, extra, { select: false })).finally(() => tile.classList.remove('menu-open'));
       },
       { signal },
     );

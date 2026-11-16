@@ -598,6 +598,14 @@ Second paragraph.</description><wikipedia>https://en.wikipedia.org/wiki/Rock_mus
             ? { content: 'iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAIAAACwpMoFAAAA6UlEQVR4Xu3RAQkAIADAMDWNcQxmaLHG2Rqcz33uoGt10/gMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+MMjjM4zuA4g+Me5cMBuCPoBK4AAAAASUVORK5CYII=' }
             : ({ content: `<html><body style="font:14px Segoe UI,sans-serif;padding:16px"><h1>${p.path.split('\\').pop()}</h1><p>(mock help page)</p><h2>Examples</h2><pre>ARTIST IS Adele\nGENRE HAS rock AND %rating% GREATER 3</pre></body></html>`, size: 100 }),
     'menu.showNativePopup': () => (console.info('[mock] native context menu'), {}),
+    'menu.show': (p) => {
+      document.querySelector('.mock-selfmenu')?.remove();
+      const m = Object.assign(document.createElement('div'), { className: 'mock-selfmenu', textContent: (p.items || []).map((i) => i.label).join(' / ') });
+      Object.assign(m.style, { position: 'fixed', left: '200px', top: '200px', padding: '6px 14px', background: '#333', color: '#ccc', zIndex: 99999, font: '13px sans-serif' });
+      document.body.append(m);
+      return { menuId: 'mock' };
+    },
+    'menu.close': () => (document.querySelector('.mock-selfmenu')?.remove(), {}),
     'menu.getMainMenu': () => ({
       items: ['File', 'Edit', 'View', 'Playback', 'Library', 'Help'].map((l) => ({ type: 'submenu', label: l, path: l, children: [{ type: 'command', label: `${l} command`, path: `${l}/${l} command`, enabled: true }] })),
     }),

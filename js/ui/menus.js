@@ -289,9 +289,27 @@ async function contentsItems(targets) {
   return items.filter((it) => it === '-' || !CONTENTS_SKIP.has(it.label));
 }
 
-/** Contents for a big playlist: read when asked (the pointer shows it's busy). */
+/**
+ * Contents for a big playlist, read when it's clicked. foobar2000 is held up
+ * while it works out the menu, and its window can't change the pointer
+ * meanwhile, so a small menu saying so opens where the click was first and
+ * gives way to the real one when it's ready.
+ */
 async function contentsMenu(targets) {
-  const items = await busy(() => contentsItems(targets));
+  const songs = targets.reduce((n, t) => n + (t.trackCount || 0), 0);
+  const waiting = await tryCall('menu.show', {
+    items: [{ id: 'wait', label: `Reading ${songs.toLocaleString()} songs…`, enabled: false }],
+    windowModel: 'contentSized',
+    backdropDarkMode: !!store.get('dark'),
+  });
+  // Drawn before foobar2000 gets busy.
+  if (waiting?.menuId) await new Promise((r) => setTimeout(r, 150));
+  let items;
+  try {
+    items = await busy(() => contentsItems(targets));
+  } finally {
+    if (waiting?.menuId) await tryCall('menu.close', { reason: 'api' });
+  }
   if (!items.some((it) => it !== '-')) return toast('Nothing to show for those songs.');
   return showMenu(items);
 }

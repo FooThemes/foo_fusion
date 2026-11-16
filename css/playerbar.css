@@ -672,3 +672,10 @@ body.mini .pb-play {
 body.mini .sp-chip {
   display: none;
 }
+
+/* A DSP in the chain that leaves this song untouched: dimmed. */
+.sp-stage.idle .sp-node,
+.sp-stage.idle .sp-name,
+.sp-stage.idle .sp-detail {
+  opacity: 0.55;
+}

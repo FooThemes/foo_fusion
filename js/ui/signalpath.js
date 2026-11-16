@@ -66,7 +66,7 @@ export function mountSignalPath(after, root) {
         null,
         ...p.stages.map((s) =>
           el(
-            'li.sp-stage',
+            'li.sp-stage' + (s.idle ? '.idle' : ''),
             { title: s.note || '' },
             el('span.sp-node', null, glyph(s.icon)),
             el('div.sp-text', null, el('div.sp-name', null, el('span', { text: s.title }), el('span.sp-dot', { dataset: { q: s.grade } })), el('div.sp-detail', { text: s.detail || '' }), s.note ? el('div.sp-note', { text: s.note }) : null),

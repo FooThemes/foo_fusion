@@ -107,12 +107,24 @@ async function build() {
     }
   }
 
-  // 3. DSP chain.
+  // 3. DSP chain. Every DSP in it sees the audio, but many only act on some
+  // songs: those Fusion knows are checked against this one, and shown as
+  // passing it through untouched when they don't apply.
   const dsps = (chain?.dsps || []).map((d) => d.name).filter(Boolean);
   const dspList = dsps.length ? dsps : o.output_dsps ? o.output_dsps.split(/\s*[,;]\s*/).filter(Boolean) : [];
+  const outRateEarly = num(o.output_samplerate);
   for (const name of dspList) {
-    changes.push(name);
-    stages.push({ kind: 'dsp', icon: /resampl/i.test(name) ? 'resample' : 'dsp', title: name, detail: /resampl/i.test(name) ? 'Changes the sample rate' : 'DSP', grade: 'enhanced', note: 'Processes the sound before it goes out.' });
+    const act = dspActs(name, src, outRateEarly);
+    if (act.acts) changes.push(name);
+    stages.push({
+      kind: 'dsp',
+      icon: /resampl/i.test(name) ? 'resample' : 'dsp',
+      title: name,
+      detail: act.detail,
+      grade: act.acts ? 'enhanced' : 'lossless',
+      note: act.note,
+      idle: !act.acts,
+    });
   }
 
   // 4. Volume: anything below 0 dB scales the samples.
@@ -169,6 +181,31 @@ async function build() {
   else if (changes.length) quality = 'enhanced';
   else quality = 'lossless';
   return { quality, stages, outputInfo, changes };
+}
+
+/**
+ * Whether a DSP changes this song, for the ones whose rules are known.
+ * Others are taken to change it.
+ */
+function dspActs(name, src, outRate) {
+  const n = name.toLowerCase();
+  if (/skip track/.test(n)) return { acts: false, detail: 'Doesn’t touch the audio', note: 'Skips songs that match its rules; the sound itself passes through untouched.' };
+  if (/downmix.*stereo|stereo.*downmix/.test(n)) {
+    const acts = src.channels > 2;
+    return { acts, detail: acts ? `${chans(src.channels)} down to stereo` : 'Not needed: already stereo', note: acts ? 'Mixes the extra channels into two.' : 'Only acts on songs with more than two channels.' };
+  }
+  if (/downmix.*mono|mono/.test(n)) {
+    const acts = src.channels > 1;
+    return { acts, detail: acts ? 'Mixed down to mono' : 'Not needed: already mono', note: 'Only acts on songs with more than one channel.' };
+  }
+  if (/resampl|sample rate/.test(n)) {
+    if (outRate && src.rate) {
+      const acts = outRate !== src.rate;
+      return { acts, detail: acts ? `${khz(src.rate)} → ${khz(outRate)}` : `Not needed: already ${khz(src.rate)}`, note: acts ? 'Changes the sample rate.' : 'The song is already at its target rate.' };
+    }
+    return { acts: true, detail: 'Changes the sample rate', note: 'With Output Info installed, Fusion can tell whether it does for this song.' };
+  }
+  return { acts: true, detail: 'DSP', note: 'Processes the sound before it goes out.' };
 }
 
 const clean = (s) => (s && s !== '?' ? String(s).trim() : '');

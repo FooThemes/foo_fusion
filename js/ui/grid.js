@@ -17,6 +17,7 @@ import { bindArt, albumArtTypes, warmArt, refreshArtist } from '../data/artwork.
 import { ArtistHero } from './artisthero.js';
 import { GenreHero } from './genrehero.js';
 import { Shelves } from './shelves.js';
+import { logInfo } from '../core/log.js';
 import { musicArtistFolder, onPictureRevoked } from '../data/artistinfo.js';
 import { trackContextMenu, handlesOf, refreshAlbums } from './menus.js';
 import { TrackPanel } from './trackpanel.js';
@@ -90,7 +91,13 @@ export class Grid {
       { signal },
     );
 
-    this.onScroll = rafThrottle(() => this.render());
+    this.onScroll = rafThrottle(() => {
+      if (performance.now() < (this.jumpWatch || 0) && Math.abs(this.scroller.scrollTop - (this.lastTraceScroll ?? -1e9)) > 150) {
+        this.lastTraceScroll = this.scroller.scrollTop;
+        this.#trace('scrolled');
+      }
+      this.render();
+    });
     const stopReveal = () => (this.revealUntil = 0);
     scroller.addEventListener('wheel', stopReveal, { passive: true, signal });
     scroller.addEventListener('pointerdown', (e) => e.target === scroller && stopReveal(), { signal });
@@ -174,7 +181,24 @@ export class Grid {
   }
 
   /** New data from the view model. Keeps scroll position when possible. */
+  // Go to album: a few seconds' trace of what happens to the page after the
+  // jump (it opened, then sometimes wasn't on screen). Temporary.
+  #trace(what) {
+    if (!(performance.now() < (this.jumpWatch || 0))) return;
+    const t = this.expanded >= 0 ? Math.round(this.rowTop(this.expandedRow)) : null;
+    logInfo(`go to album trace: ${what} | open ${this.expanded >= 0 ? view.groups[this.expanded]?.key : 'none'} at ${t}, scroll ${Math.round(this.scroller.scrollTop)}/${Math.round(this.scroller.scrollHeight)}, top ${Math.round(this.top || 0)}, ${view.groups.length} albums`);
+  }
+
   setData(keepScroll = false) {
+    this.#trace(`setData(keep ${keepScroll}) before`);
+    try {
+      return this.#setData(keepScroll);
+    } finally {
+      this.#trace('setData after');
+    }
+  }
+
+  #setData(keepScroll = false) {
     // Same groups as on screen (e.g. a reload after a re-sort that changed
     // nothing visible): just refresh the text, don't rebuild the tiles.
     const sig = view.groups.map((g) => `${g.key}:${firstRow(g)}:${g.count}`).join('|');
@@ -251,6 +275,7 @@ export class Grid {
     if (anchor >= 0 && anchor < view.groups.length) {
       this.scroller.scrollTop = Math.max(0, this.rowTop(Math.floor(anchor / this.cols)) - anchorOffset);
     }
+    this.#trace(`layout (anchor ${anchor}, offset ${Math.round(anchorOffset)})`);
     for (const [i, node] of this.tiles) this.#place(node, i);
     this.render();
     this.#warm();
@@ -688,6 +713,8 @@ export class Grid {
     const i = view.groups.findIndex((g) => g.key === key || g.key.toLowerCase() === lower);
     if (i < 0) return false;
     if (jump) {
+      this.jumpWatch = performance.now() + 6000;
+      this.lastTraceScroll = null;
       this.expanded = i;
       this.expandedKey = view.groups[i].key;
       this.panel.open(view.groups[i], i);
@@ -696,6 +723,7 @@ export class Grid {
       this.scroller.scrollTop = Math.max(0, this.rowTop(this.expandedRow) - 8);
       this.render();
       for (const [j, node] of this.tiles) node.classList.toggle('expanded', j === i);
+      this.#trace('opened');
       return true;
     }
     if (this.expanded !== i) this.toggle(i);
@@ -703,6 +731,7 @@ export class Grid {
   }
 
   toggle(i) {
+    this.#trace(`toggle ${i}`);
     this.shelves.closeAlbum(); // one open album at a time
     if (this.expanded === i) {
       this.collapse();
@@ -730,6 +759,7 @@ export class Grid {
 
   collapse() {
     if (this.expanded < 0) return;
+    this.#trace('collapse');
     this.expanded = -1;
     this.expandedKey = null;
     this.panel.close();

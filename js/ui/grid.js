@@ -229,6 +229,7 @@ export class Grid {
     if (!keepScroll) {
       this.expanded = -1;
       this.scroller.scrollTop = 0;
+      this.laidTop = null; // a new page: nothing to keep in place
     }
     this.panel.close(true);
     if (this.expanded >= 0) this.panel.open(view.groups[this.expanded], this.expanded);
@@ -250,8 +251,13 @@ export class Grid {
     let anchor = -1;
     let anchorOffset = 0;
     if (hadLayout) {
-      anchor = this.expanded >= 0 ? this.expanded : Math.max(0, Math.floor((this.scroller.scrollTop - this.top) / this.tileH)) * this.cols;
-      anchorOffset = this.rowTop(Math.floor(anchor / this.cols)) - this.scroller.scrollTop;
+      // Measured where things were last drawn: the shelves above may have
+      // moved the albums' start (this.top) already, before calling this.
+      const was = this.laidTop ?? this.top;
+      // Still above the albums (at the shelves): stay there, shelves in view.
+      if (this.expanded < 0 && this.scroller.scrollTop < was) anchor = -2;
+      else anchor = this.expanded >= 0 ? this.expanded : Math.max(0, Math.floor((this.scroller.scrollTop - was) / this.tileH)) * this.cols;
+      if (anchor >= 0) anchorOffset = this.rowTop(Math.floor(anchor / this.cols)) - (this.top - was) - this.scroller.scrollTop;
     }
     this.lastWidth = w;
     const round = this.kind === 'artists';
@@ -275,6 +281,7 @@ export class Grid {
     if (anchor >= 0 && anchor < view.groups.length) {
       this.scroller.scrollTop = Math.max(0, this.rowTop(Math.floor(anchor / this.cols)) - anchorOffset);
     }
+    this.laidTop = this.top;
     this.#trace(`layout (anchor ${anchor}, offset ${Math.round(anchorOffset)})`);
     for (const [i, node] of this.tiles) this.#place(node, i);
     this.render();

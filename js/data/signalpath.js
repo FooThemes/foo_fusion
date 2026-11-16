@@ -7,7 +7,7 @@
 // output (sample rate, bit depth, channels after any DSP) and the ReplayGain
 // gain actually applied; without it those stages say what can't be known.
 
-import { tryCall, on } from '../core/bridge.js';
+import { call, tryCall, on } from '../core/bridge.js';
 import { Emitter } from '../core/emitter.js';
 import { debounce } from '../core/util.js';
 import { logInfo } from '../core/log.js';
@@ -273,35 +273,47 @@ function dspActs(name, src, outRate) {
 const PROBE_ID = 'fusion-dop-probe';
 export async function probeDop(stillPlaying) {
   const sub = await tryCall('audio.subscribeSpectrum', { subscriptionId: PROBE_ID, fps: 1, event: 'fusion:dop-probe', backgroundThrottle: false });
-  if (!sub) return null;
-  const seen = [];
-  try {
-    for (const wait of [900, 2000, 2000]) {
-      await new Promise((r) => setTimeout(r, wait)); // the stream starts about 0.7 s after subscribing
-      if (!stillPlaying()) return null;
-      const w = await tryCall('audio.getWaveform', { duration: 0.02, signed: true, channels: 'stereo' });
-      if (!w?.left?.length) {
-        seen.push('none');
-        continue;
-      }
-      const int = (v) => Math.round(v * 8388608) & 0xffffff; // as a 24-bit sample
-      const top = (v) => (int(v) >> 16) & 0xff;
-      let marked = 0;
-      let nonzero = 0;
-      for (let i = 0; i < w.left.length; i++) {
-        if (w.left[i] !== 0 || w.right[i] !== 0) nonzero++;
-        if (i && top(w.left[i]) === top(w.right[i]) && ((top(w.left[i - 1]) === 0x05 && top(w.left[i]) === 0xfa) || (top(w.left[i - 1]) === 0xfa && top(w.left[i]) === 0x05))) marked++;
-      }
-      const kind = marked / w.left.length > 0.95 ? 'dop' : nonzero === 0 ? 'silent' : 'audio';
-      seen.push(kind);
-      logInfo(`signal path: stream check: ${w.left.length} samples at ${w.sampleRate} Hz; DoP markers ${((marked / w.left.length) * 100).toFixed(1)}%, non-zero ${nonzero}; first ${w.left.slice(0, 6).map((v) => int(v).toString(16).padStart(6, '0')).join(' ')} -> ${kind}`);
-      if (kind === 'dop') return 'dop';
-      if (kind === 'audio') return null;
+  if (!sub) return logInfo('signal path: stream check: the stream isn’t available'), null;
+  const int = (v) => Math.round(v * 8388608) & 0xffffff; // as a 24-bit sample
+  const top = (v) => (int(v) >> 16) & 0xff;
+  const read = async (args, what) => {
+    try {
+      return await call('audio.getWaveform', { signed: true, channels: 'stereo', ...args });
+    } catch (err) {
+      logInfo(`signal path: stream check: ${what} not read (${err?.message || err})`);
+      return null;
     }
+  };
+  try {
+    await new Promise((r) => setTimeout(r, 1200)); // the stream starts about 0.7 s after subscribing
+    if (!stillPlaying()) return null;
+    // 1. DoP: 20 ms of consecutive samples.
+    const w = await read({ duration: 0.02 }, 'DoP window');
+    if (w?.left?.length) {
+      let marked = 0;
+      for (let i = 1; i < w.left.length; i++) {
+        const a = top(w.left[i - 1]);
+        const b = top(w.left[i]);
+        if (b === top(w.right[i]) && ((a === 0x05 && b === 0xfa) || (a === 0xfa && b === 0x05))) marked++;
+      }
+      const share = marked / (w.left.length - 1);
+      logInfo(`signal path: stream check: ${w.left.length} samples at ${w.sampleRate} Hz, DoP markers ${(share * 100).toFixed(1)}%; first ${w.left.slice(0, 6).map((v) => int(v).toString(16).padStart(6, '0')).join(' ')}`);
+      if (share > 0.95) return 'dop';
+    }
+    // 2. Silence: a whole second, 4096 samples spread across it, twice.
+    for (const pause of [0, 1500]) {
+      if (pause) await new Promise((r) => setTimeout(r, pause));
+      if (!stillPlaying()) return null;
+      const long = await read({ duration: 1, points: 4096 }, 'one-second window');
+      if (!long?.left?.length) return null;
+      const loud = long.left.reduce((n, v, i) => n + (v !== 0 || long.right[i] !== 0 ? 1 : 0), 0);
+      logInfo(`signal path: stream check: 1 s window, ${loud} of ${long.left.length} samples non-zero`);
+      if (loud) return null; // real audio in the stream: can't tell from here
+    }
+    return 'bypass';
   } finally {
     tryCall('audio.unsubscribeSpectrum', { subscriptionId: PROBE_ID });
   }
-  return seen.length && seen.every((k) => k === 'silent') ? 'bypass' : null;
 }
 
 const clean = (s) => (s && s !== '?' ? String(s).trim() : '');

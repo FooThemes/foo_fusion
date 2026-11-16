@@ -74,6 +74,9 @@ async function editColumn(existing = null) {
   const name = el('input.field', { type: 'text', value: existing?.label || '', placeholder: 'e.g. Rating', spellcheck: false });
   const pattern = el('input.field.pa-input', { type: 'text', value: existing?.pattern || '', placeholder: 'e.g. $if2(%rating%,-)', spellcheck: false });
   const status = el('div.pa-status');
+  // How it sorts, when that isn't by what it shows (blank: by what it shows).
+  const sortBy = el('input.field.pa-input', { type: 'text', value: existing?.sort || '', placeholder: 'Blank: sorted by what the column shows', spellcheck: false });
+  const sortStatus = el('div.pa-status');
   const right = el('input', { type: 'checkbox', checked: !!existing?.right });
   const body = el(
     'div.col-dialog',
@@ -83,29 +86,47 @@ async function editColumn(existing = null) {
     el('label.dialog-label', { text: 'Pattern (title formatting, as in foobar2000’s own columns)' }),
     pattern,
     status,
+    el('label.dialog-label', { text: 'Sort by (optional, title formatting)' }),
+    sortBy,
+    sortStatus,
     el('label.dialog-check', null, right, el('span', { text: 'Right-aligned (numbers)' })),
   );
   attachAssist(pattern, 'format', status).refresh?.();
+  attachAssist(sortBy, 'format', sortStatus).refresh?.();
   const ok = await dialog(existing ? 'Edit column' : 'New column', body, (close) => [
     el('button.btn-primary', { text: existing ? 'Save' : 'Add column', onclick: () => close(true) }),
     el('button.btn-text', { text: 'Cancel', onclick: () => close(false) }),
   ]);
   const label = name.value.trim();
   const pat = pattern.value.trim();
+  const sort = sortBy.value.trim();
   if (!ok || !pat) return;
   const list = custom();
   if (existing) {
-    store.set('customColumns', list.map((c) => (c.id === existing.id ? { ...c, label: label || pat, pattern: pat, right: right.checked } : c)));
+    store.set('customColumns', list.map((c) => (c.id === existing.id ? { ...c, label: label || pat, pattern: pat, sort, right: right.checked } : c)));
   } else {
     const id = 'x' + Date.now().toString(36);
-    store.set('customColumns', [...list, { id, label: label || pat, pattern: pat, right: right.checked }]);
+    store.set('customColumns', [...list, { id, label: label || pat, pattern: pat, sort, right: right.checked }]);
     store.set('songColumns', [...columns(), id]);
   }
+  // Sorted by this column: again, in its new order.
+  if (existing && view.mode === 'songs' && view.currentSortKey() === existing.id && (existing.sort || '') !== sort) view.load({ sort: true });
   view.refreshHeads(); // the songs' details again, with the new pattern
+}
+
+// The Quality column (as first set up): DSD, then lossless, then lossy,
+// the best of each first. Filled in once, for a copy that has no sort yet.
+const QUALITY_SHOWS = '$if($stricmp(%__encoding%,lossless),$ifequal(%__bitspersample%,1,DSD$div(%samplerate%,44100),%__bitspersample%/$div(%samplerate%,1000)$ifequal($mod($div(%samplerate%,100),10),0,,.$mod($div(%samplerate%,100),10))),%bitrate%kbps)';
+const QUALITY_SORT = '$ifequal(%__bitspersample%,1,1,$if($stricmp(%__encoding%,lossless),2,3))|$if($stricmp(%__encoding%,lossless),$num($sub(99,%__bitspersample%),2)|$num($sub(99999999,%samplerate%),8),$num($sub(99999,%bitrate%),5))';
+function fillQualitySort() {
+  const list = custom();
+  if (!list.some((c) => c.pattern === QUALITY_SHOWS && c.sort == null)) return;
+  store.set('customColumns', list.map((c) => (c.pattern === QUALITY_SHOWS && c.sort == null ? { ...c, sort: QUALITY_SORT } : c)));
 }
 
 export class SongList {
   constructor(scroller) {
+    fillQualitySort();
     this.scroller = scroller;
     this.headerRow = el('div.song-head');
     this.sizer = el('div.song-sizer');

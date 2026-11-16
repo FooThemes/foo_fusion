@@ -60,7 +60,7 @@ export const VIEW_SORTS = {
 export function sortDef(key) {
   if (SORTS[key]) return SORTS[key];
   const c = (get('customColumns') || []).find((x) => x.id === key);
-  return c ? { label: c.label, pattern: `${c.pattern}${THEN}` } : null;
+  return c ? { label: c.label, pattern: `${c.sort || c.pattern}${THEN}` } : null;
 }
 
 export const ACCENTS = [
@@ -114,7 +114,7 @@ const DEFAULTS = {
   versionTooltips: true, // list every version in tooltips
   gifCovers: 'large', // animate GIF covers: 'large' (open album, Now Playing), 'everywhere' or 'never'
   artistNoPicture: 'cover', // artists without a picture: 'cover' (an album's), 'placeholder' (coloured silhouette) or 'plain'
-  customColumns: [], // your own Songs view columns: [{ id, label, pattern, right }]
+  customColumns: [], // your own Songs view columns: [{ id, label, pattern, sort, right }] (sort: optional, how it sorts)
   playlistIcons: {}, // icons picked for playlists: { [guid]: icon name } (see ui/plicon.js)
   songColumns: null, // Songs view columns in order (null: the defaults, see songs.js)
   songColumnWidths: {}, // Songs view column -> width in px (sized by hand)

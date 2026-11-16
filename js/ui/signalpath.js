@@ -5,7 +5,6 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { signalPath, QUALITY } from '../data/signalpath.js';
-import * as store from '../core/store.js';
 
 // Small symbols for the stages (drawn here: not in the icon set).
 const GLYPH = {
@@ -15,6 +14,7 @@ const GLYPH = {
   dsp: 'M5 4v16M12 4v16M19 4v16M3 9h4M10 15h4M17 7h4',
   resample: 'M4 16c3 0 3-8 6-8s3 8 6 8 3-8 4-8M4 20h16',
   output: 'M5 9h4l5-4v14l-5-4H5zM17 9a4 4 0 0 1 0 6',
+  volume: 'M4 9h3l4-4v14l-4-4H4zM15 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10',
   windows: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z',
 };
 const glyph = (name) => {
@@ -59,49 +59,44 @@ export function mountSignalPath(controls, root) {
     if (pop.hidden) return;
     clear(pop);
     const foot = p.outputInfo ? [] : [el('p.sp-foot', null, icon('info'), el('span', { text: 'Install the Output Info component (foo_outinfo) to see the format going out and the ReplayGain actually applied.' }))];
-    // DSD: what the DAC says it's getting settles DoP vs a conversion to PCM.
-    const dsdPick = p.dsd
-      ? [
-          el(
-            'div.sp-dsd',
-            null,
-            el('span', { text: 'Your DAC shows:' }),
-            ...[
-              ['auto', 'Work it out'],
-              ['dsd', 'DSD'],
-              ['pcm', 'PCM'],
-            ].map(([v, label]) =>
-              el('button.btn-soft' + ((p.dsdTold || 'auto') === v ? '.on' : ''), {
-                type: 'button',
-                text: label,
-                onclick: () => {
-                  store.set('dsdOut', v);
-                  signalPath.refresh();
-                },
-              }),
-            ),
-          ),
-        ]
-      : [];
     pop.append(
       el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })),
       el('p.sp-sub', { text: q.note }),
-      el(
-        'ol.sp-stages',
-        null,
-        ...p.stages.map((s) =>
-          el(
-            'li.sp-stage' + (s.idle ? '.idle' : ''),
-            { title: s.note || '' },
-            el('span.sp-node', null, glyph(s.icon)),
-            el('div.sp-text', null, el('div.sp-name', null, el('span', { text: s.title }), el('span.sp-dot', { dataset: { q: s.grade } })), el('div.sp-detail', { text: s.detail || '' }), s.note ? el('div.sp-note', { text: s.note }) : null),
-          ),
-        ),
-      ),
-      ...dsdPick,
+      el('ol.sp-stages', null, ...p.stages.filter((st) => !st.idle).map(stage)),
+      ...idleList(p.stages.filter((st) => st.idle)),
       ...foot,
     );
   }
+  // A stage: its symbol on the line, name, detail and note.
+  function stage(s) {
+    return el(
+      'li.sp-stage' + (s.idle ? '.idle' : ''),
+      { title: s.note || '' },
+      el('span.sp-node', null, glyph(s.icon)),
+      el('div.sp-text', null, el('div.sp-name', null, el('span', { text: s.title }), el('span.sp-dot', { dataset: { q: s.grade } })), el('div.sp-detail', { text: s.detail || '' }), s.note ? el('div.sp-note', { text: s.note }) : null),
+    );
+  }
+
+  // What's in the chain but doesn't touch this song: one line, opened on request.
+  let showIdle = false;
+  function idleList(idle) {
+    if (!idle.length) return [];
+    const head = el(
+      'button.sp-idle-toggle',
+      {
+        type: 'button',
+        'aria-expanded': String(showIdle),
+        onclick: () => {
+          showIdle = !showIdle;
+          render();
+        },
+      },
+      icon(showIdle ? 'chevronDown' : 'chevronRight'),
+      el('span', { text: `${idle.length} not in the path: ${idle.map((s) => s.title).join(', ')}` }),
+    );
+    return [head, showIdle ? el('ol.sp-stages.sp-idle', null, ...idle.map(stage)) : null].filter(Boolean);
+  }
+
   signalPath.on('change', render);
   signalPath.init();
 }

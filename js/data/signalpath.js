@@ -12,7 +12,6 @@ import { Emitter } from '../core/emitter.js';
 import { debounce } from '../core/util.js';
 import { logInfo } from '../core/log.js';
 import { player } from './player.js';
-import * as store from '../core/store.js';
 
 // Output Info's fields, read in one go ("?" when it isn't installed).
 const OUT = ['output_samplerate', 'output_bitdepth', 'output_channels', 'output_device', 'output_dsps', 'output_dsp_preset', 'output_volume', 'output_rg_mode', 'output_rg_source', 'output_rg_gain', 'output_buffer_length'];
@@ -94,16 +93,15 @@ async function build() {
   // (DSD packed into PCM frames at 1/16 of its rate: DSD64 = 176.4 kHz). Then
   // foobar2000's PCM processing (ReplayGain, DSP, volume) is bypassed; if it
   // weren't, the packing would break and the DAC couldn't show DSD. A real
-  // conversion to PCM at that rate looks the same from here, so "Your DAC
-  // shows" (dsdOut setting) settles it; by default the rate decides.
+  // conversion to PCM at that rate looks the same from here (the DSD decoder's
+  // and output's settings aren't readable), so it's assumed from the rate.
   const earlyRate = num(o.output_samplerate);
   const dopRate = src.dsd && src.rate ? src.rate / 16 : 0;
   // From the file's own tags: native when the output runs at the DSD file's
   // own rate, DoP at exactly 1/16 of it.
   const nativeOut = src.dsd && ((!!earlyRate && !!src.rate && Math.abs(earlyRate - src.rate) < 1) || num(o.output_bitdepth) === 1);
   const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
-  const told = store.get('dsdOut') || 'auto';
-  const dsdKept = src.dsd && (told === 'dsd' || (told === 'auto' && (nativeOut || looksDop)));
+  const dsdKept = src.dsd && (nativeOut || looksDop);
   const bypassed = (stage) => ({ ...stage, detail: 'Not applied: DSD passes through untouched', note: 'foobar2000’s PCM processing doesn’t touch DSD sent to the DAC as DSD.', grade: 'lossless', idle: true });
 
   // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
@@ -175,11 +173,11 @@ async function build() {
   // on the way) exactly a standard DSD rate, DSD32 to DSD1024.
   const outDsd = !!outRate && (nativeOut || (!src.dsd && (outBits === 1 || isDsdRate(outRate))));
   const fmtOut = dsdKept
-    ? [dsd(src.rate), outDsd ? 'native DSD' : looksDop || told === 'dsd' ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
+    ? [dsd(src.rate), outDsd ? 'native DSD' : looksDop ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
     : [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
   if (!src.dsd && outputInfo && src.rate && outRate && outRate !== src.rate && !dspList.some((n) => /resampl/i.test(n))) changes.push('sample rate');
   // DSD turned into PCM on the way, or PCM into DSD (a DSD processor or the output).
-  const dsdToPcm = (outputInfo || told === 'pcm') && src.dsd && !dsdKept && (told === 'pcm' || (outRate && !outDsd));
+  const dsdToPcm = outputInfo && src.dsd && !dsdKept && !!outRate && !outDsd;
   const pcmToDsd = outputInfo && !src.dsd && outDsd;
   if (dsdToPcm) changes.push('DSD to PCM');
   if (pcmToDsd) changes.push('PCM to DSD');
@@ -194,7 +192,7 @@ async function build() {
     note: dsdKept
       ? outDsd
         ? 'DSD goes to the DAC as it is, natively.'
-        : 'DSD goes to the DAC as it is, packed in PCM frames (DoP); the DAC unpacks it.'
+        : 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Assumed from the rate: a conversion to PCM at this rate would look the same here.'
       : dsdToPcm
         ? 'The DSD file is converted to PCM before it goes out.'
       : pcmToDsd
@@ -217,7 +215,7 @@ async function build() {
   else if (['Windows mixer', 'bit depth', 'sample rate', 'DSD to PCM'].some((c) => changes.includes(c))) quality = 'high';
   else if (changes.length) quality = 'enhanced';
   else quality = 'lossless';
-  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept, dsdTold: told };
+  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept };
 }
 
 /**

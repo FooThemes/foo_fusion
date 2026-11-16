@@ -38,9 +38,20 @@ class SignalPath extends Emitter {
     again();
   }
 
+  #probed = new Map(); // handle -> 'dop' | 'none' | null
+
   async refresh() {
-    const path = player.active && player.track ? await build() : null;
-    if (path && !this.#logged) {
+    let path = player.active && player.track ? await build(this.#probed.get(player.track.handle)) : null;
+    // A DSD song: check the audio itself for DoP (once per song), then redo.
+    const h = player.track?.handle;
+    if (path?.dsd && h && !this.#probed.has(h) && player.state === 'playing') {
+      this.#probed.set(h, undefined);
+      const found = await probeDop();
+      this.#probed.set(h, found);
+      if (player.track?.handle === h) path = await build(found);
+    }
+    // Logged once, and for each DSD song (the DoP check's outcome).
+    if (path && (!this.#logged || path.dsd)) {
       this.#logged = true;
       logInfo(`signal path: Output Info ${path.outputInfo ? 'found' : 'not found'}; ${path.stages.map((s) => `${s.title}: ${s.detail}`).join(' → ')} (${path.quality})`);
     }
@@ -51,7 +62,7 @@ class SignalPath extends Emitter {
   }
 }
 
-async function build() {
+async function build(dopSeen) {
   const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%__channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`)].join(SEP);
   const [tf, conf, chain, rgMode, rgPre, vol] = await Promise.all([
     tryCall('titleformat.eval', { pattern }),
@@ -101,7 +112,8 @@ async function build() {
   // own rate, DoP at exactly 1/16 of it.
   const nativeOut = src.dsd && ((!!earlyRate && !!src.rate && Math.abs(earlyRate - src.rate) < 1) || num(o.output_bitdepth) === 1);
   const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
-  const dsdKept = src.dsd && (nativeOut || looksDop);
+  // The audio itself, when checked: DoP markers found settle it.
+  const dsdKept = src.dsd && (nativeOut || dopSeen === 'dop' || (looksDop && dopSeen !== 'none'));
   const bypassed = (stage) => ({ ...stage, detail: 'Not applied: DSD passes through untouched', note: 'foobar2000’s PCM processing doesn’t touch DSD sent to the DAC as DSD.', grade: 'lossless', idle: true });
 
   // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
@@ -192,7 +204,9 @@ async function build() {
     note: dsdKept
       ? outDsd
         ? 'DSD goes to the DAC as it is, natively.'
-        : 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Assumed from the rate: a conversion to PCM at this rate would look the same here.'
+        : dopSeen === 'dop'
+          ? 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Confirmed: the DoP markers are intact in the playing audio.'
+          : 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Assumed from the rate (the playing audio couldn’t be checked).'
       : dsdToPcm
         ? 'The DSD file is converted to PCM before it goes out.'
       : pcmToDsd
@@ -241,6 +255,43 @@ function dspActs(name, src, outRate) {
     return { acts: true, detail: 'Changes the sample rate', note: 'With Output Info installed, Fusion can tell whether it does for this song.' };
   }
   return { acts: true, detail: 'DSP', note: 'Processes the sound before it goes out.' };
+}
+
+/**
+ * Look for DoP in the audio foobar2000 is playing (its visualisation stream):
+ * in DoP each 24-bit sample's top byte is a marker alternating 0x05 / 0xFA,
+ * on both channels at once. Intact markers mean the DSD is packed and
+ * untouched up to there; volume, ReplayGain or a conversion to PCM would
+ * scramble them. Resolves 'dop', 'none' or null (the stream wasn't readable).
+ */
+const PROBE_ID = 'fusion-dop-probe';
+export async function probeDop() {
+  const sub = await tryCall('audio.subscribeSpectrum', { subscriptionId: PROBE_ID, fps: 1, event: 'fusion:dop-probe', backgroundThrottle: false });
+  if (!sub) return null;
+  try {
+    await new Promise((r) => setTimeout(r, 900)); // the stream starts about 0.7 s after subscribing
+    const w = await tryCall('audio.getWaveform', { duration: 0.02, signed: true, channels: 'stereo' });
+    if (!w?.left?.length) {
+      logInfo('signal path: DoP check: no samples from the stream');
+      return null;
+    }
+    const top = (v) => (Math.round(v * 8388608) >> 16) & 0xff; // 24-bit sample's top byte
+    let pairs = 0;
+    let marked = 0;
+    for (let i = 1; i < w.left.length; i++) {
+      const a = top(w.left[i - 1]);
+      const b = top(w.left[i]);
+      const r = top(w.right[i]);
+      pairs++;
+      if (((a === 0x05 && b === 0xfa) || (a === 0xfa && b === 0x05)) && r === b) marked++;
+    }
+    const share = pairs ? marked / pairs : 0;
+    const raw = w.left.slice(0, 8).map((v) => (Math.round(v * 8388608) & 0xffffff).toString(16).padStart(6, '0'));
+    logInfo(`signal path: DoP check: ${w.left.length} samples at ${w.sampleRate} Hz, ${w.channelCount} ch; markers on ${(share * 100).toFixed(1)}%; first samples (24-bit hex) ${raw.join(' ')}`);
+    return share > 0.95 ? 'dop' : 'none';
+  } finally {
+    tryCall('audio.unsubscribeSpectrum', { subscriptionId: PROBE_ID });
+  }
 }
 
 const clean = (s) => (s && s !== '?' ? String(s).trim() : '');

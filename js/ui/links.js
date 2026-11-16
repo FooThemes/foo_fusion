@@ -14,5 +14,5 @@ export function valueLink(kind, value, { label = value, go = () => view.showValu
 
 /** An album, in the Collection. */
 export function albumLink(handle, text, album = text) {
-  return el('button.link', { text, title: `Open ${album} in the Collection`, onclick: async () => view.goTo('albums', await view.albumKeyOf(handle)) });
+  return el('button.link', { text, title: `Open ${album} in the Collection`, onclick: () => view.goToAlbumOf(handle) });
 }

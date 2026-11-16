@@ -561,7 +561,7 @@ function goToItems(t) {
   // tabs list (ARTISTS when tagged, else the album artist or artist).
   const artists = splitValues(f.ar || t.artist || '');
   const genres = splitValues(f.gn || t.genre || '', 'genres');
-  const items = [{ label: 'Go to album', run: async () => view.goTo('albums', await view.albumKeyOf(t.handle)) }];
+  const items = [{ label: 'Go to album', run: () => view.goToAlbumOf(t.handle) }];
   if (artists.length === 1) items.push({ label: 'Go to artist', run: () => view.goTo('artists', artists[0]) });
   else if (artists.length) items.push({ label: 'Go to artist', submenu: artists.map((a) => ({ label: a, run: () => view.goTo('artists', a) })) });
   if (genres.length === 1) items.push({ label: 'Go to genre', run: () => view.goTo('genres', genres[0]) });

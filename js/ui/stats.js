@@ -462,7 +462,7 @@ function collectionView(pl) {
 
 /** An album, opened in the Collection. */
 async function goToAlbum(handle) {
-  view.goTo('albums', await view.albumKeyOf(handle));
+  view.goToAlbumOf(handle);
 }
 
 /** An artist's or genre's page in the Collection (Back returns here). */

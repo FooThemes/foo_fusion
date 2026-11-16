@@ -346,6 +346,8 @@ export async function installMock() {
     },
     'playlist.getMatchingRows': (p) => {
       const [pl, i] = getPl(p);
+      const byPath = /^%path% IS "(.*)"$/.exec(p.query);
+      if (byPath) return { playlist: i, items: pl.items.flatMap((t, n) => (t.handle === byPath[1] ? [n] : [])) };
       const words = [...p.query.matchAll(/HAS "([^"]+)"/g)].map((m) => m[1].toLowerCase());
       const uniq = [...new Set(words)];
       const items = [];

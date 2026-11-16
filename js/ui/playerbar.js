@@ -36,7 +36,7 @@ export function mountPlayerBar(root, app) {
     const key = t && (await view.albumKeyOf(t.handle));
     if (!key) return;
     if (isMini()) await toggleMini(false);
-    view.goTo('albums', key);
+    view.goTo('albums', key, { handle: t.handle });
   });
   artistText.addEventListener('click', async () => {
     const t = player.track;

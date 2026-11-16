@@ -313,7 +313,8 @@ class View extends Emitter {
    * Collection, from anywhere: another playlist, Favourites, a search, Now
    * playing. `key` is an album key (see albumKeyOf) or an artist/genre name.
    */
-  async goTo(kind, key) {
+  async goTo(kind, key, { handle = null } = {}) {
+    logInfo(`go to ${kind}: ${key}${handle ? ` (${handle})` : ''}`);
     let pl = playlists.byName(COLLECTION);
     if (!pl) {
       await playlists.ensureCollection(false);
@@ -339,11 +340,34 @@ class View extends Emitter {
     this.mode = kind;
     if (kind === 'albums') {
       this.drill = null;
-      this.returning = { expandedKey: key, jump: true }; // the grid opens it once loaded
+      this.returning = { expandedKey: key, jump: true, handle }; // the grid opens it once loaded
     } else this.drill = { kind, key, label: key };
     this.emit('mode', kind);
     this.#blank();
     this.load();
+  }
+
+  /** Go to the album a song is on (opened, in the Collection). */
+  async goToAlbumOf(handle) {
+    const key = await this.albumKeyOf(handle);
+    if (key) return this.goTo('albums', key, { handle });
+    logInfo(`go to album: no album key for ${handle}`);
+  }
+
+  /**
+   * The key of the shown album that has this song, found by the song's own
+   * row in the Collection: for when its album key (read from the file) isn't
+   * the one its tile has.
+   */
+  async albumKeyByRow(handle) {
+    const pl = this.playlist;
+    if (!pl || !handle || this.mode !== 'albums') return null;
+    const path = String(handle).replace(/"/g, '');
+    const res = await tryCall('playlist.getMatchingRows', { playlist: pl.index, query: `%path% IS "${path}"` });
+    const row = res?.items?.[0];
+    if (row == null) return null;
+    const g = this.groups.find((g) => (g.rows ? g.rows.includes(row) : row >= g.start && row < g.start + g.count));
+    return g ? g.key : null;
   }
 
   /** The album key (as tiles use) of a track, for goTo('albums', …). */

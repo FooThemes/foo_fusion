@@ -7,6 +7,7 @@ import { el, clear } from '../core/util.js';
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
 import { view, isPage } from '../data/view.js';
+import { logInfo } from '../core/log.js';
 import { player } from '../data/player.js';
 import { playlists, COLLECTION } from '../data/playlists.js';
 import { Grid } from './grid.js';
@@ -123,16 +124,35 @@ export function mountContent(root) {
 
   let jumpTimer = 0;
   let jumpStarted = 0;
+  let jumpBusyAt = 0; // last seen loading
   function settleJump(key, ret) {
-    if (!jumpStarted) jumpStarted = performance.now();
+    if (!jumpStarted) jumpStarted = jumpBusyAt = performance.now();
     scroller.classList.add('jumping');
     clearTimeout(jumpTimer);
     jumpTimer = setTimeout(() => {
       if (pendingRestore !== key || lastKey !== key) return finishJump();
-      const late = performance.now() - jumpStarted > 4000;
+      const now = performance.now();
+      // The Collection can take a while on the way (re-sorted, refilled):
+      // waited for, up to 12 s.
+      const late = now - jumpStarted > 12000;
+      if (view.loading) jumpBusyAt = now;
       if (view.loading && !late) return settleJump(key, ret);
       const found = current?.expandKey?.(ret.expandedKey, { jump: true });
-      if (!found && !late) return settleJump(key, ret);
+      if (!found) {
+        // Its tile has another key than the file gave: found by the song's row.
+        if (ret.handle && !ret.byRow) {
+          ret.byRow = true;
+          view.albumKeyByRow(ret.handle).then((k) => {
+            if (k && k !== ret.expandedKey) logInfo(`go to album: found by its song as ${k}`);
+            if (k) ret.expandedKey = k;
+            settleJump(key, ret);
+          });
+          return;
+        }
+        // Another reload may be on its way: a moment's grace after the last.
+        if (!late && now - jumpBusyAt < 2500) return settleJump(key, ret);
+        logInfo(`go to album: not found: ${ret.expandedKey} (${view.groups.length} albums, ${Math.round(now - jumpStarted)} ms)`);
+      } else logInfo(`go to album: opened in ${Math.round(now - jumpStarted)} ms`);
       pendingRestore = null;
       view.returning = null;
       finishJump();

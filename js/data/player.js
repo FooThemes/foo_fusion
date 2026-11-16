@@ -25,12 +25,24 @@ class Player extends Emitter {
   canSeek = false;
   volume = 100;
   muted = false;
-  order = 'default';
+  nativeOrder = 'default'; // foobar2000's own playback order
+  shuffle = null; // Fusion's shuffle (shuffle.js), when one is on it decides the order
+  onNativeOrder = null; // shuffle.js: told when foobar2000's order changes
   history = []; // songs played before the current one, oldest first
   queueCount = 0;
   stopAfterCurrent = false;
   playingPlaylist = -1;
   playingIndex = -1;
+
+  /** Songs you queued (not the one Fusion's shuffle keeps queued). */
+  get userQueueCount() {
+    return Math.max(0, this.queueCount - (this.shuffle?.oursQueued ? 1 : 0));
+  }
+
+  /** The order in effect: Fusion's shuffle when it's on, else foobar2000's. */
+  get order() {
+    return this.shuffle?.mode || this.nativeOrder;
+  }
 
   get active() {
     return this.state !== 'stopped';
@@ -54,7 +66,7 @@ class Player extends Emitter {
     if (st) this.#setState(st.state, st);
     if (cur?.track) this.track = cur.track;
     if (vol) this.#setVolume(vol);
-    if (ord) this.order = ord.orderName || ord.name || 'default';
+    if (ord) this.nativeOrder = ord.orderName || ord.name || 'default';
     if (q) this.queueCount = q.count ?? 0;
     if (sac) this.stopAfterCurrent = !!(sac.enabled ?? sac.stopAfterCurrent ?? sac.value);
     if (this.active) {
@@ -99,7 +111,8 @@ class Player extends Emitter {
     });
     on('playback:volumeChanged', (d) => this.#setVolume(d));
     on('playback:orderChanged', (d) => {
-      this.order = ORDERS[d.orderIndex ?? d.order] || this.order;
+      this.nativeOrder = ORDERS[d.orderIndex ?? d.order] || this.nativeOrder;
+      this.onNativeOrder?.(this.nativeOrder);
       this.emit('order', this.order);
     });
     on('playback:queueChanged', (d) => {
@@ -162,6 +175,8 @@ class Player extends Emitter {
     return call('playback.next');
   }
   previous() {
+    // Fusion's shuffle: back to the song that played before in its order.
+    if (this.shuffle?.mode) return this.shuffle.previous();
     return call('playback.previous');
   }
   stop() {
@@ -178,7 +193,10 @@ class Player extends Emitter {
   toggleMute() {
     return call('playback.toggleMute');
   }
-  setOrder(name) {
+  /** Shuffle (tracks, albums, folders) is Fusion's own (shuffle.js); the rest are foobar2000's. */
+  async setOrder(name) {
+    if (this.shuffle?.handles(name)) return this.shuffle.start(name);
+    if (this.shuffle?.mode) return this.shuffle.stop({ name });
     return call('playback.setPlaybackOrder', { name });
   }
 }

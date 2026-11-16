@@ -435,7 +435,7 @@ export async function installMock() {
     },
     'queue.add': (p) => {
       const [pl, i] = getPl(p);
-      (p.tracks || [p.track]).forEach((r) => queue.push({ ...pl.items[r], playlist: i, playlistItem: r }));
+      (p.tracks || [p.track]).forEach((r) => queue.push({ ...pl.items[r], playlist: i, playlistGuid: pl.guid, playlistItem: r }));
       emit('playback:queueChanged', { count: queue.length });
       return { addedCount: p.tracks?.length || 1, queueCount: queue.length };
     },
@@ -443,7 +443,7 @@ export async function installMock() {
       const next = p.items.map((it) => {
         if (it.queueIndex != null) return queue[it.queueIndex];
         const [pl, i] = getPl({ playlistGuid: it.playlistGuid, playlist: it.playlist });
-        return { ...pl.items[it.item], playlist: i, playlistItem: it.item };
+        return { ...pl.items[it.item], playlist: i, playlistGuid: pl.guid, playlistItem: it.item };
       });
       queue.length = 0;
       queue.push(...next.filter(Boolean));

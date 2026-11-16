@@ -267,9 +267,14 @@ export function mountPlayerBar(root, app) {
     clearTimeout(nextTimer);
     if (!store.get('waveformSeekbar')) return;
     nextTimer = setTimeout(async () => {
-      if (player.order !== 'default' && player.order !== 'repeat-playlist') return;
-      if (player.playingPlaylist < 0 || player.playingIndex < 0) return;
-      const res = await tryCall('playlist.getTracksAt', { playlist: player.playingPlaylist, rows: [player.playingIndex + 1, player.playingIndex + 2], fields: ['handle'] });
+      // Fusion's shuffle knows its next songs; otherwise only playlist order does.
+      const sh = player.shuffle;
+      const shPl = sh?.mode ? playlists.list.findIndex((p) => p.guid === sh.guid) : -1;
+      if (shPl < 0 && player.order !== 'default' && player.order !== 'repeat-playlist') return;
+      if (shPl < 0 && (player.playingPlaylist < 0 || player.playingIndex < 0)) return;
+      const res = shPl >= 0
+        ? await tryCall('playlist.getTracksAt', { playlist: shPl, rows: sh.upcoming(2), fields: ['handle'] })
+        : await tryCall('playlist.getTracksAt', { playlist: player.playingPlaylist, rows: [player.playingIndex + 1, player.playingIndex + 2], fields: ['handle'] });
       prefetchWave(...(res?.tracks || []).map((t) => t?.handle));
     }, 800);
   }

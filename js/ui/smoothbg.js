@@ -201,6 +201,14 @@ export function smoothBackdrop(img, box, { blur = 60, at = 1600, opacity = 0.45,
     // Next frame: after a theme change has recoloured the page behind it.
     frame = requestAnimationFrame(async () => {
       const mine = ++gen;
+      // Only once a picture is drawn small: an empty canvas still has a
+      // size, and switching to the blurred copy hides whatever the box was
+      // showing (an artist header's sharp fanart vanished this way).
+      if (!small.classList.contains('loaded')) {
+        box.classList.remove('smooth');
+        full.classList.remove('loaded');
+        return;
+      }
       let ok = false;
       try {
         ok = await drawSmooth(small, full, { bg: backgroundOf(box), opacity: typeof opacity === 'function' ? opacity() : opacity, bleed, solid, box, isCurrent: () => mine === gen });
@@ -216,7 +224,15 @@ export function smoothBackdrop(img, box, { blur = 60, at = 1600, opacity = 0.45,
     });
   };
   const small = softBackdrop(img, { blur, at, onDraw: paint });
-  new MutationObserver(() => full.classList.toggle('loaded', small.classList.contains('loaded'))).observe(small, { attributes: true, attributeFilter: ['class'] });
+  // The small copy turning "loaded" (it can come after its drawing): draw
+  // the full one then too.
+  let wasLoaded = small.classList.contains('loaded');
+  new MutationObserver(() => {
+    const now = small.classList.contains('loaded');
+    full.classList.toggle('loaded', now);
+    if (now && !wasLoaded) paint();
+    wasLoaded = now;
+  }).observe(small, { attributes: true, attributeFilter: ['class'] });
   const ro = new ResizeObserver(() => {
     clearTimeout(timer);
     timer = setTimeout(paint, 120);

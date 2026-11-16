@@ -153,8 +153,8 @@ export function mountSidebar(root, app) {
   }
 
   function renderQueue() {
-    queueBadge.hidden = !player.queueCount;
-    queueBadge.textContent = player.queueCount;
+    queueBadge.hidden = !player.userQueueCount;
+    queueBadge.textContent = player.userQueueCount;
   }
 
   function applyWidth() {

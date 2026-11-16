@@ -51,7 +51,7 @@ export function mountHeader(root, app) {
     clear(actions);
     if (np) {
       actions.append(
-        textBtn('queue', 'Clear queue', () => call('queue.clear'), !player.queueCount),
+        textBtn('queue', 'Clear queue', () => call('queue.clear'), !player.userQueueCount),
         textBtn('shuffle', `Order: ${ORDER_LABELS[player.order]}`, orderMenu),
       );
     } else if (page) {

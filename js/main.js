@@ -6,6 +6,7 @@ import { el } from './core/util.js';
 import { tryCall } from './core/bridge.js';
 import * as store from './core/store.js';
 import { player } from './data/player.js';
+import { shuffle } from './data/shuffle.js';
 import { playlists } from './data/playlists.js';
 import { view } from './data/view.js';
 import { mountSidebar } from './ui/sidebar.js';
@@ -42,6 +43,7 @@ async function boot() {
   store.subscribe((k) => (k === 'dark' || k === 'accent') && applyTheme());
 
   await Promise.all([player.init(), playlists.init()]);
+  await shuffle.init(); // Fusion's own shuffle, picked up where it was
   await view.init();
   // Artists' and genres' pages are cut from these: fetch them while idle.
   setTimeout(() => view.warmGroupRuns(), 4000);

@@ -13,6 +13,7 @@ import { player, ORDER_LABELS } from '../data/player.js';
 import { nowPlayingUrl, isRawUrl, refreshArt } from '../data/artwork.js';
 import { playlists } from '../data/playlists.js';
 import { contextMenu } from './menus.js';
+import { shuffle } from '../data/shuffle.js';
 
 const UP_NEXT = 25;
 const PREVIOUS = 2; // songs played before the current one, shown dimmed
@@ -51,7 +52,7 @@ export class NowPlaying {
     // Drawn without banding, faded out down the page (smoothbg.js).
     this.backdrop = smoothBackdrop(this.bg, this.bgWrap, { blur: 60, at: 1600, opacity: 0.45, bleed: 140, solid: 0.25 });
     scroller.append(this.wrap);
-    this.offs = [player.on('track', () => this.render()), player.on('queue', () => this.renderList()), player.on('state', () => this.renderState()), player.on('order', () => this.renderList())];
+    this.offs = [player.on('track', () => this.render()), player.on('queue', () => this.renderList()), player.on('state', () => this.renderState()), player.on('order', () => this.renderList()), shuffle.on('change', () => this.renderList())];
     this.render();
   }
 
@@ -111,25 +112,36 @@ export class NowPlaying {
   /**
    * The queue first (if any), then what foobar2000 plays after it, following
    * the playback order: Default stops at the end, Repeat (playlist) wraps,
-   * Repeat (track) repeats. Shuffle and Random are decided by foobar2000 one
-   * song at a time, so there's nothing to list ahead for those.
+   * Repeat (track) repeats. The shuffles are Fusion's own (shuffle.js), so
+   * their order is listed; Random is foobar2000's, decided one song at a
+   * time, so there's nothing to list ahead for that.
    */
   async renderList() {
     const gen = (this.gen = (this.gen || 0) + 1);
     const q = player.queueCount ? await tryCall('queue.get') : null;
-    const queue = q?.items || [];
+    // Fusion's own queued song (its shuffle feeding foobar2000) isn't shown
+    // as queued: it's the first of the shuffle's songs listed below.
+    const queue = (q?.items || []).filter((it) => !shuffle.isOurs(it));
     const order = player.order || 'default';
-    const shuffled = ['random', 'shuffle-tracks', 'shuffle-albums', 'shuffle-folders'].includes(order);
+    const ours = shuffle.active && !!playlists.list.find((p) => p.guid === shuffle.guid);
+    const shuffled = !ours && ['random', 'shuffle-tracks', 'shuffle-albums', 'shuffle-folders'].includes(order);
     // After the queue, foobar2000 carries on from the last queued song's place
     // in its playlist; with no queue, from the playing song.
     const last = queue[queue.length - 1];
-    const basePl = last ? (last.playlist ?? -1) : player.active ? player.playingPlaylist : -1;
-    const baseRow = last ? (last.playlistItem ?? -1) : player.playingIndex;
+    let basePl = last ? (last.playlist ?? -1) : player.active ? player.playingPlaylist : -1;
+    let baseRow = last ? (last.playlistItem ?? -1) : player.playingIndex;
+    if (ours) {
+      basePl = playlists.list.findIndex((p) => p.guid === shuffle.guid);
+      baseRow = Math.max(0, player.playingIndex);
+    }
     const pl = playlists.list[basePl];
     let rows = [];
     let note = '';
     if (pl && baseRow >= 0) {
-      if (shuffled) note = `${ORDER_LABELS[order]} is on. foobar2000 keeps its shuffled order to itself, so what plays next can't be listed here.`;
+      if (ours) {
+        const playingHere = basePl === player.playingPlaylist && player.playingIndex >= 0;
+        rows = [...(!queue.length && playingHere ? [player.playingIndex] : []), ...shuffle.upcoming(UP_NEXT)];
+      } else if (shuffled) note = `${ORDER_LABELS[order]} is on. foobar2000 keeps its shuffled order to itself, so what plays next can't be listed here.`;
       else if (order === 'repeat-track' && !queue.length) note = 'Repeat (track) is on: this song plays again.';
       else {
         const n = pl.trackCount;
@@ -143,7 +155,7 @@ export class NowPlaying {
           rows.push(r);
         }
       }
-      if (shuffled || order === 'repeat-track') rows = !queue.length && basePl === player.playingPlaylist && player.playingIndex >= 0 ? [player.playingIndex] : [];
+      if (!ours && (shuffled || order === 'repeat-track')) rows = !queue.length && basePl === player.playingPlaylist && player.playingIndex >= 0 ? [player.playingIndex] : [];
     }
     const res = rows.length ? await tryCall('playlist.getTracksAt', { playlist: basePl, rows, fields: ['handle', 'title', 'artist', 'album', 'duration'] }) : null;
     if (gen !== this.gen) return;

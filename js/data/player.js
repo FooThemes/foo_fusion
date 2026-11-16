@@ -4,6 +4,8 @@
 import { call, tryCall, on, onAny, onCall } from '../core/bridge.js';
 import { debounce } from '../core/util.js';
 import { Emitter } from '../core/emitter.js';
+import * as store from '../core/store.js';
+import { logInfo } from '../core/log.js';
 
 export const ORDERS = ['default', 'repeat-playlist', 'repeat-track', 'random', 'shuffle-tracks', 'shuffle-albums', 'shuffle-folders'];
 export const ORDER_LABELS = {
@@ -100,9 +102,14 @@ class Player extends Emitter {
         if (this.history.length > HISTORY) this.history.splice(0, this.history.length - HISTORY);
         saveHistory(this.history);
       }
+      // Back from a pause that let go of the output: the same song resumes
+      // where it was; anything else ends that pause.
+      const held = this.#held;
+      this.#held = null;
+      if (held && held.handle === t.handle && held.position > 1) setTimeout(() => this.seek(held.position), 60);
       this.track = t;
       this.duration = t.duration || 0;
-      this.#setPosition(t.position || 0);
+      this.#setPosition(held && held.handle === t.handle ? held.position : t.position || 0);
       const start = this.trackStart;
       this.#refreshLocation().then(() => {
         // Its playlist and row are known now (located for this start).
@@ -199,6 +206,8 @@ class Player extends Emitter {
   #stopSoon() {
     clearTimeout(this.#stopTimer);
     this.#stopTimer = setTimeout(() => {
+      // Stopped by a pause that let go of the output: still shown as paused.
+      if (this.#held) return this.#setState('paused', {});
       this.#setState('stopped', {});
       this.playingIndex = -1;
       this.emit('track', null);
@@ -213,7 +222,10 @@ class Player extends Emitter {
 
   #setState(state, d) {
     if (!state) return;
+    const was = this.state;
     this.state = state;
+    // Paused (by any control): on ASIO, perhaps let go of the driver.
+    if (state === 'paused' && was === 'playing' && !this.#held) this.#releaseOnPause();
     if (d.duration != null) this.duration = d.duration;
     if (d.canSeek != null) this.canSeek = d.canSeek;
     if (d.position != null) this.#setPosition(d.position);
@@ -233,7 +245,35 @@ class Player extends Emitter {
   }
 
   playOrPause() {
+    if (this.#held && this.state === 'paused') return this.#resume();
     return call('playback.playOrPause');
+  }
+
+  // --- Pause that lets go of an ASIO driver -------------------------------
+  // foobar2000's ASIO output keeps the driver open while paused, so nothing
+  // else can play through the device. With "Pause releases ASIO" on, a
+  // pause there becomes a stop (which closes the driver) with the song and
+  // position kept; Play starts the song again and goes back to that point.
+  #held = null; // { playlist, index, handle, position } while paused this way
+
+  async #releaseOnPause() {
+    if (!store.get('releaseOnPause') || !this.track) return;
+    const conf = await tryCall('config.getOutputConfig');
+    if (!/asio/i.test(conf?.outputName || '') || this.state !== 'paused') return;
+    this.#held = { playlist: this.playingPlaylist, index: this.playingIndex, handle: this.track.handle, position: this.now() };
+    logInfo(`pause: ASIO output released at ${Math.round(this.#held.position)} s`);
+    await tryCall('playback.stop');
+  }
+
+  async #resume() {
+    const h = this.#held;
+    let atRow = false;
+    if (h.playlist >= 0 && h.index >= 0) {
+      const r = await tryCall('playlist.getTracksAt', { playlist: h.playlist, rows: [h.index], fields: ['handle'] });
+      atRow = r?.tracks?.[0]?.handle === h.handle;
+    }
+    if (atRow) return call('playlist.playTrack', { playlist: h.playlist, index: h.index });
+    return call('playback.playPath', { path: h.handle });
   }
   next() {
     return call('playback.next');
@@ -265,6 +305,14 @@ class Player extends Emitter {
     }
   }
   stop() {
+    // Already stopped by a pause that let go of the output: just forget the place.
+    if (this.#held) {
+      this.#held = null;
+      this.#setState('stopped', {});
+      this.playingIndex = -1;
+      this.emit('track', null);
+      return Promise.resolve();
+    }
     return call('playback.stop');
   }
   seek(seconds) {

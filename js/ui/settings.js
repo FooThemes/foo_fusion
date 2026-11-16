@@ -104,6 +104,7 @@ export function mountSettings(root, app) {
         toggle('Track info panel', 'infoPanel'),
         toggle('Action bar for selected songs', 'selectionBar', 'Play, queue, like and add-to buttons along the bottom when songs are selected'),
         toggle('Waveform seek bar', 'waveformSeekbar', 'Draws the playing song’s waveform in place of the plain bar'),
+        toggle('Pause releases ASIO', 'releaseOnPause', 'Pausing on an ASIO output frees the device for other programs. Play resumes from the same point.'),
         toggle('Animate scrolling to an opened album', 'smoothScroll', 'Glides to an album when it opens below the fold, rather than jumping'),
       ]),
       section('Expanded album', [

@@ -76,6 +76,7 @@ const DEFAULTS = {
   selectionBar: true,
   smoothScroll: true,
   waveformSeekbar: false,
+  releaseOnPause: true, // pausing on an ASIO output stops it (freeing the driver), keeping the place
   artistInfoFolder: '', // Kodi-style artist folders (artist.nfo, artist.jpg, fanart.jpg), e.g. E:\\Music\\_Artists
   showRemaining: false, // player bar shows -time remaining instead of the length
   // Original / English / romanised versions (see data/versions.js).

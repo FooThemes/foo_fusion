@@ -1,0 +1,185 @@
+// The playing song's signal path, like Roon's: the file, what's done to it
+// (ReplayGain, DSP, volume) and what goes out to the device, with a grade.
+//
+// foobar2000 itself reports the file, the DSP chain, the ReplayGain mode and
+// preamp, the volume and the output module and device. The Output Info
+// component (foo_outinfo), when installed, adds what actually enters the
+// output (sample rate, bit depth, channels after any DSP) and the ReplayGain
+// gain actually applied; without it those stages say what can't be known.
+
+import { tryCall, on } from '../core/bridge.js';
+import { Emitter } from '../core/emitter.js';
+import { debounce } from '../core/util.js';
+import { logInfo } from '../core/log.js';
+import { player } from './player.js';
+
+// Output Info's fields, read in one go ("?" when it isn't installed).
+const OUT = ['output_samplerate', 'output_bitdepth', 'output_channels', 'output_device', 'output_dsps', 'output_dsp_preset', 'output_volume', 'output_rg_mode', 'output_rg_source', 'output_rg_gain', 'output_buffer_length'];
+const SEP = '␞';
+const LOSSLESS = /^(flac|alac|wavpack|monkey'?s audio|ape|tta|pcm|wav|aiff|dsd|dsf|dff|dst|mlp|truehd|shorten|optimfrog|tak)/i;
+
+export const QUALITY = {
+  lossless: { label: 'Lossless', note: 'The file reaches the output unchanged.' },
+  enhanced: { label: 'Enhanced', note: 'A lossless file, deliberately processed on the way (DSP, ReplayGain, volume).' },
+  high: { label: 'High quality', note: 'A lossless file, but the format is changed on the way or may be.' },
+  low: { label: 'Low quality', note: 'A lossy file: some of the original was discarded when it was encoded.' },
+};
+
+class SignalPath extends Emitter {
+  path = null; // the last one worked out
+  hasOutputInfo = null; // Output Info found (null: not checked yet)
+  #logged = false;
+
+  init() {
+    const again = debounce(() => this.refresh(), 250);
+    player.on('track', again);
+    player.on('state', again);
+    for (const e of ['playback:volumeChanged', 'audio:dspPresetChanged', 'audio:outputDeviceChanged', 'audio:replaygainModeChanged']) on(e, again);
+    again();
+  }
+
+  async refresh() {
+    const path = player.active && player.track ? await build() : null;
+    if (path && !this.#logged) {
+      this.#logged = true;
+      logInfo(`signal path: Output Info ${path.outputInfo ? 'found' : 'not found'}; ${path.stages.map((s) => `${s.title}: ${s.detail}`).join(' → ')} (${path.quality})`);
+    }
+    this.hasOutputInfo = path ? path.outputInfo : this.hasOutputInfo;
+    this.path = path;
+    this.emit('change', path);
+    return path;
+  }
+}
+
+async function build() {
+  const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`)].join(SEP);
+  const [tf, conf, chain, rgMode, rgPre, vol] = await Promise.all([
+    tryCall('titleformat.eval', { pattern }),
+    tryCall('config.getOutputConfig'),
+    tryCall('dsp.getChain'),
+    tryCall('replaygain.getMode'),
+    tryCall('replaygain.getPreamp'),
+    tryCall('audio.getOutputInfo'),
+  ]);
+  const v = String(tf?.result || '').split(SEP);
+  const [codec, profile, bits, rate, channels, encoding, bitrate, rgTrack, rgAlbum] = v;
+  const o = Object.fromEntries(OUT.map((f, i) => [f, clean(v[9 + i])]));
+  const outputInfo = !!(o.output_samplerate || o.output_device);
+
+  const src = {
+    codec: codec || '?',
+    lossless: /lossless/i.test(encoding) || (!encoding && LOSSLESS.test(codec || '')),
+    dsd: /^(dsd|dsf|dff|dst)/i.test(codec || ''),
+    bits: num(bits),
+    rate: num(rate),
+    channels: num(channels),
+    bitrate: num(bitrate),
+  };
+  const stages = [];
+  const changes = []; // what alters the sound on the way (for the grade)
+
+  // 1. The file.
+  stages.push({
+    kind: 'source',
+    icon: src.lossless ? 'lossless' : 'lossy',
+    title: 'Source',
+    detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? dsd(src.rate) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, chans(src.channels), !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
+    grade: src.lossless ? 'lossless' : 'low',
+    note: src.lossless ? 'Lossless: every sample of the original is there.' : 'Lossy: compressed by discarding parts of the sound judged inaudible.',
+  });
+
+  // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
+  // "auto" follows foobar2000's own playback order: track gain when it
+  // shuffles, album gain otherwise (Fusion's shuffle runs foobar2000 in Default).
+  let source = String(rgMode?.sourceMode || '').toLowerCase();
+  if (source === 'auto') source = /shuffle|random/.test(player.nativeOrder) ? 'track' : 'album';
+  const processing = String(rgMode?.processingMode || '').toLowerCase();
+  const rgOn = o.output_rg_mode ? !/none|off|disabled/i.test(o.output_rg_mode) : source !== 'none' && source !== '' && /gain/.test(processing);
+  if (rgOn) {
+    const applied = o.output_rg_gain ? num(o.output_rg_gain) : null;
+    const which = /album/.test(o.output_rg_source || source) ? 'album' : 'track';
+    const tagGain = num(which === 'album' ? rgAlbum || rgTrack : rgTrack || rgAlbum);
+    const pre = tagGain != null ? num(rgPre?.withRg) : num(rgPre?.withoutRg);
+    const gain = applied ?? (tagGain != null ? tagGain + (pre || 0) : pre || null);
+    if (gain == null || Math.abs(gain) >= 0.005) {
+      changes.push('ReplayGain');
+      stages.push({ kind: 'rg', icon: 'gain', title: 'ReplayGain', detail: gain != null ? `${which} gain, ${signed(gain)} dB` : `${which} gain (no gain in this song's tags)`, grade: gain == null ? 'lossless' : 'enhanced', note: 'Volume levelled between songs: the samples are scaled.' });
+    }
+  }
+
+  // 3. DSP chain.
+  const dsps = (chain?.dsps || []).map((d) => d.name).filter(Boolean);
+  const dspList = dsps.length ? dsps : o.output_dsps ? o.output_dsps.split(/\s*[,;]\s*/).filter(Boolean) : [];
+  for (const name of dspList) {
+    changes.push(name);
+    stages.push({ kind: 'dsp', icon: /resampl/i.test(name) ? 'resample' : 'dsp', title: name, detail: /resampl/i.test(name) ? 'Changes the sample rate' : 'DSP', grade: 'enhanced', note: 'Processes the sound before it goes out.' });
+  }
+
+  // 4. Volume: anything below 0 dB scales the samples.
+  const dB = o.output_volume && o.output_volume !== '-inf' ? num(o.output_volume) : num(vol?.volume);
+  if (dB != null && dB < -0.005) {
+    changes.push('volume');
+    stages.push({ kind: 'volume', icon: 'volume', title: 'Volume', detail: `${dB.toFixed(1)} dB`, grade: 'enhanced', note: 'foobar2000’s volume is digital: below full volume the samples are scaled down. For bit-perfect output, leave it at 0 dB and set the volume on your amplifier or DAC.' });
+  }
+
+  // 5. Output: module, device and the format going out.
+  const module = conf?.outputName || '';
+  // Output Info names the device as "<module>: <device>".
+  const device = String(o.output_device || conf?.deviceName || '').replace(new RegExp(`^${module.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*`, 'i'), '');
+  const outBits = num(o.output_bitdepth) ?? (conf?.bitDepth || null);
+  const outRate = num(o.output_samplerate);
+  const outCh = num(o.output_channels);
+  const exclusive = /asio|exclusive|kernel streaming|\bks\b/i.test(`${module} ${device}`);
+  const outDsd = outRate && outRate >= 2822400;
+  const fmtOut = [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
+  if (outputInfo && src.rate && outRate && outRate !== src.rate && !dspList.some((n) => /resampl/i.test(n))) changes.push('sample rate');
+  // DSD turned into PCM on the way, or PCM into DSD (a DSD processor or the output).
+  const dsdToPcm = outputInfo && src.dsd && outRate && !outDsd;
+  const pcmToDsd = outputInfo && !src.dsd && outDsd;
+  if (dsdToPcm) changes.push('DSD to PCM');
+  if (pcmToDsd) changes.push('PCM to DSD');
+  const truncated = !src.dsd && !outDsd && src.bits && outBits && outBits < src.bits;
+  if (truncated) changes.push('bit depth');
+  stages.push({
+    kind: 'output',
+    icon: 'output',
+    title: module || 'Output',
+    detail: [device && device !== module ? device : '', fmtOut || (outputInfo ? '' : 'format: install Output Info to see it')].filter(Boolean).join(' · '),
+    grade: truncated || dsdToPcm ? 'high' : pcmToDsd ? 'enhanced' : 'lossless',
+    note: dsdToPcm
+      ? 'The DSD file is converted to PCM before it goes out.'
+      : pcmToDsd
+        ? 'Converted to DSD before it goes out.'
+        : truncated
+      ? `The output is set to ${outBits}-bit, fewer bits than the file's ${src.bits}${conf?.useDither ? ' (dithered)' : ''}.`
+      : exclusive
+        ? 'Exclusive access: what goes out is what your device receives.'
+        : 'Shared: Windows mixes this with other sounds.',
+  });
+
+  // 6. Shared mode: Windows' mixer converts to the device's own format.
+  if (!exclusive && module) {
+    changes.push('Windows mixer');
+    stages.push({ kind: 'mixer', icon: 'windows', title: 'Windows mixer', detail: 'Shared mode: may convert to the device’s own format', grade: 'high', note: 'Windows mixes all programs’ sound and converts it to the format set for the device (Sound settings → device properties → Advanced). For bit-perfect output, use an [exclusive] WASAPI device or ASIO.' });
+  }
+
+  let quality;
+  if (!src.lossless) quality = 'low';
+  else if (['Windows mixer', 'bit depth', 'sample rate', 'DSD to PCM'].some((c) => changes.includes(c))) quality = 'high';
+  else if (changes.length) quality = 'enhanced';
+  else quality = 'lossless';
+  return { quality, stages, outputInfo, changes };
+}
+
+const clean = (s) => (s && s !== '?' ? String(s).trim() : '');
+const num = (s) => {
+  const n = parseFloat(String(s ?? '').replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+};
+const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2);
+const khz = (hz) => (hz ? `${+(hz / 1000).toFixed(hz % 1000 ? 1 : 0)} kHz` : '');
+// DSD rates as multiples of 44.1 kHz (DSD64 = 2.8224 MHz).
+const dsd = (hz) => (hz ? `DSD${Math.round(hz / 44100)}` : '');
+const chans = (n) => (!n ? '' : n === 1 ? 'mono' : n === 2 ? 'stereo' : `${n} ch`);
+
+export const signalPath = new SignalPath();

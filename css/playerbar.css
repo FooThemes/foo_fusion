@@ -512,3 +512,163 @@ body.mini .pb-controls .btn-icon {
 body.mini .pb-play {
   transform: scale(0.85);
 }
+
+/* --- Signal path (signalpath.js) ---------------------------------------- */
+/* Grades, coloured as Roon's. */
+[data-q='lossless'] { --sp: #a78bfa; }
+[data-q='enhanced'] { --sp: #60a5fa; }
+[data-q='high'] { --sp: #4ade80; }
+[data-q='low'] { --sp: #fbbf24; }
+
+.sp-chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.sp-chip:hover,
+.sp-chip.on {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sp-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sp, #888);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--sp, #888) 70%, transparent);
+}
+
+.sp-chip .sp-dot {
+  width: 9px;
+  height: 9px;
+}
+
+.sp-pop {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--bar-h) + 6px);
+  z-index: 60;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - var(--bar-h) - 40px);
+  overflow: auto;
+  padding: 18px 20px 16px;
+  background: var(--menu-bg, #2a2a2a);
+  color: #eee;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.sp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+}
+
+.sp-title {
+  font-weight: 700;
+}
+
+.sp-sub {
+  margin: 4px 0 14px;
+  font-size: 12.5px;
+  color: #bbb;
+}
+
+.sp-stages {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sp-stage {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding-bottom: 16px;
+}
+
+/* The line joining the stages. */
+.sp-stage:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 36px;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.sp-node {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+}
+
+.sp-glyph {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sp-text {
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.sp-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+
+.sp-detail {
+  color: color-mix(in srgb, var(--accent) 65%, #fff);
+  font-size: 13.5px;
+}
+
+.sp-note {
+  margin-top: 2px;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sp-foot {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 0;
+  color: #aaa;
+  font-size: 12px;
+}
+
+.sp-foot .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+body.mini .sp-chip {
+  display: none;
+}

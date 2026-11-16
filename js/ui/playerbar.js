@@ -16,6 +16,7 @@ import { dropdown } from './dropdown.js';
 import { heartButton, setHeart } from './heart.js';
 import { favourites } from '../data/favourites.js';
 import { mountWaveform, prefetchWave } from './waveform.js';
+import { mountSignalPath } from './signalpath.js';
 
 export function mountPlayerBar(root, app) {
   const cover = el('img', { alt: '' });
@@ -94,6 +95,8 @@ export function mountPlayerBar(root, app) {
   const volPop = el('div.vol-pop', { hidden: true }, volValue, el('div.vol-slider', { role: 'slider', 'aria-label': 'Volume', tabindex: 0 }, volTrack), el('button.btn-icon.vol-mute', { title: 'Mute', onclick: () => player.toggleMute() }, icon('mute')));
 
   root.append(nowBox, seekBox, controls, volPop);
+  // Signal path: a dot after the length, opening the path from file to device.
+  mountSignalPath(length, root);
 
   function marquee(box) {
     box.classList.remove('marquee');

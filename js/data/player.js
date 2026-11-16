@@ -78,6 +78,14 @@ class Player extends Emitter {
     }
 
     on('playback:trackChanged', (t) => {
+      // Played from elsewhere while paused this way (a media key, foobar2000's
+      // own Play, which starts the queue first): straight back to the paused
+      // song, before anything takes this one as playing.
+      if (this.#held && this.#held.handle !== t.handle && !this.#resuming) {
+        logInfo('pause: resumed from elsewhere; back to the paused song');
+        this.#resume();
+        return;
+      }
       this.trackStart = (this.trackStart || 0) + 1; // each real start (re-announcements of the same song don't count)
       // Started by you (from stopped, or playing another song, which foobar2000
       // reports as a stop for "user"), rather than the queue or Next moving on.
@@ -106,6 +114,7 @@ class Player extends Emitter {
       // where it was; anything else ends that pause.
       const held = this.#held;
       this.#held = null;
+      this.#resuming = false;
       if (held && held.handle === t.handle && held.position > 1) setTimeout(() => this.seek(held.position), 60);
       this.track = t;
       this.duration = t.duration || 0;
@@ -233,6 +242,10 @@ class Player extends Emitter {
   }
 
   #setPosition(pos, dur) {
+    // Jumping back after a released pause: reports of the song's start (or
+    // of whatever foobar2000 started first) don't move the bar.
+    const j = this.#jumpTo;
+    if (j && performance.now() - j.at < 2500 && Math.abs((pos || 0) - j.position) > 2) return;
     this.position = pos || 0;
     this.positionAt = performance.now();
     if (dur != null) this.duration = dur;
@@ -255,6 +268,13 @@ class Player extends Emitter {
   // pause there becomes a stop (which closes the driver) with the song and
   // position kept; Play starts the song again and goes back to that point.
   #held = null; // { playlist, index, handle, position } while paused this way
+  #resuming = false;
+  #jumpTo = null;
+
+  /** Paused by stopping (to free an ASIO driver): foobar2000 itself is stopped. */
+  get released() {
+    return !!this.#held;
+  }
 
   async #releaseOnPause() {
     if (!store.get('releaseOnPause') || !this.track) return;
@@ -267,6 +287,8 @@ class Player extends Emitter {
 
   async #resume() {
     const h = this.#held;
+    this.#resuming = true;
+    this.#jumpTo = { position: h.position, at: performance.now() };
     let atRow = false;
     if (h.playlist >= 0 && h.index >= 0) {
       const r = await tryCall('playlist.getTracksAt', { playlist: h.playlist, rows: [h.index], fields: ['handle'] });

@@ -41,6 +41,9 @@ class SignalPath extends Emitter {
   #probed = new Map(); // handle -> 'dop' | 'none' | null
 
   async refresh() {
+    // Paused by stopping (ASIO released): nothing is playing to describe, so
+    // the last path stays.
+    if (player.released) return this.path;
     let path = player.active && player.track ? await build(this.#probed.get(player.track.handle)) : null;
     // A DSD song: check the audio itself for DoP (once per song), then redo.
     const h = player.track?.handle;

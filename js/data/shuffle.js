@@ -275,6 +275,9 @@ class Shuffle extends Emitter {
     if (mine.length) await tryCall('queue.remove', { indices: mine.map((it) => it.queueIndex) });
     this.ours = null;
     if (want != null) {
+      // Counted as Fusion's (not yours) from the moment it's added: the queue
+      // badge flicked up by one before the queue was read again.
+      this.oursQueued = true;
       const res = await tryCall('queue.add', { playlistGuid: this.guid, tracks: [want] });
       if (res) {
         const after = await this.#readQueue();

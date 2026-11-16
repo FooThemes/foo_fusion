@@ -231,9 +231,10 @@ export async function installMock() {
   };
   const err = (code, error) => Object.assign(new Error(error), { mockCode: code });
   const cur = () => (pb.pl >= 0 ? pls[pb.pl]?.items[pb.idx] : null);
-  const playAt = (pi, idx) => {
-    // Like foobar2000: changing song stops for a moment first.
-    if (pb.state !== 'stopped') emit('playback:stopped', { reason: 'starting_another' });
+  const playAt = (pi, idx, reason = 'starting_another') => {
+    // Like foobar2000: changing song stops for a moment first (Next and the
+    // queue say "starting_another"; playing another row is a "user" stop).
+    if (pb.state !== 'stopped') emit('playback:stopped', { reason });
     pb.pl = pi;
     pb.idx = idx;
     pb.pos = 0;
@@ -400,7 +401,7 @@ export async function installMock() {
     },
     'playlist.playTrack': (p) => {
       const [, i] = getPl(p);
-      playAt(i, p.index || 0);
+      playAt(i, p.index || 0, 'user');
       return {};
     },
     'playlist.removeTracks': (p) => {

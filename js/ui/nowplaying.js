@@ -6,7 +6,7 @@ import { smoothBackdrop } from './smoothbg.js';
 import { trackVersions, VERSION_KEYS } from '../data/versions.js';
 import * as store from '../core/store.js';
 import { dragSource, dropTarget } from './dnd.js';
-import { el, clear, formatTime } from '../core/util.js';
+import { el, formatTime } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { tryCall, call } from '../core/bridge.js';
 import { player, ORDER_LABELS } from '../data/player.js';
@@ -15,8 +15,8 @@ import { playlists } from '../data/playlists.js';
 import { contextMenu } from './menus.js';
 import { shuffle } from '../data/shuffle.js';
 
-const UP_NEXT = 25;
-const PREVIOUS = 2; // songs played before the current one, shown dimmed
+const UP_NEXT = 50;
+const PREVIOUS = 3; // songs played before the current one, shown dimmed (more on request)
 
 export class NowPlaying {
   constructor(scroller) {
@@ -93,6 +93,13 @@ export class NowPlaying {
       /* missing art: falls through to the placeholder */
     }
     if (this.artUrl !== url) return;
+    // The old cover stays over the new one for a moment and fades out.
+    if (this.cover.classList.contains('loaded') && this.cover.getAttribute('src') && pre.naturalWidth && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const ghost = this.cover.cloneNode(false);
+      ghost.classList.add('np-cover-ghost');
+      this.coverBox.append(ghost);
+      ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 350, delay: 30, easing: 'ease-out', fill: 'forwards' }).finished.finally(() => ghost.remove());
+    }
     for (const img of [this.cover, this.bg]) {
       if (pre.naturalWidth) {
         img.src = url;
@@ -116,7 +123,14 @@ export class NowPlaying {
    * their order is listed; Random is foobar2000's, decided one song at a
    * time, so there's nothing to list ahead for that.
    */
-  async renderList() {
+  renderList() {
+    // Several changes arrive together when a song changes (the song, the
+    // queue, the shuffle): one redraw for all of them.
+    clearTimeout(this.listTimer);
+    this.listTimer = setTimeout(() => this.#renderList(), 40);
+  }
+
+  async #renderList() {
     const gen = (this.gen = (this.gen || 0) + 1);
     const q = player.queueCount ? await tryCall('queue.get') : null;
     // Fusion's own queued song (its shuffle feeding foobar2000) isn't shown
@@ -162,12 +176,28 @@ export class NowPlaying {
     const tracks = res?.tracks || [];
     const plName = playlists.isHidden(pl) ? 'Songs' : pl?.name;
 
-    // What played before, dimmed, above the current song (any order).
-    const prev = queue.length ? [] : player.history.slice(-PREVIOUS).filter((h) => h.handle !== player.track?.handle);
+    // What played before, dimmed, above the current song (any order): the
+    // last few, or all that are kept when asked.
+    const history = queue.length ? [] : player.history.filter((h) => h.handle !== player.track?.handle);
+    const prev = history.slice(-(this.allPrevious ? history.length : PREVIOUS));
 
-    clear(this.list);
+    const out = [];
+    if (history.length > PREVIOUS) {
+      const more = history.length - PREVIOUS;
+      out.push(
+        el('button.np-earlier', {
+          type: 'button',
+          dataset: { key: 'earlier' },
+          text: this.allPrevious ? 'Hide earlier songs' : `Show ${more} earlier ${more === 1 ? 'song' : 'songs'}`,
+          onclick: () => {
+            this.allPrevious = !this.allPrevious;
+            this.#renderList();
+          },
+        }),
+      );
+    }
     prev.forEach((t, n) =>
-      this.list.append(
+      out.push(
         this.#row(t, {
           kind: 'prev',
           index: t.index,
@@ -180,14 +210,49 @@ export class NowPlaying {
     );
     this.listTitle.textContent = queue.length ? `Queue · ${queue.length}` : tracks.length || note ? `Up next${plName ? ` from ${plName}` : ''}` : '';
     const editable = pl && !pl.isLocked && !pl.isAutoplaylist;
-    queue.forEach((t, n) => this.list.append(this.#row(t, { kind: 'queue', index: n, number: n + 1, queue, onplay: () => playQueued(t, n) })));
-    if (queue.length && (tracks.length || note)) this.list.append(el('h3.np-list-title.np-then', { text: `Then from ${plName || 'the playlist'}` }));
-    if (note) this.list.append(el('div.np-note', { text: note }));
+    queue.forEach((t, n) => out.push(this.#row(t, { kind: 'queue', index: n, number: n + 1, queue, onplay: () => playQueued(t, n) })));
+    if (queue.length && (tracks.length || note)) out.push(el('h3.np-list-title.np-then', { dataset: { key: 'then' }, text: `Then from ${plName || 'the playlist'}` }));
+    if (note) out.push(el('div.np-note', { dataset: { key: 'note' }, text: note }));
+    let number = 0;
     tracks.forEach((t, n) => {
       const row = rows[n];
-      const current = basePl === player.playingPlaylist && row === player.playingIndex;
-      this.list.append(this.#row(t, { kind: 'pl', index: row, number: n + 1, current, queue, playlist: pl, editable, onplay: () => call('playlist.playTrack', { playlist: basePl, index: row }) }));
+      const current = basePl === player.playingPlaylist && row === player.playingIndex && !queue.length && n === 0;
+      // Fusion's shuffle: its upcoming songs can be dragged into another order.
+      const movable = ours && !current;
+      out.push(this.#row(t, { kind: movable ? 'shuffle' : 'pl', index: row, number: current ? 0 : ++number, current, queue, playlist: pl, editable: editable || movable, onplay: () => call('playlist.playTrack', { playlist: basePl, index: row }) }));
     });
+    this.#swap(out);
+  }
+
+  /**
+   * Put the new rows in, all at once. A song that was already listed slides
+   * from where it was to where it is now (Next moves the list up a row
+   * instead of redrawing it); new ones fade in.
+   */
+  #swap(nodes) {
+    const before = new Map();
+    const had = this.list.children.length > 0;
+    for (const n of this.list.children) if (n.dataset.key) before.set(n.dataset.key, n.getBoundingClientRect().top);
+    // A song can be listed twice (played before and coming up): key each
+    // occurrence on its own.
+    const seen = new Map();
+    for (const n of nodes) {
+      if (!n.dataset.key) continue;
+      const c = (seen.get(n.dataset.key) || 0) + 1;
+      seen.set(n.dataset.key, c);
+      if (c > 1) n.dataset.key += '#' + c;
+    }
+    this.list.replaceChildren(...nodes);
+    if (!had || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    for (const n of nodes) {
+      const was = before.get(n.dataset.key);
+      if (was == null) {
+        n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+        continue;
+      }
+      const dy = was - n.getBoundingClientRect().top;
+      if (Math.abs(dy) > 0.5 && Math.abs(dy) < 2000) n.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.2,.7,.3,1)' });
+    }
   }
 
   #row(t, o) {
@@ -200,6 +265,9 @@ export class NowPlaying {
         oncontextmenu: (e) => {
           e.preventDefault();
           const extra = [{ label: 'Refresh artwork', run: () => refreshArt([t.handle]) }];
+          // Queued and coming-up songs: play from there on (in place of
+          // foobar2000's Play, which plays just the one song).
+          if (!o.current && !o.previous) extra.unshift({ label: 'Play from here', replaces: 'Play', run: o.onplay });
           if (o.current) contextMenu({ mode: 'nowPlaying' }, extra);
           else contextMenu({ mode: 'handles', handles: [t.handle] }, extra);
         },
@@ -212,6 +280,7 @@ export class NowPlaying {
       o.kind === 'queue' ? el('button.btn-icon.np-x', { title: 'Remove from queue', onclick: () => call('queue.remove', { indices: [o.index] }) }, icon('close')) : el('span'),
     );
     setTitle(node.children[1], t.title);
+    node.dataset.key = t.handle;
     node.dataset.kind = o.kind;
     node.dataset.index = o.index;
     // Drag to reorder the queue, drag a song into the queue, or reorder an
@@ -219,7 +288,7 @@ export class NowPlaying {
     if (!o.previous) {
       dragSource(node, () => ({ type: 'np', kind: o.kind, index: o.index, playlistGuid: o.playlist?.guid, label: t.title }));
       dropTarget(node, {
-        accept: (d) => d.type === 'np' && (o.kind === 'queue' || (o.kind === 'pl' && o.editable && d.kind === 'pl' && d.playlistGuid === o.playlist?.guid)),
+        accept: (d) => d.type === 'np' && (o.kind === 'queue' || (o.kind === 'pl' && o.editable && d.kind === 'pl' && d.playlistGuid === o.playlist?.guid) || (o.kind === 'shuffle' && d.kind === 'shuffle')),
         over: (d, info) => (info.after ? 'after' : 'before'),
         drop: async (src, info) => {
           const queue = o.queue;
@@ -235,6 +304,9 @@ export class NowPlaying {
             if (!moving?.playlistGuid && moving?.queueIndex == null) return;
             refs.splice(at, 0, moving);
             await tryCall('queue.setContents', { items: refs });
+          } else if (o.kind === 'shuffle') {
+            // Fusion's shuffle order: the song moves before or after this one.
+            shuffle.move(src.index, o.index, !!info.after);
           } else {
             let target = o.index + (info.after ? 1 : 0);
             if (src.index < target) target--;

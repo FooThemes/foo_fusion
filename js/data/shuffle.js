@@ -31,7 +31,6 @@ class Shuffle extends Emitter {
   #at = new Map(); // row -> position in order
   ours = null; // { guid, row, handle } of the song Fusion queued
   #lastQueue = [];
-  #left = new Map(); // handle -> when a song you queued left the queue
   oursQueued = false; // Fusion's song is in the queue now
   #busy = Promise.resolve();
 
@@ -109,6 +108,28 @@ class Shuffle extends Emitter {
     this.emit('change');
   }
 
+  /**
+   * Move a coming-up song (playlist row `row`) before or after another
+   * (`target`), as dragged in Now playing.
+   */
+  move(row, target, after) {
+    if (!this.mode || row === target) return;
+    const from = this.#at.get(row);
+    if (from == null || from <= this.pos) return;
+    const order = this.order.slice();
+    order.splice(from, 1);
+    let to = order.indexOf(target);
+    if (to < 0) return;
+    if (after) to++;
+    // Never before the playing song.
+    to = Math.max(this.pos + 1, to);
+    order.splice(to, 0, row);
+    this.order = order;
+    this.#index();
+    this.emit('change');
+    return this.#run(() => this.#ensure());
+  }
+
   /** Previous: the song that played before in Fusion's order. */
   async previous() {
     if (this.pos <= 0) return call('playback.previous');
@@ -142,26 +163,28 @@ class Shuffle extends Emitter {
     this.#at = new Map(this.order.map((row, i) => [row, i]));
   }
 
-  // A new song started: work out where it is in the order. (The queue's own
-  // event can come before or after this one, so the song is recognised by
-  // its file, and songs you queued are remembered for a while after leaving
-  // the queue.)
+  // A new song started: work out where it is in the order. Only a song you
+  // started yourself (player.startedByUser) moves the shuffle elsewhere;
+  // songs that come up through the queue never do.
   async #onTrack() {
     if (!this.mode) return;
     const pl = playlists.list[player.playingPlaylist];
     const row = player.playingIndex;
     const h = player.track?.handle;
-    const yours = !!h && (this.#lastQueue.some((it) => it.handle === h && !this.isOurs(it)) || Date.now() - (this.#left.get(h) || 0) < 15000);
-    if (h && this.ours && h === this.ours.handle) {
-      this.pos = this.#at.get(this.ours.row) ?? this.pos + 1;
+    const nextUp = pl && pl.guid === this.guid && row === this.order[this.pos + 1];
+    if ((h && this.ours && h === this.ours.handle) || (nextUp && !player.startedByUser)) {
+      // Fusion's queued song: the order moves on.
+      this.pos = this.#at.get(row) ?? this.pos + 1;
       this.ours = null;
-    } else if (yours) {
-      // A song you queued: Fusion's order waits until the queue is done.
-      this.#left.delete(h);
+    } else if (!player.startedByUser) {
+      // A song that came up through the queue (yours, from any playlist) or
+      // with Next: the shuffle waits, and carries on after it.
     } else if (pl && pl.guid === this.guid && row >= 0 && this.#at.has(row)) {
+      // You played a song from the shuffled playlist: carry on from there.
       this.pos = this.#at.get(row);
     } else if (pl && row >= 0) {
-      // Another playlist (or a song not in the order): shuffle that one.
+      // You started a song in another playlist: shuffle that one now.
+      logInfo(`shuffle: now from ${pl.name}`);
       return this.#rebuild();
     }
     if (this.order.length && this.pos >= this.order.length - 1) {
@@ -196,12 +219,10 @@ class Shuffle extends Emitter {
     save(this);
   }
 
-  // The queue now, noting songs you queued that have left it since.
+  // The queue now.
   async #readQueue() {
     const q = await tryCall('queue.get');
     const items = q?.items || [];
-    const now = new Set(items.map((it) => it.handle));
-    for (const it of this.#lastQueue) if (!this.isOurs(it) && !now.has(it.handle)) this.#left.set(it.handle, Date.now());
     this.#lastQueue = items;
     const was = this.oursQueued;
     this.oursQueued = items.some((it) => this.isOurs(it));

@@ -145,10 +145,12 @@ const PLAY_ITEMS = ['Play', 'Add to playback queue'];
  * that repeat Fusion's are dropped.
  */
 function arrange(extra, items) {
-  const ours = new Set(extra.filter((x) => x && x !== '-').map((x) => x.label));
+  // Fusion's items can stand in for one of foobar2000's ("Play from here"
+  // for "Play"), taking its place at the top.
+  const ours = new Set(extra.filter((x) => x && x !== '-').flatMap((x) => [x.label, x.replaces].filter(Boolean)));
   const theirs = items.filter((it) => it === '-' || !ours.has(it.label));
   const all = [...extra, ...theirs];
-  const top = PLAY_ITEMS.map((label) => all.find((it) => it && it !== '-' && it.label === label)).filter(Boolean);
+  const top = PLAY_ITEMS.map((label) => all.find((it) => it && it !== '-' && (it.label === label || it.replaces === label))).filter(Boolean);
   const mine = extra.filter((it) => !top.includes(it));
   const rest = theirs.filter((it) => !top.includes(it));
   return tidy([...top, '-', ...mine, '-', ...rest]);

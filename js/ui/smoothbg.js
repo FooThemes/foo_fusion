@@ -209,12 +209,28 @@ export function smoothBackdrop(img, box, { blur = 60, at = 1600, opacity = 0.45,
         full.classList.remove('loaded');
         return;
       }
+      // The picture showing now stays on top, as a copy, and fades out once
+      // the new one is drawn underneath it (a cross-fade, not a cut).
+      let ghost = null;
+      if (box.classList.contains('smooth') && full.classList.contains('loaded') && full.width) {
+        ghost = full.cloneNode(false);
+        ghost.classList.add('ghost');
+        ghost.getContext('2d').drawImage(full, 0, 0);
+        full.after(ghost);
+      }
+      const fade = () => {
+        if (!ghost) return;
+        const g = ghost;
+        ghost = null;
+        g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, easing: 'ease-out' }).finished.finally(() => g.remove());
+      };
       let ok = false;
       try {
         ok = await drawSmooth(small, full, { bg: backgroundOf(box), opacity: typeof opacity === 'function' ? opacity() : opacity, bleed, solid, box, isCurrent: () => mine === gen });
       } catch {
         ok = false; // a picture that can't be read back: the stretched copy shows instead
       }
+      fade();
       if (mine !== gen) return;
       // Until the first drawing is ready the stretched copy shows; after
       // that a redraw replaces the picture in one go.

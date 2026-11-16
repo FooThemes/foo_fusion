@@ -28,7 +28,7 @@ class Player extends Emitter {
   nativeOrder = 'default'; // foobar2000's own playback order
   shuffle = null; // Fusion's shuffle (shuffle.js), when one is on it decides the order
   onNativeOrder = null; // shuffle.js: told when foobar2000's order changes
-  history = []; // songs played before the current one, oldest first
+  history = loadHistory(); // songs played before the current one, oldest first (kept across reloads)
   queueCount = 0;
   stopAfterCurrent = false;
   playingPlaylist = -1;
@@ -76,22 +76,40 @@ class Player extends Emitter {
     }
 
     on('playback:trackChanged', (t) => {
+      // Started by you (from stopped, or playing another song, which foobar2000
+      // reports as a stop for "user"), rather than the queue or Next moving on.
+      const stop = this.#lastStop;
+      this.startedByUser = this.state === 'stopped' || (!!stop && performance.now() - stop.at < 2000 && stop.reason !== 'starting_another');
+      this.#lastStop = null;
       // Remember what played before (for "Previously" in Now playing).
+      clearTimeout(this.#stopTimer);
       if (this.track && this.track.handle !== t.handle) {
-        this.history.push({ ...this.track, playlist: this.playingPlaylist, index: this.playingIndex });
-        if (this.history.length > 20) this.history.shift();
+        const { handle, title, artist, album, duration } = this.track;
+        this.history.push({ handle, title, artist, album, duration, playlist: this.playingPlaylist, index: this.playingIndex });
+        if (this.history.length > HISTORY) this.history.splice(0, this.history.length - HISTORY);
+        saveHistory(this.history);
       }
       this.track = t;
       this.duration = t.duration || 0;
       this.#setPosition(t.position || 0);
       this.#refreshLocation().then(() => this.emit('track', t));
     });
-    on('playback:stateChanged', (d) => this.#setState(d.state, d));
+    // foobar2000 stops for a moment when another song is started (Next is
+    // "starting_another"; playing another row reports a "user" stop). Acting
+    // on that blanked Now playing between songs, so a stop only counts if no
+    // song starts within a moment.
+    on('playback:stateChanged', (d) => {
+      if (d.state !== 'stopped') {
+        clearTimeout(this.#stopTimer);
+        return this.#setState(d.state, d);
+      }
+      this.#stopSoon();
+    });
     on('playback:paused', (d) => this.#setState(d.paused ? 'paused' : 'playing', d));
-    on('playback:stopped', () => {
-      this.#setState('stopped', {});
-      this.playingIndex = -1;
-      this.emit('track', null);
+    on('playback:stopped', (d) => {
+      this.#lastStop = { reason: d?.reason || 'unknown', at: performance.now() };
+      if (d?.reason === 'starting_another') return;
+      this.#stopSoon();
     });
     on('playback:time', (d) => {
       // The once-a-second report lands a little early or late; snapping to
@@ -139,6 +157,18 @@ class Player extends Emitter {
     }, 120);
     onAny(['playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered', 'playlist:itemsReplaced', 'playlist:sorted', 'playlist:created', 'playlist:removed', 'playlist:reordered'], relocate);
     on('playback:edited', () => tryCall('playback.getCurrentTrack').then((r) => r?.track && ((this.track = r.track), this.emit('track', r.track))));
+  }
+
+  #stopTimer = 0;
+  #lastStop = null;
+  startedByUser = false; // the playing song was started by you (see trackChanged)
+  #stopSoon() {
+    clearTimeout(this.#stopTimer);
+    this.#stopTimer = setTimeout(() => {
+      this.#setState('stopped', {});
+      this.playingIndex = -1;
+      this.emit('track', null);
+    }, 350);
   }
 
   async #refreshLocation() {
@@ -198,6 +228,26 @@ class Player extends Emitter {
     if (this.shuffle?.handles(name)) return this.shuffle.start(name);
     if (this.shuffle?.mode) return this.shuffle.stop({ name });
     return call('playback.setPlaybackOrder', { name });
+  }
+}
+
+// The last songs played, kept in the page's storage so Now playing can show
+// them (and Previous go back through them) after a reload.
+const HISTORY = 50;
+const HISTORY_KEY = 'fusion.history';
+function loadHistory() {
+  try {
+    const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    return Array.isArray(h) ? h.slice(-HISTORY) : [];
+  } catch {
+    return [];
+  }
+}
+function saveHistory(h) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  } catch {
+    /* no storage: kept until a reload */
   }
 }
 

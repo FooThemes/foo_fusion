@@ -204,7 +204,17 @@
   padding: 24px var(--margin) 30px;
 }
 
+.np-cover-ghost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
 .np-cover {
+  position: relative;
   width: min(300px, 32vw);
   height: min(300px, 32vw);
   flex: none;
@@ -296,6 +306,24 @@
 
 .np-then {
   margin-top: 26px;
+}
+
+/* "Show 12 earlier songs" above the dimmed previous ones. */
+.np-earlier {
+  display: block;
+  margin: 0 0 4px;
+  padding: 4px 10px;
+  border: 0;
+  background: none;
+  color: var(--text2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.np-earlier:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .np-note {

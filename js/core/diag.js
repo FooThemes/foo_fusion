@@ -90,6 +90,9 @@ function start(view) {
   let switchT0 = 0;
   let switchMode = '';
   const offMode = view.on('mode', (m) => {
+    // Now playing and Listening stats load nothing through the view, so its
+    // next change (seconds later, for something else) isn't their timing.
+    if (m === 'nowplaying' || m === 'stats') return void (switchT0 = 0);
     switchT0 = performance.now();
     switchMode = m;
   });

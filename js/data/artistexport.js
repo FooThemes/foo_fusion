@@ -9,6 +9,7 @@ import { TF } from './patterns.js';
 import { playlists, COLLECTION } from './playlists.js';
 import { splitValues } from './view.js';
 import * as store from '../core/store.js';
+import { logAlways } from '../core/log.js';
 
 const SEP = '|||';
 // MBIDs from the tag that matches where the names came from (ARTISTS, else
@@ -42,9 +43,7 @@ export async function exportArtists() {
   const list = [...artists.values()]
     .map((a) => ({ name: a.name, songs: a.songs, mbid: [...a.ids].sort((x, y) => y[1] - x[1])[0]?.[0] || null }))
     .sort((x, y) => x.name.localeCompare(y.name));
-  const path = await exportPath('fusion-artists.json');
-  const ok = await tryCall('file.write', { path, content: JSON.stringify({ exported: new Date().toISOString(), artists: list }, null, 1), atomic: true });
-  if (!ok) throw new Error("Couldn't write " + path);
+  const path = await writeList('fusion-artists.json', { exported: new Date().toISOString(), artists: list });
   return { path, count: list.length, withId: list.filter((a) => a.mbid).length };
 }
 
@@ -72,23 +71,54 @@ export async function exportGenres() {
     }
   }
   const list = [...genres.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const path = await exportPath('fusion-genres.json');
-  const ok = await tryCall('file.write', { path, content: JSON.stringify({ exported: new Date().toISOString(), genres: list }, null, 1), atomic: true });
-  if (!ok) throw new Error("Couldn't write " + path);
+  const path = await writeList('fusion-genres.json', { exported: new Date().toISOString(), genres: list });
   return { path, count: list.length };
 }
 
-/** Where the lists go: the export folder, else beside the script, else the profile. */
+/**
+ * Where the lists go: the export folder if one is set, else foobar2000's
+ * profile. (They used to go beside the script by default, but
+ * foo_ui_webview2 only lets a theme write on the system drive inside the
+ * profile, so a script on C: couldn't get them. The script is told where
+ * they are either way.)
+ */
 export async function exportDir() {
   const clean = (v) => String(v || '').trim().replace(/^"|"$/g, '').replace(/[\\/]+$/, '');
   const chosen = clean(store.get('exportFolder'));
   if (chosen) return chosen;
-  const script = clean(store.get('artistScript'));
-  if (/\.py$/i.test(script) && /[\\/]/.test(script)) return script.replace(/[\\/][^\\/]*$/, '');
-  const prof = await tryCall('misc.getProfilePath');
-  return clean(prof?.path || prof?.value);
+  return profileDir();
 }
+
+async function profileDir() {
+  const prof = await tryCall('misc.getProfilePath');
+  return String(prof?.path || prof?.value || '').replace(/[\\/]+$/, '');
+}
+
+/**
+ * Write a list where exportDir() says, or in the profile if that's refused
+ * (an export folder on the system drive). Returns the path written.
+ */
+async function writeList(name, data) {
+  const content = JSON.stringify(data, null, 1);
+  const path = await exportPath(name);
+  if (await tryCall('file.write', { path, content, atomic: true })) return path;
+  const fallback = `${await profileDir()}\\${name}`;
+  if (fallback !== path && (await tryCall('file.write', { path: fallback, content, atomic: true }))) {
+    logAlways(`couldn't write ${path}; wrote ${fallback} instead`);
+    lastWritten.set(name, fallback);
+    return fallback;
+  }
+  throw new Error("Couldn't write " + path);
+}
+
+// Where each list actually went (writeList's fallback), for the script.
+const lastWritten = new Map();
 
 export async function exportPath(name) {
   return `${await exportDir()}\\${name}`;
+}
+
+/** Where a list was last written (for passing to the script). */
+export async function writtenPath(name) {
+  return lastWritten.get(name) || exportPath(name);
 }

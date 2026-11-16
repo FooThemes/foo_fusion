@@ -296,7 +296,7 @@ export function mountSettings(root, app) {
   function exportFolderField() {
     // Browse starts in the script's folder, when the script is set.
     const scriptDir = () => winPath(store.get('artistScript')).replace(/\\[^\\]*$/, '');
-    return pathField('Export folder', 'exportFolder', 'Where the artist and genre lists are saved for the script. Empty: beside the script, or the foobar2000 profile folder if the script isn’t set.', 'Beside the script', {
+    return pathField('Export folder', 'exportFolder', 'Where the artist and genre lists are saved for the script (it’s told where they are). Empty: foobar2000’s profile folder. A folder on the system drive outside the profile can’t be written to.', 'The profile folder', {
       onSet: (v) => (store.set('exportFolder', v), render()),
       startIn: scriptDir,
     });

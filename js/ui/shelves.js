@@ -160,7 +160,9 @@ export class Shelves {
     this.offListening();
     this.ac.abort();
     this.album.destroy();
-    kept = this.shown ? { node: this.node, sig: this.sig } : null;
+    // Kept for the next Albums tab, shown or not: its tiles (and their loaded
+    // covers) are reused, rather than redrawn blank and filled in again.
+    kept = { node: this.node, sig: this.shown ? this.sig : '' };
     this.node.remove();
   }
 
@@ -200,8 +202,21 @@ export class Shelves {
   #draw() {
     const openKey = this.album.key;
     this.album.close({ animate: false });
+    // Tiles already drawn (here before, or on an earlier visit) are reused by
+    // album, cover and all.
+    // (An album on two shelves has a tile on each.)
+    const old = new Map();
+    for (const t of this.node.querySelectorAll('.shelf-tile')) old.set(t.dataset.key, [...(old.get(t.dataset.key) || []), t]);
+    const tile = (i) => {
+      const g = view.groups[i];
+      const node = old.get(g.key)?.shift();
+      if (!node) return this.#tile(i);
+      node.classList.remove('expanded', 'menu-open', 'playing');
+      this.#fill(node, g);
+      return node;
+    };
     const rows = this.shelves.map(({ id, items }) => {
-      const row = el('div.shelf-row', null, ...items.map((i) => this.#tile(i)));
+      const row = el('div.shelf-row', null, ...items.map(tile));
       const scroll = (dir) => row.scrollBy({ left: dir * Math.max(this.grid.tileW, row.clientWidth - this.grid.tileW), behavior: store.get('smoothScroll') ? 'smooth' : 'auto' });
       const prev = el('button.btn-icon.shelf-arrow', { title: 'Back', onclick: () => scroll(-1) }, icon('back'));
       const next = el('button.btn-icon.shelf-arrow', { title: 'More', onclick: () => scroll(1) }, icon('forward'));
@@ -314,8 +329,7 @@ export class Shelves {
     this.album.close({ animate: false });
     this.shown = false;
     this.sig = '';
-    this.node.hidden = true;
-    this.node.replaceChildren();
+    this.node.hidden = true; // its tiles stay, for reuse when it's back
     if (this.grid.top !== 16) {
       this.grid.top = 16;
       this.grid.layout();

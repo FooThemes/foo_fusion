@@ -78,17 +78,12 @@ export async function trackContextMenu(rows, extra = [], { select = true } = {})
 
 /**
  * foobar2000's context menu for `target` ({ mode: 'selection' | 'nowPlaying' }
- * or { mode: 'handles', handles }). The native menu can't take extra items,
- * so with `extra` the same commands are shown in Fusion's menu instead and
- * run through foobar2000.
+ * or { mode: 'handles', handles }), with Fusion's `extra` items, shown as
+ * Fusion's menu (so every menu is laid out the same way; see arrange()).
  */
-export async function contextMenu(target, extra = [], { hoist = [] } = {}) {
-  if (!extra.length && target.mode !== 'handles') return tryCall('menu.showNativePopup', target);
+export async function contextMenu(target, extra = []) {
   const items = withAlbumFolder(await contextItems(target), target);
-  // foobar2000's own items Fusion already offers above ("Play") aren't
-  // listed twice; `hoist`ed ones move up beside Fusion's first item.
-  const { mine, rest } = mergeItems(extra, items, hoist);
-  return showMenu(rest.length ? [...mine, '-', ...rest] : mine);
+  return showMenu(arrange(extra, items));
 }
 
 /** foobar2000's context menu for `target`, as showMenu() items. */
@@ -140,16 +135,35 @@ function withAlbumFolder(items, target) {
   return items.map((it) => (it.submenu ? { ...it, submenu: it.submenu.map(open) } : open(it)));
 }
 
+// Every song menu starts with these two, in this order, set off by lines.
+const PLAY_ITEMS = ['Play', 'Add to playback queue'];
+
 /**
- * Fusion's items with foobar2000's: theirs that repeat ours are dropped, and
- * the `hoist`ed ones move up to just after our first item.
+ * Fusion's items with foobar2000's, laid out the same in every menu: Play and
+ * Add to playback queue first (Fusion's own when it has them), a line,
+ * Fusion's items, a line, then the rest of foobar2000's. foobar2000's items
+ * that repeat Fusion's are dropped.
  */
-function mergeItems(extra, items, hoist = []) {
+function arrange(extra, items) {
   const ours = new Set(extra.filter((x) => x && x !== '-').map((x) => x.label));
-  let rest = items.filter((it) => it === '-' || !ours.has(it.label));
-  const lifted = rest.filter((it) => it !== '-' && hoist.includes(it.label));
-  rest = rest.filter((it) => !lifted.includes(it));
-  return { mine: lifted.length ? [extra[0], ...lifted, ...extra.slice(1)] : extra, rest };
+  const theirs = items.filter((it) => it === '-' || !ours.has(it.label));
+  const all = [...extra, ...theirs];
+  const top = PLAY_ITEMS.map((label) => all.find((it) => it && it !== '-' && it.label === label)).filter(Boolean);
+  const mine = extra.filter((it) => !top.includes(it));
+  const rest = theirs.filter((it) => !top.includes(it));
+  return tidy([...top, '-', ...mine, '-', ...rest]);
+}
+
+/** No lines at the ends of a menu, nor two in a row. */
+function tidy(list) {
+  const out = [];
+  for (const it of list) {
+    if (!it) continue;
+    if (it === '-' && (!out.length || out[out.length - 1] === '-')) continue;
+    out.push(it);
+  }
+  while (out[out.length - 1] === '-') out.pop();
+  return out;
 }
 
 /**
@@ -265,6 +279,7 @@ export async function playlistMenu(p, targets = [p]) {
   return showMenu([
     play,
     queue,
+    '-',
     { label: 'Show', run: () => playlists.activate(p.index) },
     '-',
     { label: 'Rename…', enabled: !special && !many, shortcut: 'F2', run: () => renamePlaylist(p) },

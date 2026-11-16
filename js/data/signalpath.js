@@ -52,7 +52,7 @@ class SignalPath extends Emitter {
 }
 
 async function build() {
-  const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`)].join(SEP);
+  const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%__channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`)].join(SEP);
   const [tf, conf, chain, rgMode, rgPre, vol] = await Promise.all([
     tryCall('titleformat.eval', { pattern }),
     tryCall('config.getOutputConfig'),

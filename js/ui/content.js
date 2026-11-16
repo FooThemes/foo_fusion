@@ -168,6 +168,12 @@ export function mountContent(root) {
       message.append(el('h2', { text: "Sorry, we've got no results to show." }));
     } else show = false;
     message.hidden = !show;
+    // Songs: below the column headers, which would otherwise cover it.
+    const head = show && scroller.querySelector('.song-head');
+    if (head) {
+      const r = (message.offsetParent || root).getBoundingClientRect();
+      message.style.top = `${Math.round(head.getBoundingClientRect().bottom - r.top) + 32}px`;
+    } else message.style.top = '';
   }
 
   view.on('change', onChange);

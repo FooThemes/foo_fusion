@@ -70,7 +70,8 @@ async function build() {
   const src = {
     codec: codec || '?',
     lossless: /lossless/i.test(encoding) || (!encoding && LOSSLESS.test(codec || '')),
-    dsd: /^(dsd|dsf|dff|dst)/i.test(codec || ''),
+    // DSD: 1-bit samples (what any DSD decoder reports), or a DSD codec name.
+    dsd: num(bits) === 1 || /^(dsd|dsf|dff|dst)/i.test(codec || ''),
     bits: num(bits),
     rate: num(rate),
     channels: num(channels),
@@ -99,7 +100,7 @@ async function build() {
   const dopRate = src.dsd && src.rate ? src.rate / 16 : 0;
   // From the file's own tags: native when the output runs at the DSD file's
   // own rate, DoP at exactly 1/16 of it.
-  const nativeOut = src.dsd && !!earlyRate && !!src.rate && Math.abs(earlyRate - src.rate) < 1;
+  const nativeOut = src.dsd && ((!!earlyRate && !!src.rate && Math.abs(earlyRate - src.rate) < 1) || num(o.output_bitdepth) === 1);
   const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
   const told = store.get('dsdOut') || 'auto';
   const dsdKept = src.dsd && (told === 'dsd' || (told === 'auto' && (nativeOut || looksDop)));
@@ -172,7 +173,7 @@ async function build() {
   const deviceName = device.replace(/\s*\[exclusive\]\s*$/i, '');
   // The output is DSD: the DSD file at its own rate, or (PCM made into DSD
   // on the way) exactly a standard DSD rate, DSD32 to DSD1024.
-  const outDsd = !!outRate && (nativeOut || (!src.dsd && isDsdRate(outRate)));
+  const outDsd = !!outRate && (nativeOut || (!src.dsd && (outBits === 1 || isDsdRate(outRate))));
   const fmtOut = dsdKept
     ? [dsd(src.rate), outDsd ? 'native DSD' : looksDop || told === 'dsd' ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
     : [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');

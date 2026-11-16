@@ -777,3 +777,9 @@ button.heart.hate {
   opacity: 0.5;
   font-weight: inherit;
 }
+
+/* Waiting on foobar2000 (a big playlist's menu being read). */
+html.busy,
+html.busy * {
+  cursor: progress !important;
+}

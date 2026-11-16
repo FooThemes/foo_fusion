@@ -218,17 +218,38 @@ export function folderMenu(f) {
   ]);
 }
 
+// Above this many songs, Contents is read only when it's clicked: reading a
+// big playlist's menu holds foobar2000 up for a moment.
+const CONTENTS_MAX = 1500;
+// foobar2000's items that Contents leaves out (Play and the queue are on the
+// menu itself; one folder for a whole playlist means little).
+const CONTENTS_SKIP = new Set(['Play', 'Add to playback queue', 'Open containing folder']);
+
 export async function playlistMenu(p, targets = [p]) {
   const special = playlists.isSpecial(p);
   const many = targets.length > 1;
-  // Contents: foobar2000's menu for every song in them (file operations,
-  // tagging, ReplayGain …). A real submenu, so it's read before the menu opens.
-  const handles = await playlistHandles(targets);
-  const contents = handles.length ? await contextItems({ mode: 'handles', handles }) : [];
+  const songs = targets.reduce((n, t) => n + (t.trackCount || 0), 0);
   const play = { label: 'Play', run: () => call('playlist.playTrack', { playlist: p.index, index: 0 }) };
-  const { mine, rest } = mergeItems([play], contents, ['Add to playback queue']);
+  const queue = {
+    label: 'Add to playback queue',
+    enabled: songs > 0,
+    run: async () => {
+      for (const t of targets) if (t.trackCount) await tryCall('queue.add', { playlistGuid: t.guid, tracks: Array.from({ length: t.trackCount }, (_, i) => i) });
+    },
+  };
+  // Contents: foobar2000's menu for every song in them (file operations,
+  // tagging, ReplayGain …). A real submenu when the playlists are small
+  // enough to read before the menu opens; otherwise opened by a click.
+  let contents;
+  if (!songs) contents = { label: 'Contents', enabled: false, submenu: [{ label: 'Empty', enabled: false }] };
+  else if (songs > CONTENTS_MAX) contents = { label: 'Contents…', run: () => contentsMenu(targets) };
+  else {
+    const items = await busy(() => contentsItems(targets));
+    contents = { label: 'Contents', enabled: items.length > 0, submenu: items.length ? items : [{ label: 'Empty', enabled: false }] };
+  }
   return showMenu([
-    ...mine,
+    play,
+    queue,
     { label: 'Show', run: () => playlists.activate(p.index) },
     '-',
     { label: 'Rename…', enabled: !special && !many, shortcut: 'F2', run: () => renamePlaylist(p) },
@@ -237,7 +258,7 @@ export async function playlistMenu(p, targets = [p]) {
       for (const t of [...targets].reverse()) await tryCall('playlist.duplicate', { playlistGuid: t.guid });
     } },
     { label: 'Folder', enabled: !targets.some((t) => playlists.isSpecial(t)), submenu: folderMenuItems(targets) },
-    { label: 'Contents', enabled: rest.some((x) => x !== '-'), submenu: rest.length ? rest : [{ label: 'Empty', enabled: false }] },
+    contents,
     { label: 'Save as…', enabled: !many, run: async () => {
       await playlists.activate(p.index);
       await runMainMenuAny(['File/Save playlist...', 'File/Save playlist…', 'Save playlist...']);
@@ -258,6 +279,33 @@ export async function playlistMenu(p, targets = [p]) {
       : []),
     ...(targets.some((t) => playlists.isSpecial(t)) ? [] : ['-', { label: many ? `Delete ${targets.length} playlists` : 'Delete', shortcut: 'Del', run: () => deletePlaylists(targets) }]),
   ]);
+}
+
+/** foobar2000's menu items for every song in these playlists, less CONTENTS_SKIP. */
+async function contentsItems(targets) {
+  const handles = await playlistHandles(targets);
+  if (!handles.length) return [];
+  const items = await contextItems({ mode: 'handles', handles });
+  return items.filter((it) => it === '-' || !CONTENTS_SKIP.has(it.label));
+}
+
+/** Contents for a big playlist: read when asked (the pointer shows it's busy). */
+async function contentsMenu(targets) {
+  const items = await busy(() => contentsItems(targets));
+  if (!items.some((it) => it !== '-')) return toast('Nothing to show for those songs.');
+  return showMenu(items);
+}
+
+/** Run `fn` with the busy pointer showing (drawn before the work starts). */
+async function busy(fn) {
+  const root = document.documentElement;
+  root.classList.add('busy');
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  try {
+    return await fn();
+  } finally {
+    root.classList.remove('busy');
+  }
 }
 
 // Every song's handle in a playlist, kept until its songs change.

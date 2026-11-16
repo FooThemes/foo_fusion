@@ -218,9 +218,6 @@ export function folderMenu(f) {
   ]);
 }
 
-// Above this many songs, Contents is read only when it's clicked: reading a
-// big playlist's menu holds foobar2000 up for a moment.
-const CONTENTS_MAX = 1500;
 // foobar2000's items that Contents leaves out (Play and the queue are on the
 // menu itself; one folder for a whole playlist means little).
 const CONTENTS_SKIP = new Set(['Play', 'Add to playback queue', 'Open containing folder']);
@@ -238,15 +235,10 @@ export async function playlistMenu(p, targets = [p]) {
     },
   };
   // Contents: foobar2000's menu for every song in them (file operations,
-  // tagging, ReplayGain …). A real submenu when the playlists are small
-  // enough to read before the menu opens; otherwise opened by a click.
-  let contents;
-  if (!songs) contents = { label: 'Contents', enabled: false, submenu: [{ label: 'Empty', enabled: false }] };
-  else if (songs > CONTENTS_MAX) contents = { label: 'Contents…', run: () => contentsMenu(targets) };
-  else {
-    const items = await busy(() => contentsItems(targets));
-    contents = { label: 'Contents', enabled: items.length > 0, submenu: items.length ? items : [{ label: 'Empty', enabled: false }] };
-  }
+  // tagging, ReplayGain …), laid out from a few of their songs so it opens
+  // straight away; a command picked runs on all of them.
+  const items = songs ? await contentsItems(targets) : [];
+  const contents = { label: 'Contents', enabled: items.length > 0, submenu: items.length ? items : [{ label: 'Empty', enabled: false }] };
   return showMenu([
     play,
     queue,
@@ -281,37 +273,98 @@ export async function playlistMenu(p, targets = [p]) {
   ]);
 }
 
-/** foobar2000's menu items for every song in these playlists, less CONTENTS_SKIP. */
+/**
+ * foobar2000's menu for the songs in these playlists, less CONTENTS_SKIP.
+ *
+ * foo_ui_webview2 checks every song's file on disk before building a menu for
+ * them (about half a millisecond each: 7–8 s for a 17,000-song Collection,
+ * with foobar2000 frozen). So the menu is laid out from a sample of a few
+ * dozen songs spread through the playlists, which is near-instant, and only
+ * when a command is picked are all the songs read and the command run on
+ * them (runOnAll).
+ */
 async function contentsItems(targets) {
-  const handles = await playlistHandles(targets);
-  if (!handles.length) return [];
-  const items = await contextItems({ mode: 'handles', handles });
-  return items.filter((it) => it === '-' || !CONTENTS_SKIP.has(it.label));
+  const sample = await sampleHandles(targets);
+  if (!sample.length) return [];
+  const res = await tryCall('menu.getContextMenu', { mode: 'handles', handles: sample, withAvailability: false });
+  const conv = (nodes) =>
+    (nodes || [])
+      .filter((n) => !n.hidden && (n.type === 'separator' || !CONTENTS_SKIP.has(clean(n.displayLabel || n.label))))
+      .map((n) => {
+        if (n.type === 'separator') return '-';
+        const label = clean(n.displayLabel || n.label);
+        if (n.type === 'submenu') return { label, submenu: conv(n.children) };
+        return {
+          label,
+          enabled: n.enabled !== false && n.commandId != null && !!n.path,
+          checked: !!(n.checked || n.radioChecked),
+          run: () => runOnAll(targets, n.path, label),
+        };
+      });
+  return conv(res?.items);
+}
+
+// Songs to lay the menu out from: a few runs of rows spread through each
+// playlist, so different formats (and their own items) are likely included.
+const SAMPLE_RUNS = 8;
+const SAMPLE_RUN = 5;
+async function sampleHandles(targets) {
+  const out = [];
+  for (const t of targets) {
+    const n = t.trackCount || 0;
+    if (!n) continue;
+    if (n <= SAMPLE_RUNS * SAMPLE_RUN) {
+      const res = await tryCall('playlist.getTracks', { playlistGuid: t.guid, start: 0, count: n, fields: ['handle'] });
+      for (const x of res?.tracks || []) if (x.handle) out.push(x.handle);
+      continue;
+    }
+    const step = Math.floor(n / SAMPLE_RUNS);
+    const runs = await Promise.all(
+      Array.from({ length: SAMPLE_RUNS }, (_, k) => tryCall('playlist.getTracks', { playlistGuid: t.guid, start: Math.min(k * step, n - SAMPLE_RUN), count: SAMPLE_RUN, fields: ['handle'] })),
+    );
+    for (const res of runs) for (const x of res?.tracks || []) if (x.handle) out.push(x.handle);
+  }
+  return [...new Set(out)];
 }
 
 /**
- * Contents for a big playlist, read when it's clicked. foobar2000 is held up
- * while it works out the menu, and its window can't change the pointer
- * meanwhile, so a small menu saying so opens where the click was first and
- * gives way to the real one when it's ready.
+ * Run the menu command at `path` on every song in these playlists. The menu
+ * is built again for all of them (the slow part, on a big playlist), and the
+ * command is found there by its path, so it runs only if it's still the same
+ * command for the whole set.
  */
-async function contentsMenu(targets) {
+async function runOnAll(targets, path, label) {
   const songs = targets.reduce((n, t) => n + (t.trackCount || 0), 0);
-  const waiting = await tryCall('menu.show', {
-    items: [{ id: 'wait', label: `Reading ${songs.toLocaleString()} songs…`, enabled: false }],
-    windowModel: 'contentSized',
-    backdropDarkMode: !!store.get('dark'),
-  });
-  // Drawn before foobar2000 gets busy.
-  if (waiting?.menuId) await new Promise((r) => setTimeout(r, 150));
-  let items;
+  // A big set holds foobar2000 up while it's read, and its window can't show
+  // a busy pointer then: a small menu saying so stands in.
+  const slow = songs > 400;
+  const waiting = slow
+    ? await tryCall('menu.show', {
+        items: [{ id: 'wait', label: `Reading ${songs.toLocaleString()} songs…`, enabled: false }],
+        windowModel: 'contentSized',
+        backdropDarkMode: !!store.get('dark'),
+      })
+    : null;
+  if (waiting?.menuId) await new Promise((r) => setTimeout(r, 150)); // drawn before foobar2000 gets busy
+  let res;
+  let handles;
   try {
-    items = await busy(() => contentsItems(targets));
+    handles = await busy(() => playlistHandles(targets));
+    res = handles.length ? await tryCall('menu.getContextMenu', { mode: 'handles', handles, withAvailability: false }) : null;
   } finally {
     if (waiting?.menuId) await tryCall('menu.close', { reason: 'api' });
   }
-  if (!items.some((it) => it !== '-')) return toast('Nothing to show for those songs.');
-  return showMenu(items);
+  const find = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.type === 'command' && n.path === path) return n;
+      const hit = n.children && find(n.children);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const node = find(res?.items);
+  if (!node || node.commandId == null || node.enabled === false) return toast(`“${label}” isn’t available for all of those songs.`);
+  return tryCall('menu.runContextCommandById', { id: node.commandId, mode: res.mode, handles, ...expect(node, res) });
 }
 
 /** Run `fn` with the busy pointer showing (drawn before the work starts). */

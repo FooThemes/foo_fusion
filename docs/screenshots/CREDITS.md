@@ -1,6 +1,6 @@
 # Screenshot credits
 
-The screenshots in the README were taken in a browser with the development mock (`dev/mock-bridge.js`), not in foobar2000, using a demo library made of real Creative Commons and public-domain albums from the Internet Archive's netlabel collections. Their covers, titles and track lists are used as published. "Harbour Lights" and its lyrics were made up for the demo.
+The screenshots in the README were taken in a browser with the development mock (`dev/mock-bridge.js`), not in foobar2000, using a demo library made of real Creative Commons and public-domain albums from the Internet Archive's netlabel collections. Their covers, titles and track lists are used as published; file formats, play counts and the audio output in the signal path are made up. "Harbour Lights" and its lyrics were made up for the demo. `dev/demo/build.py` downloads the albums below, and `dev/demo/capture.js` takes the screenshots.
 
 Artist pictures are photos from [Unsplash](https://unsplash.com/license), used as stand-ins: they are not pictures of these artists.
 

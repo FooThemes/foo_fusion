@@ -107,6 +107,9 @@ function buildLibrary() {
 
 // Emulate exactly the title formatting patterns Fusion uses.
 function tfEval(pattern, t) {
+  // A page may evaluate patterns the mock doesn't know (e.g. a demo's columns).
+  const own = window.__mockTf?.(pattern, t);
+  if (own != null) return own;
   const aa = t.albumArtist || 'Unknown Artist';
   const al = t.album || 'Single(s)';
   const map = {

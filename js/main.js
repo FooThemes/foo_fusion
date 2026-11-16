@@ -27,6 +27,13 @@ import { initArtCache } from './data/artcache.js';
 async function boot() {
   if (!window.fb2k) {
     // Opened outside foobar2000 (e.g. in a browser while developing).
+    // ?demo: the Creative Commons library the screenshots use (dev/demo).
+    if (/[?&]demo\b/.test(location.search)) {
+      const demo = await import('../dev/demo/demo.js');
+      window.__mockTracks = demo.demoTracks();
+      window.__mockOverride = demo.demoOverride;
+      window.__mockTf = demo.demoTf;
+    }
     const { installMock } = await import('../dev/mock-bridge.js');
     await installMock();
   }

@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 dist/
 shots/
+
+# Demo library downloads (dev/demo/build.py)
+dev/demo/data/

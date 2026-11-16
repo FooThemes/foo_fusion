@@ -236,7 +236,9 @@ class Player extends Emitter {
     // Paused (by any control): on ASIO, perhaps let go of the driver.
     if (state === 'paused' && was === 'playing' && !this.#held) this.#releaseOnPause();
     if (d.duration != null) this.duration = d.duration;
-    if (d.canSeek != null) this.canSeek = d.canSeek;
+    // While jumping back after a released pause the song is briefly reported
+    // as not seekable: the seek bar would dim for a moment.
+    if (d.canSeek != null && !(d.canSeek === false && this.#jumpTo && performance.now() - this.#jumpTo.at < 2500)) this.canSeek = d.canSeek;
     if (d.position != null) this.#setPosition(d.position);
     this.emit('state', state);
   }

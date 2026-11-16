@@ -277,12 +277,18 @@ class Shuffle extends Emitter {
     if (want != null) {
       // Counted as Fusion's (not yours) from the moment it's added: the queue
       // badge flicked up by one before the queue was read again.
+      // Recorded as Fusion's before the queue is read again, so it's never
+      // counted as yours (the badge flicked up by one on each Next).
+      this.ours = { guid: this.guid, row: want, handle: undefined };
       this.oursQueued = true;
       const res = await tryCall('queue.add', { playlistGuid: this.guid, tracks: [want] });
-      if (res) {
+      if (!res) {
+        this.ours = null;
+        this.oursQueued = false;
+      } else {
         const after = await this.#readQueue();
-        const added = after[after.length - 1];
-        this.ours = { guid: this.guid, row: want, handle: added?.handle };
+        const added = after.filter((it) => this.isOurs(it)).pop();
+        if (added && this.ours) this.ours.handle = added.handle;
       }
     }
     save(this);

@@ -84,7 +84,7 @@ export async function trackContextMenu(rows, extra = [], { select = true } = {})
  */
 export async function contextMenu(target, extra = [], { hoist = [] } = {}) {
   if (!extra.length && target.mode !== 'handles') return tryCall('menu.showNativePopup', target);
-  const items = await contextItems(target);
+  const items = withAlbumFolder(await contextItems(target), target);
   // foobar2000's own items Fusion already offers above ("Play") aren't
   // listed twice; `hoist`ed ones move up beside Fusion's first item.
   const { mine, rest } = mergeItems(extra, items, hoist);
@@ -115,6 +115,29 @@ export async function contextItems(target) {
         };
       });
   return conv(res?.items);
+}
+
+/**
+ * foobar2000 greys out "Open containing folder" when the songs are in more
+ * than one folder (an album's disc folders, Artist\\Album\\CD1 and CD2). Then
+ * it opens the folder they share instead (Artist\\Album), with the first of
+ * their folders selected.
+ */
+function withAlbumFolder(items, target) {
+  if (target.mode !== 'handles' || !target.handles?.length) return items;
+  const dirs = [...new Set(target.handles.map((h) => String(h).replace(/\|subsong:\d+$/, '').replace(/[\\/][^\\/]*$/, '')))].filter(Boolean);
+  if (dirs.length < 2) return items;
+  const parts = dirs.map((d) => d.split(/[\\/]/));
+  let n = 0;
+  while (parts.every((p) => n < p.length && p[n].toLowerCase() === parts[0][n].toLowerCase())) n++;
+  // Only a drive (or nothing) in common: no one folder to open.
+  if (n < 2) return items;
+  // Revealing a folder inside the shared one opens the shared one.
+  const deeper = parts.find((p) => p.length > n);
+  if (!deeper) return items;
+  const child = deeper.slice(0, n + 1).join('\\');
+  const open = (it) => (it !== '-' && it.label === 'Open containing folder' ? { ...it, enabled: true, run: () => tryCall('shell.showInExplorer', { path: child }) } : it);
+  return items.map((it) => (it.submenu ? { ...it, submenu: it.submenu.map(open) } : open(it)));
 }
 
 /**

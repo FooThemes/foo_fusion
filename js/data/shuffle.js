@@ -28,6 +28,7 @@ class Shuffle extends Emitter {
   count = 0; // its song count when the order was made
   order = []; // its rows, in the order they play
   pos = -1; // where the playing song is in `order`
+  #handles = []; // the file of each song in `order` (to follow them when rows move)
   #at = new Map(); // row -> position in order
   ours = null; // { guid, row, handle } of the song Fusion queued
   #lastQueue = [];
@@ -55,11 +56,10 @@ class Shuffle extends Emitter {
   async init() {
     on('playback:queueChanged', debounce(() => this.#run(() => this.#ensure()), 150));
     player.on('track', () => this.#run(() => this.#onTrack()));
-    // Songs added, removed or moved in the shuffled playlist: its rows no
-    // longer match the order, so a new one is made from the playing song.
-    // (Fusion's playback list for the Songs tab fills in a few hundred songs
-    // at a time: one new order once it's done.)
-    const changed = debounce(() => this.mode && this.#run(() => this.#rebuild()), 1500);
+    // Songs added, removed or moved in the shuffled playlist (an autoplaylist
+    // re-sorts as play counts change): the order is kept, each song followed
+    // to its new row; new songs are slotted in at random further on.
+    const changed = debounce(() => this.mode && this.#run(() => this.#remap()), 800);
     onAny(['playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered', 'playlist:itemsReplaced', 'playlist:sorted'], (d) => {
       if (!this.mode) return;
       const g = d?.playlistGuid || playlists.list[d?.playlist]?.guid;
@@ -80,7 +80,10 @@ class Shuffle extends Emitter {
       Object.assign(this, { mode: saved.mode, guid: saved.guid, count: saved.count, order: saved.order, pos: saved.pos ?? -1, ours: saved.ours || null });
       this.#index();
       player.emit('order', this.mode);
-      await this.#run(() => this.#onTrack());
+      await this.#run(async () => {
+        this.#handles = await rowHandles(pl, this.order);
+        await this.#onTrack();
+      });
     } else {
       await this.start(saved.mode);
     }
@@ -117,14 +120,18 @@ class Shuffle extends Emitter {
     const from = this.#at.get(row);
     if (from == null || from <= this.pos) return;
     const order = this.order.slice();
+    const handles = this.#handles.slice();
     order.splice(from, 1);
+    const [h] = handles.splice(from, 1);
     let to = order.indexOf(target);
     if (to < 0) return;
     if (after) to++;
     // Never before the playing song.
     to = Math.max(this.pos + 1, to);
     order.splice(to, 0, row);
+    handles.splice(to, 0, h);
     this.order = order;
+    this.#handles = handles;
     this.#index();
     this.emit('change');
     return this.#run(() => this.#ensure());
@@ -154,6 +161,46 @@ class Shuffle extends Emitter {
     this.count = pl.trackCount;
     this.order = await makeOrder(this.mode, pl, current);
     this.pos = current >= 0 ? 0 : -1;
+    this.#index();
+    this.#handles = await rowHandles(pl, this.order);
+    logInfo(`shuffle: new ${this.mode} order for ${pl.name} (${this.order.length} songs)`);
+    await this.#ensure();
+    this.emit('change');
+  }
+
+  /** The playlist changed: the same order, each song at its row now. */
+  async #remap() {
+    const pl = playlists.list.find((p) => p.guid === this.guid);
+    if (!pl) return;
+    const all = await rowHandles(pl);
+    if (!all.length && pl.trackCount) return;
+    const rowsOf = new Map(); // handle -> its rows, in order
+    all.forEach((h, row) => {
+      if (!rowsOf.has(h)) rowsOf.set(h, []);
+      rowsOf.get(h).push(row);
+    });
+    const order = [];
+    const handles = [];
+    let pos = -1;
+    this.#handles.forEach((h, i) => {
+      const row = rowsOf.get(h)?.shift();
+      if (row == null) return; // removed from the playlist
+      if (i === this.pos) pos = order.length;
+      order.push(row);
+      handles.push(h);
+    });
+    // Songs new to the playlist: anywhere after the playing one.
+    for (const [h, rows] of rowsOf) {
+      for (const row of rows) {
+        const at = pos + 1 + Math.floor(Math.random() * (order.length - pos));
+        order.splice(at, 0, row);
+        handles.splice(at, 0, h);
+      }
+    }
+    this.count = pl.trackCount;
+    this.order = order;
+    this.#handles = handles;
+    this.pos = pos;
     this.#index();
     await this.#ensure();
     this.emit('change');
@@ -265,6 +312,17 @@ async function makeOrder(mode, pl, current) {
   const mine = current >= 0 ? list.find((g) => g.includes(current)) : null;
   const rest = shuffled(list.filter((g) => g !== mine));
   return [...(mine ? mine.slice(mine.indexOf(current)) : []), ...rest.flat()];
+}
+
+/** The file of each row (all of the playlist, or just `rows`, in that order). */
+async function rowHandles(pl, rows = null) {
+  const all = [];
+  for (let i = 0; i < pl.trackCount; i += 4000) {
+    const res = await tryCall('playlist.getTracks', { playlistGuid: pl.guid, start: i, count: Math.min(4000, pl.trackCount - i), fields: ['handle'] });
+    if (!res) return [];
+    for (const t of res.tracks) all.push(t.handle);
+  }
+  return rows ? rows.map((r) => all[r]) : all;
 }
 
 function shuffled(a) {

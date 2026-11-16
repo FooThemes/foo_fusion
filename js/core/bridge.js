@@ -38,7 +38,22 @@ export function onSlowCall(fn) {
   slowHook = fn;
 }
 
+// Told about every call before it goes out (the player notes when Fusion
+// starts a song for you).
+const callHooks = new Set();
+export function onCall(fn) {
+  callHooks.add(fn);
+  return () => callHooks.delete(fn);
+}
+
 export async function call(method, params) {
+  for (const fn of callHooks) {
+    try {
+      fn(method, params);
+    } catch {
+      /* a hook's own problem */
+    }
+  }
   let res;
   const id = ++nextId;
   const t0 = performance.now();

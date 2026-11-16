@@ -1,7 +1,7 @@
 // Playback state: transport, now-playing track, time, volume, order, queue.
 // One source of truth that the player bar, now-playing view and tiles read.
 
-import { call, tryCall, on, onAny } from '../core/bridge.js';
+import { call, tryCall, on, onAny, onCall } from '../core/bridge.js';
 import { debounce } from '../core/util.js';
 import { Emitter } from '../core/emitter.js';
 
@@ -79,8 +79,10 @@ class Player extends Emitter {
       // Started by you (from stopped, or playing another song, which foobar2000
       // reports as a stop for "user"), rather than the queue or Next moving on.
       const stop = this.#lastStop;
-      this.startedByUser = this.state === 'stopped' || (!!stop && performance.now() - stop.at < 2000 && stop.reason !== 'starting_another');
+      const now = performance.now();
+      this.startedByUser = now - this.#playAsked < 3000 || this.state === 'stopped' || (!!stop && now - stop.at < 2000 && stop.reason !== 'starting_another');
       this.#lastStop = null;
+      this.#playAsked = -1e9;
       // Remember what played before (for "Previously" in Now playing).
       clearTimeout(this.#stopTimer);
       if (this.track && this.track.handle !== t.handle) {
@@ -98,7 +100,14 @@ class Player extends Emitter {
     // "starting_another"; playing another row reports a "user" stop). Acting
     // on that blanked Now playing between songs, so a stop only counts if no
     // song starts within a moment.
+    // A song Fusion starts for you (double-click, Play from here, Previous
+    // in its shuffle). foobar2000 started by its own controls is told apart
+    // by the stop it reports (below).
+    onCall((method) => {
+      if (method === 'playlist.playTrack' || method === 'playback.playPath') this.#playAsked = performance.now();
+    });
     on('playback:stateChanged', (d) => {
+      if (d.state === 'stopped') this.#lastStop = { reason: this.#lastStop?.reason || 'user', at: performance.now() };
       if (d.state !== 'stopped') {
         clearTimeout(this.#stopTimer);
         return this.#setState(d.state, d);
@@ -161,6 +170,7 @@ class Player extends Emitter {
 
   #stopTimer = 0;
   #lastStop = null;
+  #playAsked = -1e9;
   startedByUser = false; // the playing song was started by you (see trackChanged)
   #stopSoon() {
     clearTimeout(this.#stopTimer);

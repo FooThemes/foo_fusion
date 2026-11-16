@@ -234,7 +234,7 @@ export async function installMock() {
   const playAt = (pi, idx, reason = 'starting_another') => {
     // Like foobar2000: changing song stops for a moment first (Next and the
     // queue say "starting_another"; playing another row is a "user" stop).
-    if (pb.state !== 'stopped') emit('playback:stopped', { reason });
+    if (pb.state !== 'stopped' && !window.__mockNoStops) emit('playback:stopped', { reason });
     pb.pl = pi;
     pb.idx = idx;
     pb.pos = 0;

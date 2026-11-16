@@ -76,6 +76,7 @@ class Player extends Emitter {
     }
 
     on('playback:trackChanged', (t) => {
+      this.trackStart = (this.trackStart || 0) + 1; // each real start (re-announcements of the same song don't count)
       // Started by you (from stopped, or playing another song, which foobar2000
       // reports as a stop for "user"), rather than the queue or Next moving on.
       const stop = this.#lastStop;
@@ -102,7 +103,12 @@ class Player extends Emitter {
       this.track = t;
       this.duration = t.duration || 0;
       this.#setPosition(t.position || 0);
-      this.#refreshLocation().then(() => this.emit('track', t));
+      const start = this.trackStart;
+      this.#refreshLocation().then(() => {
+        // Its playlist and row are known now (located for this start).
+        if (this.trackStart === start) this.locatedStart = start;
+        this.emit('track', t);
+      });
     });
     // foobar2000 stops for a moment when another song is started (Next is
     // "starting_another"; playing another row reports a "user" stop). Acting

@@ -32,6 +32,7 @@ class Shuffle extends Emitter {
   #at = new Map(); // row -> position in order
   ours = null; // { guid, row, handle } of the song Fusion queued
   #lastQueue = [];
+  #seen = ''; // the song last handled by #onTrack
   #left = new Map(); // handle -> when a song you queued left the queue
   oursQueued = false; // Fusion's song is in the queue now
   #busy = Promise.resolve();
@@ -216,6 +217,13 @@ class Shuffle extends Emitter {
     const pl = playlists.list[player.playingPlaylist];
     const row = player.playingIndex;
     const h = player.track?.handle;
+    // The player announces a song more than once (its details arrive in
+    // stages): only a new song moves the order on.
+    // Until its playlist row is known, a new song can't be placed.
+    if (player.locatedStart !== player.trackStart) return;
+    const key = `${h}|${player.trackStart || ''}`;
+    if (key === this.#seen) return this.#ensure();
+    this.#seen = key;
     const inOrder = pl && pl.guid === this.guid && row >= 0 && this.#at.has(row);
     const nextUp = inOrder && row === this.order[this.pos + 1];
     // A song that was in the queue (yours, from any playlist).
@@ -259,6 +267,9 @@ class Shuffle extends Emitter {
     if (this.ours && player.track?.handle === this.ours.handle && !items.some((it) => this.isOurs(it))) return;
     const mine = items.filter((it) => this.isOurs(it));
     const want = this.order[this.pos + 1];
+    // Never queue the song that's playing (its track event may not have
+    // been handled yet, leaving the place in the order behind).
+    if (want != null && player.track?.handle && this.#handles[this.pos + 1] === player.track.handle) return;
     const okay = mine.length === 1 && items[items.length - 1] === mine[0] && mine[0].playlistItem === want;
     if (okay || !player.active) return save(this);
     if (mine.length) await tryCall('queue.remove', { indices: mine.map((it) => it.queueIndex) });

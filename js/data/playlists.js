@@ -58,6 +58,8 @@ class Playlists extends Emitter {
     );
     on('playlist:activated', (d) => {
       this.active = d.newIndex ?? -1;
+      this.pending = -1;
+      this.pendingName = '';
       for (const p of this.list) p.isActive = p.index === this.active;
       this.emit('active', this.activePlaylist);
       refresh();
@@ -71,16 +73,55 @@ class Playlists extends Emitter {
     const prev = this.active;
     const act = this.list.find((p) => p.isActive);
     this.active = act ? act.index : -1;
+    if (this.pending === this.active) (this.pending = -1), (this.pendingName = '');
     this.emit('change', this.list);
     if (prev !== this.active) this.emit('active', this.activePlaylist);
   }
 
+  // The playlist about to be shown (asked for, not yet reported active):
+  // leaving Now playing redrew the old one's page in the meantime.
+  // -2: one that's still being made (Favourites, the first time).
+  pending = -1;
+  pendingName = '';
+  #pendingTimer = 0;
+  /** The playlist being shown, or about to be (-1: one not listed yet). */
+  get shownIndex() {
+    return this.pending >= 0 ? this.pending : this.pending === -2 ? -1 : this.active;
+  }
+  get shownPlaylist() {
+    return this.list.find((p) => p.index === this.shownIndex) || null;
+  }
+  /** Mark the playlist that's about to be activated (before the tab switches). */
+  willShow(index, name = '') {
+    const known = index != null && index >= 0;
+    this.pending = known ? (index !== this.active ? index : -1) : -2;
+    this.pendingName = this.pending === -1 ? '' : name || this.list.find((p) => p.index === index)?.name || '';
+    // In case it never comes (the switch failed).
+    clearTimeout(this.#pendingTimer);
+    if (this.pending !== -1) this.#pendingTimer = setTimeout(() => this.#settle(), 4000);
+  }
+  #settle() {
+    if (this.pending === -1) return;
+    this.pending = -1;
+    this.pendingName = '';
+    this.emit('change', this.list);
+  }
+
   async activate(index) {
     if (index === this.active) {
+      this.pending = -1;
+      this.pendingName = '';
       this.emit('active', this.activePlaylist);
       return;
     }
-    await call('playlist.setActive', { playlist: index });
+    this.pending = index;
+    this.pendingName = this.list.find((p) => p.index === index)?.name || '';
+    try {
+      await call('playlist.setActive', { playlist: index });
+    } catch (e) {
+      this.pending = -1;
+      throw e;
+    }
   }
 
   async ensureCollection(activate = true) {

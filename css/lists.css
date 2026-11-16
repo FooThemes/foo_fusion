@@ -718,3 +718,36 @@
   grid-column: 1 / -1;
   margin: 0 -40px;
 }
+
+/* Click a header to sort by its column: an arrow on the sorted one. */
+.song-head [data-col]:hover {
+  color: var(--text);
+}
+
+.col-sort {
+  display: none;
+  flex: none;
+  margin-left: 4px;
+}
+
+.col-sort .icon {
+  width: 12px;
+  height: 12px;
+  transform: rotate(180deg);
+}
+
+.song-head .sorted {
+  color: var(--text);
+}
+
+.song-head .sorted .col-sort {
+  display: inline-flex;
+}
+
+.song-head .sorted.desc .col-sort .icon {
+  transform: none;
+}
+
+.song-head .c-fav.sorted .col-sort {
+  margin-left: 2px;
+}

@@ -7,6 +7,9 @@ import { debounce } from './util.js';
 
 const KEY = 'fusion.settings';
 
+// Ties broken by album and track order.
+const THEN = " | %album artist% | $if2(%album%,'Single(s)') | $num(%discnumber%,3) | $num(%tracknumber%,3) | %title%";
+
 export const SORTS = {
   album: {
     label: 'Album',
@@ -29,8 +32,18 @@ export const SORTS = {
     pattern: "$if2(%added%,0) | %album artist% | $if2(%album%,'Single(s)') | $num(%discnumber%,3) | $num(%tracknumber%,3)",
   },
   title: { label: 'Title', pattern: '%title% | %artist%' },
-  length: { label: 'Length', pattern: '$num(%length_seconds%,6)' },
+  length: { label: 'Length', pattern: '$num(%length_seconds%,6)' + THEN },
   path: { label: 'File path', pattern: '%path%' },
+  // The Songs view's other columns (click a column's header to sort by it).
+  trackartist: { label: 'Artist', pattern: "$if2(%artist%,'Unknown Artist')" + THEN },
+  albumartist: { label: 'Album artist', pattern: "$if2(%album artist%,'Unknown Artist') | $if(%album%,%date%,'9999') | $if2(%album%,'Single(s)') | $num(%discnumber%,3) | $num(%tracknumber%,3) | %title%" },
+  date: { label: 'Date', pattern: "$if2(%date%,'9999')" + THEN },
+  track: { label: 'Track', pattern: '$num(%tracknumber%,3)' + THEN },
+  disc: { label: 'Disc', pattern: '$num(%discnumber%,3)' + THEN },
+  fav: { label: 'Favourite', pattern: "$if($stricmp(%mood%,Like it),0,$if($stricmp(%mood%,Hate it),2,1))" + THEN },
+  codec: { label: 'Format', pattern: '[%codec%]' + THEN },
+  bitrate: { label: 'Bitrate', pattern: '$num(%bitrate%,6)' + THEN },
+  plays: { label: 'Plays', pattern: '$num(%play_count%,6)' + THEN },
 };
 
 // Which sort options each view offers, and which one it starts with.
@@ -39,8 +52,16 @@ export const VIEW_SORTS = {
   artists: ['artist'],
   genres: ['genre'],
   folders: ['path'],
-  songs: ['title', 'artist', 'album', 'year', 'genre', 'length', 'added', 'path'],
+  // Songs: every column (see songs.js), plus these two that aren't columns.
+  songs: ['title', 'trackartist', 'album', 'albumartist', 'year', 'date', 'genre', 'track', 'disc', 'fav', 'length', 'codec', 'bitrate', 'plays', 'added', 'path'],
 };
+
+/** A sort by its key: one of SORTS, or a column of your own (Songs view). */
+export function sortDef(key) {
+  if (SORTS[key]) return SORTS[key];
+  const c = (get('customColumns') || []).find((x) => x.id === key);
+  return c ? { label: c.label, pattern: `${c.pattern}${THEN}` } : null;
+}
 
 export const ACCENTS = [
   '#107C10', '#60A917', '#00ABA9', '#1BA1E2', '#0050EF', '#6A00FF', '#AA00FF',

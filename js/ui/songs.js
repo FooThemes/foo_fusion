@@ -39,6 +39,18 @@ const COLUMNS = {
   plays: { label: 'Plays', width: '52px', right: true, menu: 'Plays (foo_playcount)' },
   added: { label: 'Added', width: '96px', menu: 'Added (foo_playcount)' },
 };
+// The sort each column sorts by (store.SORTS); your own columns by their pattern.
+const COLUMN_SORT = { title: 'title', artist: 'trackartist', album: 'album', albumartist: 'albumartist', year: 'year', date: 'date', genre: 'genre', track: 'track', disc: 'disc', fav: 'fav', len: 'length', codec: 'codec', bitrate: 'bitrate', plays: 'plays', added: 'added' };
+const sortOf = (k) => COLUMN_SORT[k] || (customCol(k) ? k : null);
+
+/** The Songs view's sorts, for the header's "Sort by": its columns in their
+ *  order, then Date added and File path (when they aren't columns). */
+export function songSortKeys() {
+  const keys = columns().map(sortOf).filter(Boolean);
+  for (const k of ['added', 'path']) if (!keys.includes(k)) keys.push(k);
+  return keys;
+}
+
 const DEFAULT_COLUMNS = ['fav', 'title', 'artist', 'album', 'year', 'genre', 'len'];
 const MIN_WIDTH = 28;
 
@@ -104,6 +116,7 @@ export class SongList {
     this.#dragColumns();
     this.#resizeColumns();
     this.offStore = store.subscribe((k) => {
+      if (k === 'sort' || k === 'sortDescending') return this.#markSort();
       if (k !== 'songColumns' && k !== 'songColumnWidths' && k !== 'customColumns') return;
       this.#buildHeader();
       for (const node of [...this.nodes.values(), ...this.free]) node.remove();
@@ -193,12 +206,33 @@ export class SongList {
       ...this.cols.map((k) =>
         el(
           `div.c-${k}${col(k).right ? '.right' : ''}`,
-          { dataset: { col: k }, title: col(k).menu || col(k).label },
+          { dataset: { col: k }, title: (col(k).menu || col(k).label) + (sortOf(k) ? '\nClick to sort by this; again to reverse' : '') },
           col(k).icon ? icon(col(k).icon) : el('span.col-label', { text: col(k).label }),
+          sortOf(k) ? el('span.col-sort', null, icon('chevronDown')) : null,
           el('span.col-resize', { title: 'Drag to resize; double-click for the default width' }),
         ),
       ),
     );
+    this.#markSort();
+  }
+
+  /** The arrow on the column the songs are sorted by. */
+  #markSort() {
+    const key = view.mode === 'songs' ? view.currentSortKey() : null;
+    const desc = !!store.get('sortDescending');
+    for (const cell of this.headerRow.querySelectorAll('[data-col]')) {
+      const on = !!key && sortOf(cell.dataset.col) === key;
+      cell.classList.toggle('sorted', on);
+      cell.classList.toggle('desc', on && desc);
+    }
+  }
+
+  /** Click a header: sort by its column; the sorted one again: reverse it. */
+  #sortBy(k) {
+    const key = sortOf(k);
+    if (!key || !view.canSort()) return;
+    if (view.currentSortKey() === key) view.setSort(key, !store.get('sortDescending'));
+    else view.setSort(key, false);
   }
 
   /** Drag a header's right edge to size its column (double-click: default). */
@@ -345,7 +379,7 @@ export class SongList {
         c.style.transform = '';
         c.classList.remove('col-drag');
       }
-      if (!d.moved) return;
+      if (!d.moved) return this.#sortBy(d.key);
       const { at } = plan(d, d.dx || 0);
       const list = this.cols.filter((k) => k !== d.key);
       list.splice(at, 0, d.key);

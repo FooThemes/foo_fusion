@@ -27,6 +27,7 @@ export function mountSidebar(root, app) {
   // old playlist first (that briefly showed its covers).
   const leaveNowPlaying = (name) => {
     if (!isPage(view.mode)) return;
+    playlists.willShow(playlists.byName(name)?.index, name);
     const tab = store.get('view');
     view.setMode(isPage(tab) ? 'albums' : tab, { load: playlists.activePlaylist?.name === name });
   };
@@ -88,7 +89,7 @@ export function mountSidebar(root, app) {
   });
 
   function render() {
-    const active = playlists.active;
+    const active = playlists.shownIndex;
     const np = isPage(view.mode);
     const coll = playlists.byName(COLLECTION);
     const fav = playlists.byName(FAVORITES);
@@ -109,6 +110,7 @@ export function mountSidebar(root, app) {
           role: 'option',
           title: `${p.name} - ${p.trackCount.toLocaleString()} songs`,
           onclick: () => {
+            playlists.willShow(p.index);
             if (isPage(view.mode)) view.setMode(isPage(store.get('view')) ? 'albums' : store.get('view'), { load: p.index === playlists.active });
             playlists.activate(p.index);
           },

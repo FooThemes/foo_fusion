@@ -45,8 +45,17 @@ async function boot() {
   await Promise.all([player.init(), playlists.init()]);
   await shuffle.init(); // Fusion's own shuffle, picked up where it was
   await view.init();
-  // Artists' and genres' pages are cut from these: fetch them while idle.
-  setTimeout(() => view.warmGroupRuns(), 4000);
+  // Once the tab opened with is up: the other tabs made ready in the
+  // background, then the runs artists' and genres' pages are cut from.
+  let preloaded = false;
+  const preload = () => {
+    if (preloaded) return;
+    preloaded = true;
+    setTimeout(() => view.preloadTabs().finally(() => view.warmGroupRuns()), 600);
+  };
+  const offLoading = view.on('loading', (busy) => !busy && view.playlist && (offLoading(), preload()));
+  // Safety net, in case the first load came and went unseen.
+  setTimeout(preload, 8000);
 
   // Panels call each other through this object; members are filled in below.
   let content, settings, sidebar, plm;

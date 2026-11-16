@@ -10,7 +10,7 @@ import { logInfo } from '../core/log.js';
 import { Emitter } from '../core/emitter.js';
 import { debounce, serialize } from '../core/util.js';
 import * as store from '../core/store.js';
-import { SORTS, VIEW_SORTS } from '../core/store.js';
+import { SORTS, VIEW_SORTS, sortDef } from '../core/store.js';
 import { TF, searchQuery } from './patterns.js';
 import { playlists, COLLECTION, FAVORITES, PLAYBACK } from './playlists.js';
 import { MOOD_TF, favourites } from './favourites.js';
@@ -68,17 +68,111 @@ class View extends Emitter {
     const pl = playlists.byName(COLLECTION);
     if (!pl) return;
     const albumKey = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
-    const songsSort = SORTS[store.get('sort').songs || 'title'] || SORTS.title;
+    const songsSort = sortDef(store.get('sort').songs === 'artist' ? 'albumartist' : store.get('sort').songs || 'title') || SORTS.title;
     this.#groupRuns(pl, [TF.artistsMulti, albumKey])
       .then(() => this.#groupRuns(pl, [TF.genresMulti, albumKey]))
       // The Songs tab's order too (it's sorted here, from runs of its key).
       .then(() => pl.isLocked && songsSort && this.#sortedRows(pl, songsSort.pattern, false));
   }
 
-  #snapshotKey() {
-    const pl = playlists.activePlaylist;
-    return pl ? [pl.guid, pl.trackCount, this.mode, this.drill?.kind || '', this.drill?.key || '', this.filter, store.get('separateDiscs'), this.currentSortKey(), store.get('sortDescending')].join('|') : '';
+  #snapshotKey(mode = this.mode, drill = this.drill, filter = this.filter, pl = playlists.shownPlaylist) {
+    return pl ? [pl.guid, pl.trackCount, mode, drill?.kind || '', drill?.key || '', filter, store.get('separateDiscs'), this.currentSortKey(mode, drill), store.get('sortDescending')].join('|') : '';
   }
+
+  #keepSnapshot(key, groups, total) {
+    this.#snapshots.delete(key);
+    this.#snapshots.set(key, { groups, total });
+    if (this.#snapshots.size > 16) this.#snapshots.delete(this.#snapshots.keys().next().value);
+  }
+
+  /**
+   * On launch: the other tabs of the playlist made ready in the background
+   * (their tiles, the first titles and covers; the runs Folders and Songs are
+   * built from), so the first switch to each draws at once. The tab opened
+   * with is loaded first; this runs after it, one tab at a time, and stops
+   * if you move to another playlist.
+   */
+  async preloadTabs() {
+    const pl = this.playlist;
+    if (!pl || !pl.trackCount) return;
+    const t0 = performance.now();
+    const done = [];
+    for (const mode of ['albums', 'artists', 'genres', 'folders', 'songs']) {
+      if (mode === this.mode && !this.drill) continue;
+      await new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(r, { timeout: 1500 }) : setTimeout(r, 200)));
+      if (this.playlist?.guid !== pl.guid || this.filter) return;
+      try {
+        if (await this.#preloadTab(pl, mode)) done.push(mode);
+      } catch (e) {
+        console.warn('[fusion] preloading', mode, e);
+      }
+    }
+    logInfo(`preloaded ${done.join(', ') || 'nothing'} for ${pl.name} in ${Math.round(performance.now() - t0)} ms`);
+  }
+
+  async #preloadTab(pl, mode) {
+    const albumKey = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
+    if (mode === 'folders') return !!(await Promise.all([this.#groupRuns(pl, [TF.dirKey]), libraryRoots()]))[0];
+    if (mode === 'songs') {
+      const def = sortDef(this.currentSortKey('songs', null));
+      // Autoplaylists are sorted here (see #sortedRows); others play in order.
+      if (pl.isLocked && def) await this.#sortedRows(pl, def.pattern, false);
+      return true;
+    }
+    const key = this.#snapshotKey(mode, null, '', pl);
+    if (this.#snapshots.has(key)) return false;
+    // An Albums tab whose playlist still needs sorting into its order: that
+    // happens when it's opened (a preview in the old order would reshuffle).
+    const desc = !!store.get('sortDescending');
+    if (mode === 'albums') {
+      const pattern = (sortDef(this.currentSortKey('albums', null)) || SORTS.album).pattern;
+      const stamp = pattern + (pl.isLocked ? '' : desc ? ':desc' : '');
+      if (store.get('sortOnOpen') && this.isLibrary && store.get('appliedSort')[pl.guid] !== stamp && this.canSort(pl)) return false;
+    }
+    const patterns = mode === 'albums' ? [albumKey] : [mode === 'genres' ? TF.genresMulti : TF.artistsMulti, albumKey];
+    const runs = await this.#groupRuns(pl, patterns);
+    if (!runs) return false;
+    const groups =
+      mode === 'albums'
+        ? mergeRuns(runs.map((r) => ({ key: r.key, start: r.start, count: r.count })))
+        : groupByValues(runs, mode, mode === 'genres' ? UNKNOWN_GENRE : UNKNOWN_ARTIST, mode === 'artists' && store.get('hidePlaceholderArtists') ? isPlaceholderArtist : null);
+    if (mode === 'albums' ? pl.isLocked && desc : desc) groups.reverse();
+    const ns = `${mode === 'albums' ? 'a' : mode}|${albumKey}|`;
+    for (const g of groups) if (!g.head) g.head = headCache.get(ns + g.key);
+    // The first screenfuls' titles and covers.
+    const first = groups.slice(0, HEAD_CHUNK).filter((g) => !g.head);
+    if (first.length) await this.#fetchHeads(pl, first, ns);
+    if (this.playlist?.guid !== pl.guid) return false;
+    this.#keepSnapshot(key, groups, groups.reduce((n, g) => n + g.count, 0));
+    return true;
+  }
+
+  /** Titles, details and the cover's song for these groups (their first rows). */
+  async #fetchHeads(pl, chunk, ns) {
+    const title = store.get('separateDiscs') ? TF.albumDiscTitle : TF.albumTitle;
+    const formats = { t: title, a: TF.albumArtist, y: TF.year, g: TF.genre, d: TF.date, b: TF.albumRaw, av: versionsTF('album'), aav: versionsTF('albumartist') };
+    const res = await tryCall('playlist.getTracksAt', { playlist: pl.index, rows: chunk.map((g) => firstRow(g)), fields: ['handle'], formats });
+    if (!res) return false;
+    res.tracks.forEach((t, n) => {
+      const f = t.formats;
+      const head = { handle: t.handle, title: f.t, artist: f.a, year: f.y, genre: f.g, date: f.d };
+      // Original / English / romanised versions, when tagged; `albumSuffix`
+      // is what the title adds after the album name (" (Disc 2)").
+      const album = parseVersions(f.av);
+      const albumArtist = parseVersions(f.aav);
+      if (album || albumArtist) {
+        head.versions = { album, albumArtist };
+        head.albumSuffix = f.b && f.t.startsWith(f.b) ? f.t.slice(f.b.length) : '';
+      }
+      head.vkey = (f.av || '') + (f.aav || '');
+      // Same album, same details: keep the object, so nothing redraws.
+      const old = chunk[n].head;
+      chunk[n].head = old && old.handle === head.handle && old.title === head.title && old.year === head.year && old.date === head.date && old.genre === head.genre && old.artist === head.artist && old.vkey === head.vkey ? old : head;
+      headCache.set(ns + chunk[n].key, chunk[n].head);
+    });
+    return true;
+  }
+
 
   async init() {
     // The playback copy grows as playback gets near its ends (see #playSorted).
@@ -338,18 +432,24 @@ class View extends Emitter {
    * has a slot of its own: sorting Tame Impala's albums by year used to
    * leave the Artists tab itself saying "Sort by year".
    */
-  #sortSlot() {
-    const mode = isPage(this.mode) ? 'albums' : this.mode;
-    return this.drill ? `${this.drill.kind}Page` : mode;
+  #sortSlot(mode = this.mode, drill = this.drill) {
+    mode = isPage(mode) ? 'albums' : mode;
+    return drill ? `${drill.kind}Page` : mode;
   }
 
-  currentSortKey() {
-    const slot = this.#sortSlot();
-    const saved = store.get('sort')[slot];
-    const offered = VIEW_SORTS[this.drill ? 'albums' : slot] || [];
+  /** The tab's sort (another tab's, for preloading it: currentSortKey('artists', null)). */
+  currentSortKey(mode = this.mode, drill = this.drill) {
+    const slot = this.#sortSlot(mode, drill);
+    let saved = store.get('sort')[slot];
+    const offered = VIEW_SORTS[drill ? 'albums' : slot] || [];
+    if (slot === 'songs') {
+      // Songs used to offer "Artist" sorted by album artist.
+      if (saved === 'artist') saved = 'albumartist';
+      if (sortDef(saved)) return saved; // its columns, your own included
+    }
     if (offered.includes(saved)) return saved;
     // A page's albums: by year for an artist, by artist for a genre.
-    if (this.drill) return this.drill.kind === 'artists' ? 'year' : 'artist';
+    if (drill) return drill.kind === 'artists' ? 'year' : 'artist';
     return offered[0] || (slot === 'folders' ? 'path' : undefined);
   }
 
@@ -407,7 +507,7 @@ class View extends Emitter {
     // order doesn't match the view's sort yet (remembered across sessions).
     const sortKey = this.currentSortKey();
     const desc = !!store.get('sortDescending');
-    const pattern = (SORTS[sortKey] || SORTS.album).pattern;
+    const pattern = (sortDef(sortKey) || SORTS.album).pattern;
     // Remember the pattern itself, so a changed pattern (in an update) re-sorts.
     const stamp = pattern + (pl.isLocked ? '' : desc ? ':desc' : '');
     // Artist and genre tiles are listed alphabetically whatever the playlist
@@ -552,10 +652,7 @@ class View extends Emitter {
     this.groups = groups;
     this.total = groups.reduce((n, g) => n + g.count, 0);
     this.rows = null;
-    const snapKey = this.#snapshotKey();
-    this.#snapshots.delete(snapKey);
-    this.#snapshots.set(snapKey, { groups, total: this.total });
-    if (this.#snapshots.size > 16) this.#snapshots.delete(this.#snapshots.keys().next().value);
+    this.#keepSnapshot(this.#snapshotKey(), groups, this.total);
     await this.syncSelection(false);
     // An artist's or genre's page: its first albums' covers and titles before
     // it's shown (no page of blank placeholders first).
@@ -646,34 +743,11 @@ class View extends Emitter {
 
   /** Fetch display text + art path for each group's first row, in chunks. */
   async #loadHeads(gen, chunks = Infinity) {
-    const title = store.get('separateDiscs') ? TF.albumDiscTitle : TF.albumTitle;
-    const formats = { t: title, a: TF.albumArtist, y: TF.year, g: TF.genre, d: TF.date, b: TF.albumRaw, av: versionsTF('album'), aav: versionsTF('albumartist') };
+    const pl = this.playlist;
     for (let i = 0, n = 0; i < this.groups.length && n < chunks; i += HEAD_CHUNK, n++) {
       const chunk = this.groups.slice(i, i + HEAD_CHUNK);
-      const res = await tryCall('playlist.getTracksAt', {
-        playlist: this.playlist.index,
-        rows: chunk.map((g) => firstRow(g)),
-        fields: ['handle'],
-        formats,
-      });
-      if (gen !== this.#generation || !res) return;
-      res.tracks.forEach((t, n) => {
-        const f = t.formats;
-        const head = { handle: t.handle, title: f.t, artist: f.a, year: f.y, genre: f.g, date: f.d };
-        // Original / English / romanised versions, when tagged; `albumSuffix`
-        // is what the title adds after the album name (" (Disc 2)").
-        const album = parseVersions(f.av);
-        const albumArtist = parseVersions(f.aav);
-        if (album || albumArtist) {
-          head.versions = { album, albumArtist };
-          head.albumSuffix = f.b && f.t.startsWith(f.b) ? f.t.slice(f.b.length) : '';
-        }
-        head.vkey = (f.av || '') + (f.aav || '');
-        // Same album, same details: keep the object, so nothing redraws.
-        const old = chunk[n].head;
-        chunk[n].head = old && old.handle === head.handle && old.title === head.title && old.year === head.year && old.date === head.date && old.genre === head.genre && old.artist === head.artist && old.vkey === head.vkey ? old : head;
-        headCache.set(this.#headsNs + chunk[n].key, chunk[n].head);
-      });
+      const ok = await this.#fetchHeads(pl, chunk, this.#headsNs);
+      if (gen !== this.#generation || !ok) return;
       this.emit('heads', { from: i, to: i + chunk.length });
     }
   }

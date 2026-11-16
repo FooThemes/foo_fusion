@@ -3,7 +3,8 @@
 import { el, clear, plural } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import * as store from '../core/store.js';
-import { SORTS, VIEW_SORTS } from '../core/store.js';
+import { SORTS, VIEW_SORTS, sortDef } from '../core/store.js';
+import { songSortKeys } from './songs.js';
 import { call } from '../core/bridge.js';
 import { view, isPage } from '../data/view.js';
 import { player, ORDER_LABELS } from '../data/player.js';
@@ -41,12 +42,14 @@ export function mountHeader(root, app) {
 
 
   function render() {
-    const pl = view.playlist;
+    // On the way to another playlist (from Now playing): its name already.
+    const pl = playlists.pending !== -1 ? playlists.shownPlaylist : view.playlist;
+    const plName = playlists.pending !== -1 ? playlists.pendingName : pl?.name;
     const np = view.mode === 'nowplaying';
     const page = isPage(view.mode);
     back.hidden = !view.drill || page;
     showSide.hidden = !store.get('sidebarHidden');
-    title.textContent = np ? 'Now playing' : view.mode === 'stats' ? 'Listening stats' : view.drill ? view.drill.label : view.filter ? `Results for "${view.filter}"` : pl?.name || 'No playlist';
+    title.textContent = np ? 'Now playing' : view.mode === 'stats' ? 'Listening stats' : view.drill ? view.drill.label : view.filter ? `Results for "${view.filter}"` : plName || 'No playlist';
 
     clear(actions);
     if (np) {
@@ -80,10 +83,10 @@ export function mountHeader(root, app) {
     const sortKey = view.currentSortKey();
     // Folders are listed by name, within their folder: "folder", fixed (like
     // Artists and Genres, which have one order each).
-    const sortLabel = view.mode === 'folders' && !view.drill ? 'folder' : (SORTS[sortKey]?.label || 'Album').toLowerCase();
+    const sortLabel = view.mode === 'folders' && !view.drill ? 'folder' : sortName(sortKey);
     clear(sortBtn).append(el('span.sort-label', { text: 'Sort by ' }), el('span.sort-value', { text: sortLabel }), icon('chevronDown'));
     const sortable = view.canSort();
-    sortBtn.disabled = VIEW_SORTS[view.drill ? 'albums' : view.mode]?.length < 2 || !sortable;
+    sortBtn.disabled = sortKeys().length < 2 || !sortable;
     sortBtn.title = sortable ? '' : 'This autoplaylist keeps its own order. Change it in the autoplaylist settings.';
     dirBtn.disabled = !view.playlist;
     const desc = store.get('sortDescending');
@@ -104,10 +107,21 @@ export function mountHeader(root, app) {
     return '';
   }
 
+  // Songs: its columns (as shown), then Date added and File path.
+  function sortKeys() {
+    return view.mode === 'songs' && !view.drill ? songSortKeys() : VIEW_SORTS[view.drill ? 'albums' : view.mode] || [];
+  }
+  // "Sort by album artist"; your own columns keep their name as you wrote it.
+  function sortName(k) {
+    return SORTS[k] ? SORTS[k].label.toLowerCase() : sortDef(k)?.label || 'album';
+  }
+
   function sortMenu(e) {
-    const keys = VIEW_SORTS[view.drill ? 'albums' : view.mode] || [];
     const cur = view.currentSortKey();
-    dropdown(e.currentTarget, keys.map((k) => ({ label: SORTS[k].label, checked: k === cur, run: () => view.setSort(k) })));
+    const keys = sortKeys();
+    // The current sort, even if its column was since hidden.
+    if (cur && !keys.includes(cur) && sortDef(cur)) keys.push(cur);
+    dropdown(e.currentTarget, keys.map((k) => ({ label: sortDef(k).label, checked: k === cur, run: () => view.setSort(k) })));
   }
 
   function orderMenu(e) {
@@ -134,7 +148,7 @@ export function mountHeader(root, app) {
   player.on('queue', render);
   player.on('order', render);
   playlists.on('change', render);
-  store.subscribe((k) => (k === 'sortDescending' || k === 'sidebarHidden') && render());
+  store.subscribe((k) => (k === 'sortDescending' || k === 'sidebarHidden' || k === 'songColumns' || k === 'customColumns' || k === 'sort') && render());
   render();
 }
 

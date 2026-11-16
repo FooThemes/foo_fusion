@@ -12,7 +12,6 @@ import { forgetLyrics } from '../data/lyrics.js';
 import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
 import { forgetGenreInfo } from '../data/genreinfo.js';
-import { exportArtists, exportGenres } from '../data/artistexport.js';
 import { runArtistScript } from '../data/artistscript.js';
 import { toast } from './toast.js';
 import { VERSION } from '../version.js';
@@ -165,15 +164,6 @@ export function mountSettings(root, app) {
         link('person', 'Look up new artists', () => startScript('new', 'Looking up new artists in a console window…')),
         link('refresh', 'Refresh all artists', () => startScript('refresh', 'Refreshing all artists in a console window (this takes a while)…')),
         link('info', 'Show report', () => startScript('report', '')),
-        exportFolderField(),
-        link('person', 'Export artist list…', async () => {
-          try {
-            const r = await exportArtists();
-            toast(`Exported ${r.count} artists (${r.withId} with MusicBrainz IDs) to ${r.path}`, 8000);
-          } catch (err) {
-            toast(`Export failed: ${err.message}`);
-          }
-        }),
       ]),
     ],
     genres: () => [
@@ -185,15 +175,6 @@ export function mountSettings(root, app) {
         scriptField(),
         link('tag', 'Look up new genres', () => startScript('genres', 'Looking up new genres in a console window…')),
         link('refresh', 'Refresh all genres', () => startScript('genres-refresh', 'Refreshing all genres in a console window…')),
-        exportFolderField(),
-        link('tag', 'Export genre list…', async () => {
-          try {
-            const r = await exportGenres();
-            toast(`Exported ${r.count} genres to ${r.path}`, 8000);
-          } catch (err) {
-            toast(`Export failed: ${err.message}`);
-          }
-        }),
       ]),
     ],
     languages: () => [
@@ -289,17 +270,6 @@ export function mountSettings(root, app) {
       },
     });
     return el('div.set-folder', null, el('span.set-label', null, el('span', { text: label }), el('small', { text: hint })), el('div.set-path-row', null, input, browse));
-  }
-
-  // Where "Export artist list" and "Export genre list" write (and where the
-  // script is told to read them from).
-  function exportFolderField() {
-    // Browse starts in the script's folder, when the script is set.
-    const scriptDir = () => winPath(store.get('artistScript')).replace(/\\[^\\]*$/, '');
-    return pathField('Export folder', 'exportFolder', 'Where the artist and genre lists are saved for the script (it’s told where they are). Empty: foobar2000’s profile folder. A folder on the system drive outside the profile can’t be written to.', 'The profile folder', {
-      onSet: (v) => (store.set('exportFolder', v), render()),
-      startIn: scriptDir,
-    });
   }
 
   // Characters that separate genres within one tag.

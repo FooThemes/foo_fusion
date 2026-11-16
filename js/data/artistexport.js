@@ -8,8 +8,6 @@ import { tryCall } from '../core/bridge.js';
 import { TF } from './patterns.js';
 import { playlists, COLLECTION } from './playlists.js';
 import { splitValues } from './view.js';
-import * as store from '../core/store.js';
-import { logAlways } from '../core/log.js';
 
 const SEP = '|||';
 // MBIDs from the tag that matches where the names came from (ARTISTS, else
@@ -76,49 +74,21 @@ export async function exportGenres() {
 }
 
 /**
- * Where the lists go: the export folder if one is set, else foobar2000's
- * profile. (They used to go beside the script by default, but
- * foo_ui_webview2 only lets a theme write on the system drive inside the
- * profile, so a script on C: couldn't get them. The script is told where
- * they are either way.)
+ * Where the lists go: foobar2000's profile, the one place on the system drive
+ * a theme may write. Fusion writes them just before running the script and
+ * tells it where they are.
  */
 export async function exportDir() {
-  const clean = (v) => String(v || '').trim().replace(/^"|"$/g, '').replace(/[\\/]+$/, '');
-  const chosen = clean(store.get('exportFolder'));
-  if (chosen) return chosen;
-  return profileDir();
-}
-
-async function profileDir() {
   const prof = await tryCall('misc.getProfilePath');
   return String(prof?.path || prof?.value || '').replace(/[\\/]+$/, '');
 }
 
-/**
- * Write a list where exportDir() says, or in the profile if that's refused
- * (an export folder on the system drive). Returns the path written.
- */
 async function writeList(name, data) {
-  const content = JSON.stringify(data, null, 1);
   const path = await exportPath(name);
-  if (await tryCall('file.write', { path, content, atomic: true })) return path;
-  const fallback = `${await profileDir()}\\${name}`;
-  if (fallback !== path && (await tryCall('file.write', { path: fallback, content, atomic: true }))) {
-    logAlways(`couldn't write ${path}; wrote ${fallback} instead`);
-    lastWritten.set(name, fallback);
-    return fallback;
-  }
-  throw new Error("Couldn't write " + path);
+  if (!(await tryCall('file.write', { path, content: JSON.stringify(data, null, 1), atomic: true }))) throw new Error("Couldn't write " + path);
+  return path;
 }
-
-// Where each list actually went (writeList's fallback), for the script.
-const lastWritten = new Map();
 
 export async function exportPath(name) {
   return `${await exportDir()}\\${name}`;
-}
-
-/** Where a list was last written (for passing to the script). */
-export async function writtenPath(name) {
-  return lastWritten.get(name) || exportPath(name);
 }

@@ -100,7 +100,6 @@ const DEFAULTS = {
   genreSplit: ';', // characters that separate genres in one tag ("; , /": "Pop/Rock" is two)
   genreTiles: 'wide', // genre tiles: 'wide' (2:1, as the original) or 'square'
   artistScript: '', // path of tools/fusion-artist-info.py, to run it from Settings > Artists
-  exportFolder: '', // where the artist and genre lists are exported; empty: beside the script (else the profile)
   homeShelves: true, // rows of albums above the Collection's album grid
   shelves: [
     ['added', true],

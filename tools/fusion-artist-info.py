@@ -2,8 +2,8 @@
 """
 fusion-artist-info: fetch artist information for Fusion's artist pages.
 
-For every artist in fusion-artists.json (Fusion: Settings > Export artist
-list), writes into the artist's folder:
+For every artist in fusion-artists.json (Fusion writes it to foobar2000's
+profile each time it runs this script), writes into the artist's folder:
 
     artist.nfo   biography, genres, styles, moods, years (Kodi's format)
     artist.jpg   picture
@@ -56,8 +56,8 @@ DEFAULT_SETTINGS = """[fusion-artist-info]
 music_root = E:\\Music
 ; Artists without their own folder go into this subfolder of music_root.
 artists_folder = _Artists
-; The list Fusion exports (Settings > Export artist list). Not needed when Fusion
-; runs the script (it says where the list is); beside this script by default.
+; The artist list Fusion writes to foobar2000's profile. Not needed when Fusion
+; runs the script (it says where the list is); only for running it yourself.
 artist_list = fusion-artists.json
 ; Your fanart.tv personal API key (https://fanart.tv/get-an-api-key/). Leave
 ; empty to use TheAudioDB's pictures only.

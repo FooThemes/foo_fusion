@@ -5,7 +5,7 @@
 
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
-import { exportArtists, exportGenres, writtenPath } from './artistexport.js';
+import { exportArtists, exportGenres, exportPath } from './artistexport.js';
 import { refreshArtistInfo } from './artwork.js';
 import { forgetGenreInfo } from './genreinfo.js';
 import { logInfo } from '../core/log.js';
@@ -18,15 +18,16 @@ import { logInfo } from '../core/log.js';
 export async function runArtistScript(mode) {
   const script = String(store.get('artistScript') || '').trim().replace(/^"|"$/g, '');
   if (!/\.py$/i.test(script)) throw new Error('Set the location of fusion-artist-info.py first');
+  // The lists are written fresh each time, so the script sees the library as it is now.
   if (mode === 'genres' || mode === 'genres-refresh') await exportGenres();
-  else if (mode !== 'report') await exportArtists();
+  else await exportArtists();
   const flags = { refresh: ['--refresh'], report: ['--report'], genres: ['--genres'], 'genres-refresh': ['--genres', '--refresh'] }[mode] || [];
   // Fusion's information folders are where the script writes (whatever its
   // settings file says), so the two always agree.
   const folder = (key) => String(store.get(key) || '').trim();
   const where = [...(folder('artistInfoFolder') ? ['--artists-folder', folder('artistInfoFolder')] : []), ...(folder('genreInfoFolder') ? ['--genres-folder', folder('genreInfoFolder')] : [])];
   // And where the lists were exported to.
-  const lists = ['--artist-list', await writtenPath('fusion-artists.json'), '--genre-list', await writtenPath('fusion-genres.json')];
+  const lists = ['--artist-list', await exportPath('fusion-artists.json'), '--genre-list', await exportPath('fusion-genres.json')];
   const args = [script, ...flags, ...where, ...lists, '--pause'];
   // The Python launcher ("py") comes with python.org's installer; else "python".
   let started = null;

@@ -46,7 +46,7 @@ class SignalPath extends Emitter {
     const h = player.track?.handle;
     if (path?.dsd && h && !this.#probed.has(h) && player.state === 'playing') {
       this.#probed.set(h, undefined);
-      const found = await probeDop();
+      const found = await probeDop(() => player.track?.handle === h && player.state === 'playing');
       this.#probed.set(h, found);
       if (player.track?.handle === h) path = await build(found);
     }
@@ -113,7 +113,7 @@ async function build(dopSeen) {
   const nativeOut = src.dsd && ((!!earlyRate && !!src.rate && Math.abs(earlyRate - src.rate) < 1) || num(o.output_bitdepth) === 1);
   const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
   // The audio itself, when checked: DoP markers found settle it.
-  const dsdKept = src.dsd && (nativeOut || dopSeen === 'dop' || (looksDop && dopSeen !== 'none'));
+  const dsdKept = src.dsd && (nativeOut || dopSeen === 'dop' || dopSeen === 'bypass' || looksDop);
   const bypassed = (stage) => ({ ...stage, detail: 'Not applied: DSD passes through untouched', note: 'foobar2000’s PCM processing doesn’t touch DSD sent to the DAC as DSD.', grade: 'lossless', idle: true });
 
   // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
@@ -185,7 +185,7 @@ async function build(dopSeen) {
   // on the way) exactly a standard DSD rate, DSD32 to DSD1024.
   const outDsd = !!outRate && (nativeOut || (!src.dsd && (outBits === 1 || isDsdRate(outRate))));
   const fmtOut = dsdKept
-    ? [dsd(src.rate), outDsd ? 'native DSD' : looksDop ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
+    ? [dsd(src.rate), outDsd ? 'native DSD' : dopSeen === 'bypass' ? 'sent directly' : looksDop ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
     : [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
   if (!src.dsd && outputInfo && src.rate && outRate && outRate !== src.rate && !dspList.some((n) => /resampl/i.test(n))) changes.push('sample rate');
   // DSD turned into PCM on the way, or PCM into DSD (a DSD processor or the output).
@@ -206,6 +206,8 @@ async function build(dopSeen) {
         ? 'DSD goes to the DAC as it is, natively.'
         : dopSeen === 'dop'
           ? 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Confirmed: the DoP markers are intact in the playing audio.'
+          : dopSeen === 'bypass'
+            ? 'DSD goes straight to the output, around foobar2000’s processing: its own audio stream carries only silence while this plays, so nothing in the chain touches the DSD.'
           : 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Assumed from the rate (the playing audio couldn’t be checked).'
       : dsdToPcm
         ? 'The DSD file is converted to PCM before it goes out.'
@@ -258,40 +260,48 @@ function dspActs(name, src, outRate) {
 }
 
 /**
- * Look for DoP in the audio foobar2000 is playing (its visualisation stream):
- * in DoP each 24-bit sample's top byte is a marker alternating 0x05 / 0xFA,
- * on both channels at once. Intact markers mean the DSD is packed and
- * untouched up to there; volume, ReplayGain or a conversion to PCM would
- * scramble them. Resolves 'dop', 'none' or null (the stream wasn't readable).
+ * Check foobar2000's own playing stream (its visualisation stream) during a
+ * DSD song, a few times over some seconds:
+ * - DoP markers (each 24-bit sample's top byte alternating 0x05 / 0xFA on both
+ *   channels): the DSD is packed as DoP and untouched up to there -> 'dop'.
+ * - Exact digital silence every time: the DSD is going to the output some
+ *   other way, around foobar2000's processing (seen with ASIO DSD output),
+ *   so nothing in the chain touches it -> 'bypass'. A conversion to PCM
+ *   would put actual audio in the stream.
+ * - Anything else: can't tell from here -> null (the rate decides).
  */
 const PROBE_ID = 'fusion-dop-probe';
-export async function probeDop() {
+export async function probeDop(stillPlaying) {
   const sub = await tryCall('audio.subscribeSpectrum', { subscriptionId: PROBE_ID, fps: 1, event: 'fusion:dop-probe', backgroundThrottle: false });
   if (!sub) return null;
+  const seen = [];
   try {
-    await new Promise((r) => setTimeout(r, 900)); // the stream starts about 0.7 s after subscribing
-    const w = await tryCall('audio.getWaveform', { duration: 0.02, signed: true, channels: 'stereo' });
-    if (!w?.left?.length) {
-      logInfo('signal path: DoP check: no samples from the stream');
-      return null;
+    for (const wait of [900, 2000, 2000]) {
+      await new Promise((r) => setTimeout(r, wait)); // the stream starts about 0.7 s after subscribing
+      if (!stillPlaying()) return null;
+      const w = await tryCall('audio.getWaveform', { duration: 0.02, signed: true, channels: 'stereo' });
+      if (!w?.left?.length) {
+        seen.push('none');
+        continue;
+      }
+      const int = (v) => Math.round(v * 8388608) & 0xffffff; // as a 24-bit sample
+      const top = (v) => (int(v) >> 16) & 0xff;
+      let marked = 0;
+      let nonzero = 0;
+      for (let i = 0; i < w.left.length; i++) {
+        if (w.left[i] !== 0 || w.right[i] !== 0) nonzero++;
+        if (i && top(w.left[i]) === top(w.right[i]) && ((top(w.left[i - 1]) === 0x05 && top(w.left[i]) === 0xfa) || (top(w.left[i - 1]) === 0xfa && top(w.left[i]) === 0x05))) marked++;
+      }
+      const kind = marked / w.left.length > 0.95 ? 'dop' : nonzero === 0 ? 'silent' : 'audio';
+      seen.push(kind);
+      logInfo(`signal path: stream check: ${w.left.length} samples at ${w.sampleRate} Hz; DoP markers ${((marked / w.left.length) * 100).toFixed(1)}%, non-zero ${nonzero}; first ${w.left.slice(0, 6).map((v) => int(v).toString(16).padStart(6, '0')).join(' ')} -> ${kind}`);
+      if (kind === 'dop') return 'dop';
+      if (kind === 'audio') return null;
     }
-    const top = (v) => (Math.round(v * 8388608) >> 16) & 0xff; // 24-bit sample's top byte
-    let pairs = 0;
-    let marked = 0;
-    for (let i = 1; i < w.left.length; i++) {
-      const a = top(w.left[i - 1]);
-      const b = top(w.left[i]);
-      const r = top(w.right[i]);
-      pairs++;
-      if (((a === 0x05 && b === 0xfa) || (a === 0xfa && b === 0x05)) && r === b) marked++;
-    }
-    const share = pairs ? marked / pairs : 0;
-    const raw = w.left.slice(0, 8).map((v) => (Math.round(v * 8388608) & 0xffffff).toString(16).padStart(6, '0'));
-    logInfo(`signal path: DoP check: ${w.left.length} samples at ${w.sampleRate} Hz, ${w.channelCount} ch; markers on ${(share * 100).toFixed(1)}%; first samples (24-bit hex) ${raw.join(' ')}`);
-    return share > 0.95 ? 'dop' : 'none';
   } finally {
     tryCall('audio.unsubscribeSpectrum', { subscriptionId: PROBE_ID });
   }
+  return seen.length && seen.every((k) => k === 'silent') ? 'bypass' : null;
 }
 
 const clean = (s) => (s && s !== '?' ? String(s).trim() : '');

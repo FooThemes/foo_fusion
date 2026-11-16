@@ -434,6 +434,10 @@ class View extends Emitter {
   /** Empty the page (shown as loading) before loading another one. */
   #blank() {
     const snap = this.mode !== 'songs' && !isPage(this.mode) ? this.#snapshots.get(this.#snapshotKey()) : null;
+    // Another playlist's page, shown before foobar2000 has switched to it
+    // (leaving Now playing): it's that playlist's, for everything drawn with
+    // it (the Collection's shelves, its name).
+    if (snap && playlists.pending >= 0 && playlists.shownPlaylist) this.playlist = playlists.shownPlaylist;
     this.groups = snap ? snap.groups : [];
     this.rows = snap ? null : [];
     this.total = snap ? snap.total : 0;

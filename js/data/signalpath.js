@@ -19,10 +19,10 @@ const SEP = '␞';
 const LOSSLESS = /^(flac|alac|wavpack|monkey'?s audio|ape|tta|pcm|wav|aiff|dsd|dsf|dff|dst|mlp|truehd|shorten|optimfrog|tak)/i;
 
 export const QUALITY = {
-  lossless: { label: 'Lossless', note: 'The file reaches the output unchanged.' },
-  enhanced: { label: 'Enhanced', note: 'A lossless file, deliberately processed on the way (DSP, ReplayGain, volume).' },
-  high: { label: 'High quality', note: 'A lossless file, but the format is changed on the way or may be.' },
-  low: { label: 'Low quality', note: 'A lossy file: some of the original was discarded when it was encoded.' },
+  lossless: { label: 'Lossless', note: 'Bit-perfect from file to output.' },
+  enhanced: { label: 'Enhanced', note: 'Lossless source with processing applied.' },
+  high: { label: 'High quality', note: 'Lossless source, format changed before output.' },
+  low: { label: 'Low quality', note: 'Lossy source.' },
 };
 
 class SignalPath extends Emitter {
@@ -97,7 +97,7 @@ async function build(dopSeen) {
     title: 'Source',
     detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? (dsd(src.rate).toLowerCase() === src.codec.toLowerCase() ? '' : dsd(src.rate)) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, chans(src.channels), !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
     grade: src.lossless ? 'lossless' : 'low',
-    note: src.lossless ? 'Lossless: every sample of the original is there.' : 'Lossy: compressed by discarding parts of the sound judged inaudible.',
+    note: '',
   });
 
   // DSD reaching the DAC as DSD: natively (output at the DSD rate) or as DoP
@@ -114,7 +114,7 @@ async function build(dopSeen) {
   const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
   // The audio itself, when checked: DoP markers found settle it.
   const dsdKept = src.dsd && (nativeOut || dopSeen === 'dop' || dopSeen === 'bypass' || looksDop);
-  const bypassed = (stage) => ({ ...stage, detail: 'Not applied: DSD passes through untouched', note: 'foobar2000’s PCM processing doesn’t touch DSD sent to the DAC as DSD.', grade: 'lossless', idle: true });
+  const bypassed = (stage) => ({ ...stage, detail: 'Bypassed for DSD', note: '', grade: 'lossless', idle: true });
 
   // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
   // "auto" follows foobar2000's own playback order: track gain when it
@@ -132,7 +132,7 @@ async function build(dopSeen) {
     if (dsdKept) stages.push(bypassed({ kind: 'rg', icon: 'gain', title: 'ReplayGain' }));
     else if (gain == null || Math.abs(gain) >= 0.005) {
       changes.push('ReplayGain');
-      stages.push({ kind: 'rg', icon: 'gain', title: 'ReplayGain', detail: gain != null ? `${which} gain, ${signed(gain)} dB` : `${which} gain (no gain in this song's tags)`, grade: gain == null ? 'lossless' : 'enhanced', note: 'Volume levelled between songs: the samples are scaled.' });
+      stages.push({ kind: 'rg', icon: 'gain', title: 'ReplayGain', detail: gain != null ? `${which === 'album' ? 'Album' : 'Track'} gain ${signed(gain)} dB` : `${which === 'album' ? 'Album' : 'Track'} gain (not tagged)`, grade: gain == null ? 'lossless' : 'enhanced', note: '' });
     }
   }
 
@@ -165,7 +165,7 @@ async function build(dopSeen) {
   if (dB != null && dB < -0.005 && dsdKept) stages.push(bypassed({ kind: 'volume', icon: 'volume', title: 'Volume' }));
   else if (dB != null && dB < -0.005) {
     changes.push('volume');
-    stages.push({ kind: 'volume', icon: 'volume', title: 'Volume', detail: `${dB.toFixed(1)} dB`, grade: 'enhanced', note: 'foobar2000’s volume is digital: below full volume the samples are scaled down. For bit-perfect output, leave it at 0 dB and set the volume on your amplifier or DAC.' });
+    stages.push({ kind: 'volume', icon: 'volume', title: 'Volume', detail: `${dB.toFixed(1).replace('-', '−')} dB`, grade: 'enhanced', note: 'Digital attenuation. Set to 0 dB for bit-perfect output.' });
   }
 
   // 5. Output: module, device and the format going out.
@@ -199,31 +199,31 @@ async function build(dopSeen) {
     kind: 'output',
     icon: 'output',
     title: outTitle,
-    detail: [deviceName && deviceName !== module ? deviceName : '', fmtOut || (outputInfo ? '' : 'format: install Output Info to see it')].filter(Boolean).join(' · '),
+    detail: [deviceName && deviceName !== module ? deviceName : '', fmtOut || (outputInfo ? '' : 'format unknown')].filter(Boolean).join(' · '),
     grade: truncated || dsdToPcm ? 'high' : pcmToDsd ? 'enhanced' : 'lossless',
     note: dsdKept
       ? outDsd
-        ? 'DSD goes to the DAC as it is, natively.'
+        ? 'Native DSD.'
         : dopSeen === 'dop'
-          ? 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Confirmed: the DoP markers are intact in the playing audio.'
+          ? 'DoP, verified from the stream.'
           : dopSeen === 'bypass'
-            ? 'DSD goes straight to the output, around foobar2000’s processing: its own audio stream carries only silence while this plays, so nothing in the chain touches the DSD.'
-          : 'DSD goes to the DAC as it is, packed in PCM frames (DoP), which the DAC unpacks. Assumed from the rate (the playing audio couldn’t be checked).'
+            ? 'DSD sent directly, bypassing the DSP chain.'
+            : 'DoP, assumed from the sample rate.'
       : dsdToPcm
-        ? 'The DSD file is converted to PCM before it goes out.'
-      : pcmToDsd
-        ? 'Converted to DSD before it goes out.'
-        : truncated
-      ? `The output is set to ${outBits}-bit, fewer bits than the file's ${src.bits}${conf?.useDither ? ' (dithered)' : ''}.`
-      : exclusive
-        ? 'Exclusive access: what goes out is what your device receives.'
-        : 'Shared: Windows mixes this with other sounds.',
+        ? 'DSD converted to PCM.'
+        : pcmToDsd
+          ? 'PCM converted to DSD.'
+          : truncated
+            ? `Output bit depth ${outBits}-bit, source ${src.bits}-bit${conf?.useDither ? ', dithered' : ''}.`
+            : exclusive
+              ? 'Exclusive mode.'
+              : 'Shared mode.',
   });
 
   // 6. Shared mode: Windows' mixer converts to the device's own format.
   if (!exclusive) {
     changes.push('Windows mixer');
-    stages.push({ kind: 'mixer', icon: 'windows', title: 'Windows mixer', detail: 'Shared mode: may convert to the device’s own format', grade: 'high', note: 'Windows mixes all programs’ sound and converts it to the format set for the device (Sound settings → device properties → Advanced). For bit-perfect output, use an [exclusive] WASAPI device or ASIO.' });
+    stages.push({ kind: 'mixer', icon: 'windows', title: 'Windows mixer', detail: 'May resample to the device format', grade: 'high', note: 'Use an [exclusive] device or ASIO to bypass.' });
   }
 
   let quality;
@@ -240,23 +240,23 @@ async function build(dopSeen) {
  */
 function dspActs(name, src, outRate) {
   const n = name.toLowerCase();
-  if (/skip track/.test(n)) return { acts: false, detail: 'Doesn’t touch the audio', note: 'Skips songs that match its rules; the sound itself passes through untouched.' };
+  if (/skip track/.test(n)) return { acts: false, detail: 'No effect on audio', note: '' };
   if (/downmix.*stereo|stereo.*downmix/.test(n)) {
     const acts = src.channels > 2;
-    return { acts, detail: acts ? `${chans(src.channels)} down to stereo` : 'Not needed: already stereo', note: acts ? 'Mixes the extra channels into two.' : 'Only acts on songs with more than two channels.' };
+    return { acts, detail: acts ? `${chans(src.channels)} → stereo` : 'Inactive (source is stereo)', note: '' };
   }
   if (/downmix.*mono|mono/.test(n)) {
     const acts = src.channels > 1;
-    return { acts, detail: acts ? 'Mixed down to mono' : 'Not needed: already mono', note: 'Only acts on songs with more than one channel.' };
+    return { acts, detail: acts ? `${chans(src.channels)} → mono` : 'Inactive (source is mono)', note: '' };
   }
   if (/resampl|sample rate/.test(n)) {
     if (outRate && src.rate) {
       const acts = outRate !== src.rate;
-      return { acts, detail: acts ? `${khz(src.rate)} → ${khz(outRate)}` : `Not needed: already ${khz(src.rate)}`, note: acts ? 'Changes the sample rate.' : 'The song is already at its target rate.' };
+      return { acts, detail: acts ? `${khz(src.rate)} → ${khz(outRate)}` : `Inactive (source is ${khz(src.rate)})`, note: '' };
     }
-    return { acts: true, detail: 'Changes the sample rate', note: 'With Output Info installed, Fusion can tell whether it does for this song.' };
+    return { acts: true, detail: 'Resampling', note: '' };
   }
-  return { acts: true, detail: 'DSP', note: 'Processes the sound before it goes out.' };
+  return { acts: true, detail: 'Active', note: '' };
 }
 
 /**

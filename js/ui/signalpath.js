@@ -58,7 +58,7 @@ export function mountSignalPath(controls, root) {
     chip.title = `Signal path: ${q.label}`;
     if (pop.hidden) return;
     clear(pop);
-    const foot = p.outputInfo ? [] : [el('p.sp-foot', null, icon('info'), el('span', { text: 'Install the Output Info component (foo_outinfo) to see the format going out and the ReplayGain actually applied.' }))];
+    const foot = p.outputInfo ? [] : [el('p.sp-foot', null, icon('info'), el('span', { text: 'Install foo_outinfo to show the output format and applied ReplayGain.' }))];
     pop.append(
       el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })),
       el('p.sp-sub', { text: q.note }),
@@ -92,7 +92,7 @@ export function mountSignalPath(controls, root) {
         },
       },
       icon(showIdle ? 'chevronDown' : 'chevronRight'),
-      el('span', { text: `${idle.length} not in the path: ${idle.map((s) => s.title).join(', ')}` }),
+      el('span', { text: `${idle.length} inactive: ${idle.map((s) => s.title).join(', ')}` }),
     );
     return [head, showIdle ? el('ol.sp-stages.sp-idle', null, ...idle.map(stage)) : null].filter(Boolean);
   }

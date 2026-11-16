@@ -1,8 +1,8 @@
 # Screenshot credits
 
-The screenshots in the README were taken in a browser with the development mock (`dev/mock-bridge.js`), not in foobar2000, using a demo library made of real Creative Commons and public-domain albums from the Internet Archive's netlabel collections. Their covers, titles and track lists are used as published; file formats, play counts and the audio output in the signal path are made up. "Harbour Lights" and its lyrics were made up for the demo. `dev/demo/build.py` downloads the albums below, and `dev/demo/capture.js` takes the screenshots.
+The screenshots in the README were taken in a browser with the development mock (`dev/mock-bridge.js`), not in foobar2000, using a demo library of real Creative Commons and public-domain albums from the Internet Archive's netlabel collections. Their covers, titles and track lists are used as published. The rest is made up for the demo: file formats, play counts, the audio output in the signal path, and the artist biographies. Artist pictures are the artists' own album covers. "Night Ferry" by Harbour Lights, its cover and its lyrics were made up for the demo too.
 
-Artist pictures are photos from [Unsplash](https://unsplash.com/license), used as stand-ins: they are not pictures of these artists.
+`dev/demo/build.py` downloads the albums below, and `dev/demo/capture.js` takes the screenshots.
 
 ## Albums
 
@@ -56,7 +56,6 @@ Artist pictures are photos from [Unsplash](https://unsplash.com/license), used a
 | graphite412: A Grain of Wheat | e4g004 | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/E4g004-Graphite412AGrainOfWheat) |
 | Generative I: Conway's Game Of Life | Edward J. Powley | [CC BY 2.5](http://creativecommons.org/licenses/by/2.5/) | [archive.org](https://archive.org/details/Generative_I) |
 | sidha rasta | Ekustika | [CC BY 2.5](http://creativecommons.org/licenses/by/2.5/) | [archive.org](https://archive.org/details/zufall007) |
-| Song to Japan | Ethnomite Pux/Junpei Makuuchi | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/gt323EthnomitePuxjunpeiMakuuchi-SongToJapan) |
 | Singularity | F.A.N.T.A.S.T | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/gt439Fantast-Singularity) |
 | Solaris | F.A.N.T.A.S.T | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/gt508F.a.n.t.a.s.t-Solaris) |
 | Choice by Definition | Fature | [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/FNet018) |
@@ -110,7 +109,6 @@ Artist pictures are photos from [Unsplash](https://unsplash.com/license), used a
 | translations ep | raymundo mendoza | [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/unfound53) |
 | Ristikiehtova | Ristikiehtova | [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/SFIRE012) |
 | City EP | RuiD | [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/prak005) |
-| [ ] | Saflin | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/gt319Saflin-) |
 | sputnikrecords004 | Schuldiner | [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/sputnikrecords004) |
 | SPUTNIKRECORDS008 | Schuldiner | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/SPUTNIKRECORDS008) |
 | Burning Bright | Sciurid | [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/BurningBright) |
@@ -169,133 +167,3 @@ Artist pictures are photos from [Unsplash](https://unsplash.com/license), used a
 | Надежды нет | Птомаин | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/GT411_861) |
 | Я Ничего Не Знаю О Своей Жизни | Харбкраст | [CC0 1.0](http://creativecommons.org/publicdomain/zero/1.0/) | [archive.org](https://archive.org/details/GT590) |
 
-## Photos
-
-| Photo | Photographer |
-|---|---|
-| [Thanks for viewing and downloading it! Donations and credits are really appreciated! ♡](https://unsplash.com/photos/RFkdK8pFsKE) | [@felirbe](https://unsplash.com/@felirbe) |
-| [DJ playing music behind a vegetal decoration with leafs](https://unsplash.com/photos/UlNDzqInCXk) | [A J.](https://unsplash.com/@antoinejulien) |
-| [If you'll use my photo, tag me)  Add photo to your stories, if you like it  Instagram: @adekiii  Peace!](https://unsplash.com/photos/Sqpe_6p9CMA) | [Adil Janbyrbayev](https://unsplash.com/@adekin) |
-| [See the Rainbow!](https://unsplash.com/photos/rQaRcEdLc9c) | [Aditya Ali](https://unsplash.com/@aditya_ali) |
-| [Is all about light](https://unsplash.com/photos/soIigqWsH_g) | [Agus Dietrich](https://unsplash.com/@agusdietrich) |
-| [man holding black microphone performing on stage](https://unsplash.com/photos/2EmLMaTshko) | [Alexandre Debiève](https://unsplash.com/@alexkixa) |
-| [woman standing near field](https://unsplash.com/photos/YEC7VQzWQt8) | [Ali Pazani](https://unsplash.com/@alipzn) |
-| [underwater photography of woman wearing white dress](https://unsplash.com/photos/apYiDRNa-pY) | [Alice Alinari](https://unsplash.com/@alicealinari) |
-| [woman wearing fedora hat facing the forest](https://unsplash.com/photos/0eE9GfBaxDg) | [Allef Vinicius](https://unsplash.com/@seteph) |
-| [man sitting on chair while smoking](https://unsplash.com/photos/JhzuzaHnfpo) | [amir shamsipur](https://unsplash.com/@amir_shamsipur) |
-| [women's blue off-shoulder top](https://unsplash.com/photos/uRdimvn4fqs) | [Anastasia Vityukova](https://unsplash.com/@anastasiavitph) |
-| [Instagram - @andrewtneel \| Donations - paypal.me/AndrewNeel](https://unsplash.com/photos/LpIy3YxbDA4) | [Andrew Neel](https://unsplash.com/@andrewtneel) |
-| [man in black jacket playing electric guitar](https://unsplash.com/photos/DCPS237aJIs) | [Andrija Radojevic](https://unsplash.com/@andrija420) |
-| [silhouette of man](https://unsplash.com/photos/KcH4PcbL63w) | [Artem Kovalev](https://unsplash.com/@artemkovalev) |
-| [woman in crew-neck shirt using box mod](https://unsplash.com/photos/LvWYmMA_U8k) | [Bastien Hervé](https://unsplash.com/@bastienrv) |
-| [two women with arms around their waists](https://unsplash.com/photos/5_ViQalsK3Q) | [Baylee Gramling](https://unsplash.com/@bayleejadegramling) |
-| [Bass Player](https://unsplash.com/photos/q9rPuD51r5w) | [Becca Tapert](https://unsplash.com/@beccatapert) |
-| [man playing guitar in front of crowd](https://unsplash.com/photos/3F6Jo667E4w) | [Blake Carpenter](https://unsplash.com/@blakepnw) |
-| [man wearing brown cowboy hat](https://unsplash.com/photos/ZEKHSCxtcCU) | [Brian Asare](https://unsplash.com/@brianasarejr) |
-| [woman in white blazer](https://unsplash.com/photos/JxbqicKm-ko) | [Brooke Cagle](https://unsplash.com/@brookecagle) |
-| [a person walking on a beach with a surfboard](https://unsplash.com/photos/u3udZPXt8JY) | [Brynn Pedrick](https://unsplash.com/@brynnpedrick) |
-| [man performing on stage](https://unsplash.com/photos/rRaqm9ZQSvc) | [BĀBI](https://unsplash.com/@babigraf) |
-| [So we were looking for urban explorations! After hours of shooting, we found this place who actually has a strange color palette! It mostly has a red hue, but the soft blue tones kill it completely! Also it’s the result of using multiple objects to recreate rainbows and create a colorful atmosphere. Of course, it also proves that location isn’t everything when you’re focused on transmitting concrete emotions to the viewer and self-expressing your art. Sincerely, one of my favorites for those brilliant tones and composition! (Also thanks to @alii_gonzalez02 for posing and being a huge friend!)](https://unsplash.com/photos/J95m2xJR9YQ) | [Carlos](https://unsplash.com/@folkcarlos) |
-| [Making new friends](https://unsplash.com/photos/qAe1B88uonI) | [Casey Horner](https://unsplash.com/@mischievous_penguins) |
-| [a man standing in front of a tall building](https://unsplash.com/photos/GN2BfC4qhHQ) | [cheng feng](https://unsplash.com/@chengfengrecord) |
-| [man in black hoodie standing in tunnel](https://unsplash.com/photos/e7W6BYt6Pjg) | [cheng feng](https://unsplash.com/@chengfengrecord) |
-| [Please follow me on instagram! @chrishenry](https://unsplash.com/photos/spFEcG9zoD4) | [Chris Henry](https://unsplash.com/@chrishenryphoto) |
-| [turned-on flat screen TV](https://unsplash.com/photos/_oHRmhtvpWc) | [Christopher Kuzman](https://unsplash.com/@chris_kuzman) |
-| [Woods lost](https://unsplash.com/photos/5fDa0X-8z3w) | [Claudia Ramírez](https://unsplash.com/@makuph) |
-| [silhouette of microphone](https://unsplash.com/photos/Lcqz6UUKXRU) | [Claudio Schwarz](https://unsplash.com/@purzlbaum) |
-| [woman in black jacket sitting on rock formation during daytime](https://unsplash.com/photos/JlagcSUKyTw) | [Cristina Gottardi](https://unsplash.com/@cristina_gottardi) |
-| [silhouette of person holding dun](https://unsplash.com/photos/77AW8rM9KGg) | [David Monje](https://unsplash.com/@davidmonje) |
-| [person holding smartphone with water drops](https://unsplash.com/photos/FiL6gpag2EM) | [Dev Asangbam](https://unsplash.com/@devasangbam) |
-| [woman standing near burned wall](https://unsplash.com/photos/UY52j2uUvdU) | [Dexswaggerboy](https://unsplash.com/@dexswaggerboy) |
-| [woman with red and blue face paint](https://unsplash.com/photos/zRpfHuz1hUM) | [DIEGO SÁNCHEZ](https://unsplash.com/@ediegosanchez) |
-| [silhouette photo of woman sitting on ground](https://unsplash.com/photos/X9zfEUMrrow) | [dimitris pantos](https://unsplash.com/@dpantos) |
-| [woman holding moon lamp](https://unsplash.com/photos/rQ5dDFQS3r8) | [Drew Tilk](https://unsplash.com/@drewtilk) |
-| [underwater fashion photography](https://unsplash.com/photos/8fjB_w8G7nU) | [engin akyurt](https://unsplash.com/@enginakyurt) |
-| [a sunset over a body of water](https://unsplash.com/photos/RwqVgD25SmQ) | [Evgeni Tcherkasski](https://unsplash.com/@evgenit) |
-| [Mongolian Princess 3](https://unsplash.com/photos/NScrf13AmqE) | [Fadhil Abhimantra](https://unsplash.com/@fabhimantra) |
-| [selective focus photography of woman with beads on forehead behind fern plant](https://unsplash.com/photos/9Bt8wXvar6Y) | [Felipe Bustillo](https://unsplash.com/@pipe_fx) |
-| [man in grey and green hoodie standing](https://unsplash.com/photos/nYnwq0iN2jI) | [Gerson Repreza](https://unsplash.com/@gersonrepreza) |
-| [woman wearing gray zip-up jacket](https://unsplash.com/photos/SIDRBSeaX8s) | [Gift Habeshaw](https://unsplash.com/@gift_habeshaw) |
-| [Upline Ash Catcher](https://unsplash.com/photos/GvQ5EIeJjWo) | [GRAV®](https://unsplash.com/@grav) |
-| [girl wearing black off-shoulder dress](https://unsplash.com/photos/bqyrVuu7X_o) | [hanen souhail](https://unsplash.com/@hanenphotography) |
-| [woman carrying a chihuahua](https://unsplash.com/photos/keNdmwAyzl4) | [Helena Lopes](https://unsplash.com/@helenalopesph) |
-| [Standing in the Stars.](https://unsplash.com/photos/A6ro_F8FR7g) | [Isi Parente](https://unsplash.com/@isiparente) |
-| [grayscale photo of woman wearing scoop-neck top](https://unsplash.com/photos/uOnxXwB3KNE) | [Jabari Timothy](https://unsplash.com/@jabarib) |
-| [a man standing in the middle of a street at night](https://unsplash.com/photos/cQPUosG9dQE) | [Jack Chen](https://unsplash.com/@silverarrow) |
-| [man holding umbrella](https://unsplash.com/photos/qNhaNFeZz7k) | [Jakob Owens](https://unsplash.com/@jakobowens1) |
-| [Sunset at Isthmus Peak, Wanaka, New Zealand. James Alexander Adams.](https://unsplash.com/photos/ZIE7jtHMM0c) | [James Adams](https://unsplash.com/@jamesadams) |
-| [man holding burning paper at night](https://unsplash.com/photos/aqOZ_u2BhHo) | [Javardh](https://unsplash.com/@javardh) |
-| [woman holding turkich teapot](https://unsplash.com/photos/SM3EsVq4Kyk) | [JJ Jordan](https://unsplash.com/@jjjordan) |
-| [International Women’s Day](https://unsplash.com/photos/C8e9e9Z2BCs) | [JJ Jordan](https://unsplash.com/@jjjordan) |
-| [person raising his right hand](https://unsplash.com/photos/MHiCinpZaM8) | [Joel Muniz](https://unsplash.com/@jmuniz) |
-| [woman in white dress](https://unsplash.com/photos/LONPDGRFTew) | [JoelValve](https://unsplash.com/@joelvalve) |
-| [woman with red lipstick and silver diamond ring](https://unsplash.com/photos/x0TqUeO1cuA) | [Joey Nicotra](https://unsplash.com/@joeynicotra) |
-| [silhouette photography of three people inside a building](https://unsplash.com/photos/q4qijo1bRE4) | [Jon Tyson](https://unsplash.com/@jontyson) |
-| [man in gray jacket and black pants standing on brown wooden log](https://unsplash.com/photos/KmH8CHIK-rA) | [Jonas Jaeken](https://unsplash.com/@jonasjaekenmedia) |
-| [Nature](https://unsplash.com/photos/CkPejhmaZ94) | [Jonas Svidras](https://unsplash.com/@jonassvidras) |
-| [man jumping inside building](https://unsplash.com/photos/ZW3dnRiZD9U) | [Josh Kahen](https://unsplash.com/@joshkahen) |
-| [man walking inside the building](https://unsplash.com/photos/A6mji45ETd4) | [Karl Hedin](https://unsplash.com/@karljkhedin) |
-| [Hands Up](https://unsplash.com/photos/LFWIxEGvwiE) | [Karsten Winegeart](https://unsplash.com/@_karsten) |
-| [greyscale photography of man holding umbrella](https://unsplash.com/photos/Ay69ybDp6hY) | [Kenzie Kraft](https://unsplash.com/@kenziekraft) |
-| [person crossing on road during night time](https://unsplash.com/photos/iRuwarRjap8) | [Kevin Mueller](https://unsplash.com/@kevinmueller) |
-| [a group of people standing on top of a stage](https://unsplash.com/photos/kFDyajOyqTA) | [Kevin Wolf](https://unsplash.com/@kevinwolf) |
-| [Concert stage with lights and a crowd.](https://unsplash.com/photos/St-6SCwofGo) | [kofa boyah](https://unsplash.com/@kofaboyah) |
-| [person holding lighted newspaper](https://unsplash.com/photos/l7PnmcqTj5Q) | [Krisztian Matyas](https://unsplash.com/@imkrisztian) |
-| [man holding video camera](https://unsplash.com/photos/IOkL3ZqAapM) | [Kyle Loftus](https://unsplash.com/@kyleloftusstudios) |
-| [woman wearing white floral dress walking on brown grass field](https://unsplash.com/photos/Snj3VEksbbE) | [LAUREN GRAY](https://unsplash.com/@laurenagray) |
-| [woman performing dance](https://unsplash.com/photos/aj_0AGzw6Qo) | [Leon JL](https://unsplash.com/@leoncooper) |
-| [Zoned Out.](https://unsplash.com/photos/4PS3N2WCE40) | [Lerone Pieters](https://unsplash.com/@leronep) |
-| [A woman in red light poses dramatically.](https://unsplash.com/photos/Rl96znEymvw) | [lhon karwan](https://unsplash.com/@lhonkarwanhamasalih) |
-| [A woman with artistic face paint and striking lighting.](https://unsplash.com/photos/YQWnQtt2m7w) | [lhon karwan](https://unsplash.com/@lhonkarwanhamasalih) |
-| [Woman's image is covered in "censored" text.](https://unsplash.com/photos/oQYmy1ndxnY) | [lhon karwan](https://unsplash.com/@lhonkarwanhamasalih) |
-| [A woman in red with projected chinese characters.](https://unsplash.com/photos/qY9wYZMeYF4) | [lhon karwan](https://unsplash.com/@lhonkarwanhamasalih) |
-| [woman taking selfie](https://unsplash.com/photos/6U2Z1e2acZY) | [Luka Malic](https://unsplash.com/@luka_malic_) |
-| [3D waterfalls and flowers](https://unsplash.com/photos/Rt0jNTXYIxo) | [Mahdis Mousavi](https://unsplash.com/@dissii) |
-| [woman in blue jeans](https://unsplash.com/photos/ZhJsD9T_20Q) | [Mak Flex](https://unsplash.com/@mak_flex) |
-| [A winter portrait under the Galactic Core](https://unsplash.com/photos/KT3Lx5r8K4o) | [Marcus Woodbridge](https://unsplash.com/@marcuswoodbridge) |
-| [Man with hat in autumn](https://unsplash.com/photos/YzSed_tOzrM) | [Matthew Hamilton](https://unsplash.com/@thatsmrbio) |
-| [Model: instagram.com/ariveola  Me: instagram.com/ilienerwise](https://unsplash.com/photos/kwZKWu3OqzU) | [Max Ilienerwise](https://unsplash.com/@ilienerwise) |
-| [man sitting on brown chair](https://unsplash.com/photos/OxPuMO3zQ9s) | [Miguel Dominguez](https://unsplash.com/@migueldominguez) |
-| [man using ukulele](https://unsplash.com/photos/NVmgCHbgdx0) | [Minh Trần](https://unsplash.com/@gokumacun) |
-| [One day I decided to shoot Portrait photography . I went to Tabiat Bridge then I saw a sad girl and took a photo .](https://unsplash.com/photos/b_T2nTaBaps) | [Mohammad Metri](https://unsplash.com/@mohammadmetri) |
-| [Exotic girl in tropical forest](https://unsplash.com/photos/X8s4HMKO9GI) | [Morgan Alley](https://unsplash.com/@morganxalley) |
-| [Fighting a grass fire at Mount Beauty, about 1940s.](https://unsplash.com/photos/OUc_2livCw0) | [Museums Victoria](https://unsplash.com/@museumsvictoria) |
-| [In the Shadows](https://unsplash.com/photos/_GN1A0CNnrk) | [Nathan Dumlao](https://unsplash.com/@nate_dumlao) |
-| [woman in black tank top standing near flowers in grayscale photography](https://unsplash.com/photos/H5llhoZSm9Y) | [Oktavisual Project](https://unsplash.com/@oktavisual) |
-| [man wearing scarf standing under trees](https://unsplash.com/photos/DPofhFqXImQ) | [Oleg Yeltsov](https://unsplash.com/@vostley) |
-| [woman holding sickles with fire](https://unsplash.com/photos/PA0KerQ0lHg) | [Olga Bast](https://unsplash.com/@olgabast) |
-| [smiling woman photo](https://unsplash.com/photos/9nqaWIpWSRg) | [paje victoria](https://unsplash.com/@pajevictoria) |
-| [man in black cap playing guitar](https://unsplash.com/photos/4XrEyN5sXhA) | [Parker Coffman](https://unsplash.com/@lowmurmer) |
-| [man in black and white crew neck t-shirt playing electric guitar](https://unsplash.com/photos/hXSE3xI1y4w) | [Parker Coffman](https://unsplash.com/@lowmurmer) |
-| [Protester girl on anti-police meeting](https://unsplash.com/photos/rMk7NQVP4GE) | [Rad Pozniakov](https://unsplash.com/@radpozniakov) |
-| [A trip to the landlocked country in Africa reveals visual surprises.](https://unsplash.com/photos/VOSU6M0effo) | [Random Institute](https://unsplash.com/@randominstitute) |
-| [woman in black coat standing in front of trees during daytime](https://unsplash.com/photos/FVPrdofmlhA) | [Riccardo Mion](https://unsplash.com/@riccardomion) |
-| [Forest Smoke Bomb 1](https://unsplash.com/photos/3sjAlYp8RQo) | [Rico Reutimann](https://unsplash.com/@ricoreu) |
-| [woman taking selfie outdoor](https://unsplash.com/photos/JnOHvMgw_Jo) | [Rio Syhputra](https://unsplash.com/@lingkarphoto) |
-| [woman in black and white jacket standing](https://unsplash.com/photos/BL8xd3p3bXs) | [Roman Denisenko](https://unsplash.com/@romandempire) |
-| [woman in gray and black fur coat standing](https://unsplash.com/photos/IyrlH1n6oFY) | [Roman Laschov](https://unsplash.com/@romanlaschov) |
-| [Person stares into wilderness](https://unsplash.com/photos/swPTbY7v6Ow) | [Roxane Clediere](https://unsplash.com/@roxane) |
-| [And as dreams are essential to the psyche, wilderness is to the life. Every time I explore PNW, I have one of those life moments where we stop and think; “How did our life lead us here?” It’s one of those surreal places on the planet which make you pinch yourself multiple times to believe in what you experience. A place which makes us realize that fantasy of nature is much larger than our own. We still have things to learn.](https://unsplash.com/photos/x5WHdQ3NTCg) | [Saksham Gangwar](https://unsplash.com/@saksham) |
-| [ˌsilo͞oˈet](https://unsplash.com/photos/kCaGAKExSWU) | [sarah richer](https://unsplash.com/@sarawh13) |
-| [a silhouette of a person looking out of a window](https://unsplash.com/photos/od-2xks9Alc) | [sean Kong](https://unsplash.com/@seankkkkkkkkkkkkkk) |
-| [Assassin’s creed](https://unsplash.com/photos/DICEPtYOr1M) | [Seb Barsoumian](https://unsplash.com/@sebbarsoumian) |
-| [Deep](https://unsplash.com/photos/70l86REbjmk) | [shahin khalaji](https://unsplash.com/@shahinkhalaji) |
-| [This shot was taken on an exploratory visit to a lost place just outside Leipzig.   It was perfect timing since the sun rays and the dust created this awesome effect.](https://unsplash.com/photos/eCsCuWwcqpI) | [Simon Lemhöfer](https://unsplash.com/@sim0n73) |
-| [a person sitting on a bench in front of a building](https://unsplash.com/photos/TxdmI9tHX54) | [Simon Zhu](https://unsplash.com/@smnzhu) |
-| [Model: @brevanita Photographer: @northernstatemedia, @sonnyaustn](https://unsplash.com/photos/2QHHOAPI--I) | [Sonny Mauricio](https://unsplash.com/@northernstatemedia) |
-| [woman in black top tilt photography](https://unsplash.com/photos/09w_uPwAOFY) | [Sorin Sîrbu](https://unsplash.com/@sirbusorin) |
-| [Man holding smoke outdoors](https://unsplash.com/photos/ueT5V6mFtE8) | [Stefan Rodriguez](https://unsplash.com/@stefantakespictures) |
-| [Spring Changes on Shiny Honey Blog https://shinyhoney.com/blog-outfits-spring-changes.html](https://unsplash.com/photos/FfA1uTlRKNI) | [Tamara Bellis](https://unsplash.com/@tamarabellis) |
-| [woman standing near crystal decor](https://unsplash.com/photos/4IP4cPyyzRU) | [Tema Bersh](https://unsplash.com/@temabersh) |
-| [The sky was burning](https://unsplash.com/photos/s5Pugn21ixI) | [Tim Foster](https://unsplash.com/@timberfoster) |
-| [silhouette of people on snow covered ground during sunset](https://unsplash.com/photos/D_HqAz_A4T4) | [Tim Stief](https://unsplash.com/@timstief) |
-| [Taste the rainbow.](https://unsplash.com/photos/NfksNc1Zz2g) | [Tony Tran](https://unsplash.com/@tonny_tran) |
-| [woman wearing white camisole](https://unsplash.com/photos/jlPJelJrSn4) | [trail](https://unsplash.com/@trails) |
-| [woman lying beside two kittens](https://unsplash.com/photos/7mfR5n3XozU) | [Tran Mau Tri Tam ✪](https://unsplash.com/@tranmautritam) |
-| [man playing guitar](https://unsplash.com/photos/fJgMACvFs9I) | [Tucker Good](https://unsplash.com/@tuckergood) |
-| [Model - www.instagram.com/catsantiya](https://unsplash.com/photos/A25sCBl2JCs) | [Vadim Sadovski](https://unsplash.com/@vadimsadovski) |
-| [An elderly man with glasses looks pensively down.](https://unsplash.com/photos/GZ7LiL2D5sU) | [Vitaliy Shevchenko](https://unsplash.com/@vitaliyshev89) |
-| [man holding fireworks](https://unsplash.com/photos/dB88CAJquTg) | [xandro Vandewalle](https://unsplash.com/@xandrovandewalle) |
-| [man playing saxophone photography](https://unsplash.com/photos/03TcFSGzKyA) | [Yunming Wang](https://unsplash.com/@ymwang) |
-| [man in red cap and white red and blue floral button up shirt](https://unsplash.com/photos/LZ7Io98GuRw) | [Yusuf Shamsudeen](https://unsplash.com/@elasoshi) |
-| [photography of people watching event during nighttime](https://unsplash.com/photos/aPDdaxVPxXY) | [Zahir Namane](https://unsplash.com/@zahirnamane) |

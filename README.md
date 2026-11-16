@@ -26,6 +26,11 @@ random set that changes daily. You pick which shelves show and in what order.
 
 ![An album opened in the grid](docs/screenshots/album-open.jpg)
 
+Behind an opened album goes its cover, blurred, or a background and text
+colours picked from the cover. Or nothing, if you'd rather.
+
+![An opened album over its blurred cover, and in its cover's colours](docs/screenshots/backgrounds.jpg)
+
 ## Artists and genres
 
 Each artist gets a tile. Fusion reads the ARTISTS tag, so featured artists
@@ -46,8 +51,7 @@ straight in.
 | | |
 |---|---|
 | ![Artists](docs/screenshots/artists.jpg) | ![An artist's page](docs/screenshots/artist-page.jpg) |
-
-![A genre's page](docs/screenshots/genre-page.jpg)
+| ![Genres](docs/screenshots/genres.jpg) | ![A genre's page](docs/screenshots/genre-page.jpg) |
 
 ## Folders and songs
 
@@ -118,16 +122,24 @@ values from your library as you type, and counts the matching songs.
 ## Settings
 
 Light or dark, any accent colour, tile sizes, which shelves to show, what goes
-behind an opened album (the blurred cover, its colours, or nothing), and a
-waveform seek bar.
+behind an opened album, and a waveform seek bar.
 
 | | |
 |---|---|
 | ![Settings](docs/screenshots/settings.jpg) | ![Light theme](docs/screenshots/light.jpg) |
 
+![The same page in four accent colours](docs/screenshots/colours.jpg)
+
+## Mini player
+
+Alt+M, or the button in the play bar, shrinks the window to the cover, the
+song and its controls, and keeps it on top of other windows if you want. Alt+M
+again brings the full window back.
+
+<img src="docs/screenshots/mini.jpg" alt="The mini player" width="480">
+
 ## Also
 
-- A mini player (Alt+M) that can stay on top.
 - Likes and dislikes. The heart on a song cycles through Like it, Hate it and
   nothing, kept in the `MOOD` tag as the original skin did. Favourites lists
   what you liked.

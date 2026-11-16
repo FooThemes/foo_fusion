@@ -204,7 +204,8 @@ export async function installMock() {
   } catch {}
 
   const mkPl = (name, items, auto = false, query = '') => ({ guid: `{${crypto.randomUUID()}}`, name, items, auto, query, selection: new Set(), focus: -1, locked: auto });
-  const pls = [mkPl('Collection', [...lib], true, 'ALL'), mkPl('Road trip', lib.filter((_, i) => i % 17 === 0)), mkPl('Late night', lib.filter((t) => t.genre === 'Jazz' || t.genre === 'Ambient')), mkPl('Empty playlist', [])];
+  // A page may bring its own playlists too (window.__mockPlaylists(lib, mkPl)).
+  const pls = window.__mockPlaylists ? window.__mockPlaylists(lib, mkPl) : [mkPl('Collection', [...lib], true, 'ALL'), mkPl('Road trip', lib.filter((_, i) => i % 17 === 0)), mkPl('Late night', lib.filter((t) => t.genre === 'Jazz' || t.genre === 'Ambient')), mkPl('Empty playlist', [])];
   let active = 0;
   const pb = { state: 'stopped', pl: -1, idx: -1, pos: 0, vol: 72, muted: false, order: 0, sac: false };
   const queue = [];

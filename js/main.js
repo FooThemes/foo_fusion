@@ -33,6 +33,7 @@ async function boot() {
       window.__mockTracks = demo.demoTracks();
       window.__mockOverride = demo.demoOverride;
       window.__mockTf = demo.demoTf;
+      window.__mockPlaylists = demo.demoPlaylists;
     }
     const { installMock } = await import('../dev/mock-bridge.js');
     await installMock();

@@ -181,8 +181,46 @@ def fetch_album(row):
     return {'id': ident, 'album': fix_encoding(album), 'artist': fix_encoding(artist), 'licence': lic, 'genre': return_genre, 'date': date, 'tracks': tracks}
 
 
+def harbour_cover():
+    """The cover of "Night Ferry" by Harbour Lights, an album made up for the
+    demo (it has lyrics, for the lyrics screenshot): lights on dark water."""
+    import random
+    from PIL import ImageDraw, ImageFilter
+    dest = COVERS / 'harbour-lights.jpg'
+    if dest.exists():
+        return
+    W = 700
+    rnd = random.Random(7)
+    im = Image.new('RGB', (W, W))
+    d = ImageDraw.Draw(im)
+    for y in range(W):  # night sky to water
+        t = y / W
+        d.line([(0, y), (W, y)], fill=(int(14 + 30 * t), int(18 + 22 * t), int(48 + 40 * (1 - abs(t - 0.55) * 1.6))))
+    glow = Image.new('RGB', (W, W))
+    g = ImageDraw.Draw(glow)
+    shore = 390
+    for _ in range(70):  # harbour lights along the shore, and their reflections
+        x = rnd.uniform(20, W - 20)
+        y = shore + rnd.uniform(-30, 8)
+        r = rnd.uniform(3, 9)
+        c = rnd.choice([(255, 196, 92), (255, 160, 70), (250, 230, 170), (120, 190, 255)])
+        g.ellipse([x - r, y - r, x + r, y + r], fill=c)
+        for k in range(1, 9):
+            ry = shore + 30 + k * rnd.uniform(14, 22)
+            if ry < W:
+                g.ellipse([x - r * 0.8, ry - 2, x + r * 0.8, ry + 2], fill=tuple(int(v * (1 - k / 10)) for v in c))
+    from PIL import ImageChops
+    im = ImageChops.lighter(im, glow)  # the lights themselves
+    im = ImageChops.add(im, glow.filter(ImageFilter.GaussianBlur(14)))  # and their glow
+    im = ImageChops.add(im, glow.filter(ImageFilter.GaussianBlur(40)))
+    d = ImageDraw.Draw(im)
+    d.rectangle([0, shore + 4, W, shore + 7], fill=(10, 12, 30))
+    im.filter(ImageFilter.GaussianBlur(1.2)).save(dest, quality=90)
+
+
 def main():
     COVERS.mkdir(parents=True, exist_ok=True)
+    harbour_cover()
     rows = albums_from_credits()
     print(f'{len(rows)} albums in the credits')
     out, failed = [], []

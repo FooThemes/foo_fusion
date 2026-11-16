@@ -1,7 +1,7 @@
 // Menus and small dialogs. Native popup menus come from foo_ui_webview2
 // (ui.showCustomMenu / menu.showNativePopup); text prompts are drawn in-page.
 
-import { call, tryCall } from '../core/bridge.js';
+import { call, tryCall, onAny } from '../core/bridge.js';
 import { toggleMini, isMini } from './mini.js';
 import { el, winPath } from '../core/util.js';
 import { tidyItems } from './dropdown.js';
@@ -84,6 +84,15 @@ export async function trackContextMenu(rows, extra = [], { select = true } = {})
  */
 export async function contextMenu(target, extra = [], { hoist = [] } = {}) {
   if (!extra.length && target.mode !== 'handles') return tryCall('menu.showNativePopup', target);
+  const items = await contextItems(target);
+  // foobar2000's own items Fusion already offers above ("Play") aren't
+  // listed twice; `hoist`ed ones move up beside Fusion's first item.
+  const { mine, rest } = mergeItems(extra, items, hoist);
+  return showMenu(rest.length ? [...mine, '-', ...rest] : mine);
+}
+
+/** foobar2000's context menu for `target`, as showMenu() items. */
+export async function contextItems(target) {
   const res = await tryCall('menu.getContextMenu', { ...target, withAvailability: false });
   const conv = (nodes) =>
     (nodes || [])
@@ -105,14 +114,19 @@ export async function contextMenu(target, extra = [], { hoist = [] } = {}) {
             }),
         };
       });
-  // foobar2000's own items Fusion already offers above ("Play") aren't
-  // listed twice; `hoist`ed ones move up beside Fusion's first item.
+  return conv(res?.items);
+}
+
+/**
+ * Fusion's items with foobar2000's: theirs that repeat ours are dropped, and
+ * the `hoist`ed ones move up to just after our first item.
+ */
+function mergeItems(extra, items, hoist = []) {
   const ours = new Set(extra.filter((x) => x && x !== '-').map((x) => x.label));
-  let fb = conv(res?.items).filter((it) => it === '-' || !ours.has(it.label));
-  const lifted = fb.filter((it) => it !== '-' && hoist.includes(it.label));
-  fb = fb.filter((it) => !lifted.includes(it));
-  const mine = lifted.length ? [extra[0], ...lifted, ...extra.slice(1)] : extra;
-  return showMenu(fb.length ? [...mine, '-', ...fb] : mine);
+  let rest = items.filter((it) => it === '-' || !ours.has(it.label));
+  const lifted = rest.filter((it) => it !== '-' && hoist.includes(it.label));
+  rest = rest.filter((it) => !lifted.includes(it));
+  return { mine: lifted.length ? [extra[0], ...lifted, ...extra.slice(1)] : extra, rest };
 }
 
 /**
@@ -204,11 +218,17 @@ export function folderMenu(f) {
   ]);
 }
 
-export function playlistMenu(p, targets = [p]) {
+export async function playlistMenu(p, targets = [p]) {
   const special = playlists.isSpecial(p);
   const many = targets.length > 1;
+  // Contents: foobar2000's menu for every song in them (file operations,
+  // tagging, ReplayGain …). A real submenu, so it's read before the menu opens.
+  const handles = await playlistHandles(targets);
+  const contents = handles.length ? await contextItems({ mode: 'handles', handles }) : [];
+  const play = { label: 'Play', run: () => call('playlist.playTrack', { playlist: p.index, index: 0 }) };
+  const { mine, rest } = mergeItems([play], contents, ['Add to playback queue']);
   return showMenu([
-    { label: 'Play', run: () => call('playlist.playTrack', { playlist: p.index, index: 0 }) },
+    ...mine,
     { label: 'Show', run: () => playlists.activate(p.index) },
     '-',
     { label: 'Rename…', enabled: !special && !many, shortcut: 'F2', run: () => renamePlaylist(p) },
@@ -217,7 +237,7 @@ export function playlistMenu(p, targets = [p]) {
       for (const t of [...targets].reverse()) await tryCall('playlist.duplicate', { playlistGuid: t.guid });
     } },
     { label: 'Folder', enabled: !targets.some((t) => playlists.isSpecial(t)), submenu: folderMenuItems(targets) },
-    { label: 'Contents…', enabled: targets.some((t) => t.trackCount > 0), run: () => contentsMenu(targets) },
+    { label: 'Contents', enabled: rest.some((x) => x !== '-'), submenu: rest.length ? rest : [{ label: 'Empty', enabled: false }] },
     { label: 'Save as…', enabled: !many, run: async () => {
       await playlists.activate(p.index);
       await runMainMenuAny(['File/Save playlist...', 'File/Save playlist…', 'Save playlist...']);
@@ -240,22 +260,30 @@ export function playlistMenu(p, targets = [p]) {
   ]);
 }
 
-/**
- * foobar2000's context menu for every song in these playlists (file
- * operations, tagging, ReplayGain …), as if they were all selected. The songs
- * are listed only when it's asked for: a big playlist takes a moment.
- */
-async function contentsMenu(targets) {
-  const handles = [];
-  for (const t of targets) {
-    for (let i = 0; i < t.trackCount; i += 4000) {
-      const res = await tryCall('playlist.getTracks', { playlistGuid: t.guid, start: i, count: Math.min(4000, t.trackCount - i), fields: ['handle'] });
-      if (!res) break;
-      for (const x of res.tracks) if (x.handle) handles.push(x.handle);
-    }
+// Every song's handle in a playlist, kept until its songs change.
+const handleCache = new Map(); // guid -> { count, handles }
+let watchingLists = false;
+async function playlistHandles(targets) {
+  if (!watchingLists) {
+    watchingLists = true;
+    onAny(['playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered', 'playlist:itemsReplaced', 'playlist:removed'], () => handleCache.clear());
   }
-  if (!handles.length) return toast('Those playlists are empty.');
-  return tryCall('menu.showNativePopup', { mode: 'handles', handles: [...new Set(handles)] });
+  const all = [];
+  for (const t of targets) {
+    let c = handleCache.get(t.guid);
+    if (!c || c.count !== t.trackCount) {
+      const handles = [];
+      for (let i = 0; i < t.trackCount; i += 4000) {
+        const res = await tryCall('playlist.getTracks', { playlistGuid: t.guid, start: i, count: Math.min(4000, t.trackCount - i), fields: ['handle'] });
+        if (!res) break;
+        for (const x of res.tracks) if (x.handle) handles.push(x.handle);
+      }
+      c = { count: t.trackCount, handles };
+      handleCache.set(t.guid, c);
+    }
+    all.push(...c.handles);
+  }
+  return [...new Set(all)];
 }
 
 export async function deletePlaylists(list) {

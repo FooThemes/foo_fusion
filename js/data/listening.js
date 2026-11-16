@@ -171,17 +171,29 @@ export function listeningData(pl, onProgress) {
   if (state?.guid === pl.guid && state.complete && state.count === pl.trackCount) return Promise.resolve(tracksOf());
   if (syncing?.guid === pl.guid) {
     if (onProgress) syncing.progress.add(onProgress);
+    // Songs added or removed while it was reading: read again after.
+    if (syncing.count !== pl.trackCount) return syncing.promise.then(() => listeningData(pl, onProgress));
     return syncing.promise;
   }
   const progress = new Set(onProgress ? [onProgress] : []);
-  const promise = sync(pl, (f) => progress.forEach((fn) => fn(f))).finally(() => (syncing = null));
-  syncing = { guid: pl.guid, promise, progress };
+  const before = state?.guid === pl.guid && state.complete ? state.count : null;
+  const promise = sync(pl, (f) => progress.forEach((fn) => fn(f)))
+    .then((tracks) => {
+      // New songs (an album added to the library): the shelves and stats move.
+      if (tracks && before != null && before !== pl.trackCount) listening.emit('change');
+      return tracks;
+    })
+    .finally(() => (syncing = null));
+  syncing = { guid: pl.guid, count: pl.trackCount, promise, progress };
   return promise;
 }
 
-/** Already read for this playlist (no waiting), or null. */
+/**
+ * Already read for this playlist (no waiting), or null. Not when songs were
+ * added or removed since: those are read first (listeningData).
+ */
 export function knownData(pl) {
-  return state?.guid === pl.guid && state.complete ? tracksOf() : null;
+  return state?.guid === pl.guid && state.complete && state.count === pl.trackCount ? tracksOf() : null;
 }
 
 function tracksOf() {

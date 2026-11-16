@@ -217,6 +217,7 @@ export function playlistMenu(p, targets = [p]) {
       for (const t of [...targets].reverse()) await tryCall('playlist.duplicate', { playlistGuid: t.guid });
     } },
     { label: 'Folder', enabled: !targets.some((t) => playlists.isSpecial(t)), submenu: folderMenuItems(targets) },
+    { label: 'Contents…', enabled: targets.some((t) => t.trackCount > 0), run: () => contentsMenu(targets) },
     { label: 'Save as…', enabled: !many, run: async () => {
       await playlists.activate(p.index);
       await runMainMenuAny(['File/Save playlist...', 'File/Save playlist…', 'Save playlist...']);
@@ -237,6 +238,24 @@ export function playlistMenu(p, targets = [p]) {
       : []),
     ...(targets.some((t) => playlists.isSpecial(t)) ? [] : ['-', { label: many ? `Delete ${targets.length} playlists` : 'Delete', shortcut: 'Del', run: () => deletePlaylists(targets) }]),
   ]);
+}
+
+/**
+ * foobar2000's context menu for every song in these playlists (file
+ * operations, tagging, ReplayGain …), as if they were all selected. The songs
+ * are listed only when it's asked for: a big playlist takes a moment.
+ */
+async function contentsMenu(targets) {
+  const handles = [];
+  for (const t of targets) {
+    for (let i = 0; i < t.trackCount; i += 4000) {
+      const res = await tryCall('playlist.getTracks', { playlistGuid: t.guid, start: i, count: Math.min(4000, t.trackCount - i), fields: ['handle'] });
+      if (!res) break;
+      for (const x of res.tracks) if (x.handle) handles.push(x.handle);
+    }
+  }
+  if (!handles.length) return toast('Those playlists are empty.');
+  return tryCall('menu.showNativePopup', { mode: 'handles', handles: [...new Set(handles)] });
 }
 
 export async function deletePlaylists(list) {

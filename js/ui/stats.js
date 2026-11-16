@@ -43,12 +43,18 @@ export class StatsPage {
     // Played or retagged songs are read again on their own (listening.js):
     // the page is redrawn where it is.
     this.offChange = listening.on('change', () => this.#update());
+    // Songs added to or removed from the Collection (new albums): read them.
+    this.offPlaylists = playlists.on('change', () => {
+      const now = playlists.byName(COLLECTION);
+      if (this.tracks && now && now.trackCount !== this.pl?.trackCount) this.#update();
+    });
     this.load();
   }
 
   destroy() {
     this.dead = true;
     this.offChange();
+    this.offPlaylists();
     this.resize.disconnect();
     this.album.destroy();
     this.wrap.remove();
@@ -69,8 +75,13 @@ export class StatsPage {
 
   #update() {
     if (this.dead || !this.pl) return;
+    // The Collection as it is now (songs may have been added since).
+    this.pl = playlists.byName(COLLECTION) || this.pl;
     const tracks = knownData(this.pl);
-    if (!tracks) return;
+    if (!tracks) {
+      listeningData(this.pl); // reads the new songs, then 'change' brings it back here
+      return;
+    }
     this.tracks = tracks;
     this.hasTimes = tracks.some((t) => t.times.length);
     const top = this.scroller.scrollTop;

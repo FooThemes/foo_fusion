@@ -117,7 +117,7 @@ class Player extends Emitter {
       this.#resuming = false;
       if (held && held.handle === t.handle && held.position > 1) setTimeout(() => this.seek(held.position), 60);
       this.track = t;
-      this.duration = t.duration || 0;
+      this.duration = t.duration || (held && held.handle === t.handle ? this.duration : 0);
       this.#setPosition(held && held.handle === t.handle ? held.position : t.position || 0);
       const start = this.trackStart;
       this.#refreshLocation().then(() => {
@@ -235,7 +235,7 @@ class Player extends Emitter {
     this.state = state;
     // Paused (by any control): on ASIO, perhaps let go of the driver.
     if (state === 'paused' && was === 'playing' && !this.#held) this.#releaseOnPause();
-    if (d.duration != null) this.duration = d.duration;
+    if (d.duration != null) this.#setDuration(d.duration);
     // While jumping back after a released pause the song is briefly reported
     // as not seekable: the seek bar would dim for a moment.
     if (d.canSeek != null && !(d.canSeek === false && this.#jumpTo && performance.now() - this.#jumpTo.at < 2500)) this.canSeek = d.canSeek;
@@ -250,7 +250,15 @@ class Player extends Emitter {
     if (j && performance.now() - j.at < 2500 && Math.abs((pos || 0) - j.position) > 2) return;
     this.position = pos || 0;
     this.positionAt = performance.now();
-    if (dur != null) this.duration = dur;
+    if (dur != null) this.#setDuration(dur);
+  }
+
+  // While a song is being (re)opened foobar2000 reports it as 0 seconds long
+  // for a moment: the seek bar emptied and the time left vanished. A zero
+  // length doesn't replace the playing song's known one.
+  #setDuration(d) {
+    if (!(d > 0) && this.duration > 0 && this.track && this.state !== 'stopped') return;
+    this.duration = d || 0;
   }
 
   #setVolume(v) {

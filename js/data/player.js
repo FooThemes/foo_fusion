@@ -80,12 +80,20 @@ class Player extends Emitter {
       // reports as a stop for "user"), rather than the queue or Next moving on.
       const stop = this.#lastStop;
       const now = performance.now();
-      this.startedByUser = now - this.#playAsked < 3000 || this.state === 'stopped' || (!!stop && now - stop.at < 2000 && stop.reason !== 'starting_another');
+      // How it started: 'history' (Previous going back), 'queue' (played from
+      // the queue), 'user' (you picked it), else '' (moved on by itself or Next).
+      const asked = now - this.#asked.at < 3000 ? this.#asked.kind : '';
+      this.startKind = asked || (this.state === 'stopped' || (!!stop && now - stop.at < 2000 && stop.reason !== 'starting_another') ? 'user' : '');
+      this.startedByUser = this.startKind === 'user';
       this.#lastStop = null;
-      this.#playAsked = -1e9;
+      this.#asked = { kind: '', at: -1e9 };
+      const back = this.#goingBack;
+      this.#goingBack = false;
       // Remember what played before (for "Previously" in Now playing).
       clearTimeout(this.#stopTimer);
-      if (this.track && this.track.handle !== t.handle) {
+      // Going back through what played: the song left isn't added again, so
+      // Previous keeps going further back.
+      if (this.track && this.track.handle !== t.handle && !back) {
         const { handle, title, artist, album, duration } = this.track;
         this.history.push({ handle, title, artist, album, duration, playlist: this.playingPlaylist, index: this.playingIndex });
         if (this.history.length > HISTORY) this.history.splice(0, this.history.length - HISTORY);
@@ -104,7 +112,9 @@ class Player extends Emitter {
     // in its shuffle). foobar2000 started by its own controls is told apart
     // by the stop it reports (below).
     onCall((method) => {
-      if (method === 'playlist.playTrack' || method === 'playback.playPath') this.#playAsked = performance.now();
+      const kind = { 'playlist.playTrack': 'user', 'playback.playPath': 'user', 'queue.playNow': 'queue' }[method];
+      if (kind) this.#asked = { kind: this.#goingBack || this.#replay ? 'history' : kind, at: performance.now() };
+      if (kind) this.#replay = false;
     });
     on('playback:stateChanged', (d) => {
       if (d.state === 'stopped') this.#lastStop = { reason: this.#lastStop?.reason || 'user', at: performance.now() };
@@ -170,7 +180,15 @@ class Player extends Emitter {
 
   #stopTimer = 0;
   #lastStop = null;
-  #playAsked = -1e9;
+  #asked = { kind: '', at: -1e9 };
+  #goingBack = false;
+  #replay = false;
+
+  /** The next song Fusion starts is one played before (Now playing's history). */
+  replaying() {
+    this.#replay = true;
+  }
+  startKind = '';
   startedByUser = false; // the playing song was started by you (see trackChanged)
   #stopSoon() {
     clearTimeout(this.#stopTimer);
@@ -215,9 +233,30 @@ class Player extends Emitter {
     return call('playback.next');
   }
   previous() {
-    // Fusion's shuffle: back to the song that played before in its order.
-    if (this.shuffle?.mode) return this.shuffle.previous();
+    // Fusion's shuffle: back through the songs that actually played (queued
+    // ones included), one more each time.
+    if (this.shuffle?.mode) return this.#back();
     return call('playback.previous');
+  }
+
+  async #back() {
+    const h = this.history.pop();
+    if (!h) return call('playback.previous');
+    saveHistory(this.history);
+    this.#goingBack = true;
+    // Its row, if it still holds that song; else the file itself.
+    let atRow = false;
+    if (h.playlist >= 0 && h.index >= 0) {
+      const r = await tryCall('playlist.getTracksAt', { playlist: h.playlist, rows: [h.index], fields: ['handle'] });
+      atRow = r?.tracks?.[0]?.handle === h.handle;
+    }
+    try {
+      if (atRow) await call('playlist.playTrack', { playlist: h.playlist, index: h.index });
+      else await call('playback.playPath', { path: h.handle });
+    } catch (err) {
+      this.#goingBack = false;
+      throw err;
+    }
   }
   stop() {
     return call('playback.stop');

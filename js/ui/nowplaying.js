@@ -93,12 +93,20 @@ export class NowPlaying {
       /* missing art: falls through to the placeholder */
     }
     if (this.artUrl !== url) return;
-    // The old cover stays over the new one for a moment and fades out.
+    // The new cover (already decoded) fades in over the old one, which stays
+    // until then: no blank frame between songs.
     if (this.cover.classList.contains('loaded') && this.cover.getAttribute('src') && pre.naturalWidth && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const ghost = this.cover.cloneNode(false);
-      ghost.classList.add('np-cover-ghost');
-      this.coverBox.append(ghost);
-      ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 350, delay: 30, easing: 'ease-out', fill: 'forwards' }).finished.finally(() => ghost.remove());
+      pre.className = 'np-cover-next loaded' + (isRawUrl(url) ? ' alpha' : '');
+      this.coverBox.append(pre);
+      await pre.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' }).finished.catch(() => {});
+      if (this.artUrl !== url) return pre.remove();
+      this.cover.src = url;
+      try {
+        await this.cover.decode();
+      } catch {
+        /* shown as it loads */
+      }
+      pre.remove();
     }
     for (const img of [this.cover, this.bg]) {
       if (pre.naturalWidth) {
@@ -151,9 +159,13 @@ export class NowPlaying {
     const pl = playlists.list[basePl];
     let rows = [];
     let note = '';
+    let elsewhere = null;
     if (pl && baseRow >= 0) {
       if (ours) {
-        const playingHere = basePl === player.playingPlaylist && player.playingIndex >= 0;
+        const playingHere = basePl === player.playingPlaylist && player.playingIndex >= 0 && shuffle.order[shuffle.pos] === player.playingIndex;
+        // A song from the queue (or elsewhere) is playing: it's shown on top
+        // as it is, then the shuffle's songs.
+        if (!queue.length && !playingHere && player.active && player.track) elsewhere = player.track;
         rows = [...(!queue.length && playingHere ? [player.playingIndex] : []), ...shuffle.upcoming(UP_NEXT)];
       } else if (shuffled) note = `${ORDER_LABELS[order]} is on. foobar2000 keeps its shuffled order to itself, so what plays next can't be listed here.`;
       else if (order === 'repeat-track' && !queue.length) note = 'Repeat (track) is on: this song plays again.';
@@ -204,7 +216,10 @@ export class NowPlaying {
           number: n - prev.length,
           previous: true,
           queue,
-          onplay: () => (t.playlist >= 0 && t.index >= 0 ? call('playlist.playTrack', { playlist: t.playlist, index: t.index }) : call('playback.playPath', { path: t.handle })),
+          onplay: () => {
+            player.replaying(); // a song from before: doesn't move the shuffle elsewhere
+            return t.playlist >= 0 && t.index >= 0 ? call('playlist.playTrack', { playlist: t.playlist, index: t.index }) : call('playback.playPath', { path: t.handle });
+          },
         }),
       ),
     );
@@ -214,9 +229,10 @@ export class NowPlaying {
     if (queue.length && (tracks.length || note)) out.push(el('h3.np-list-title.np-then', { dataset: { key: 'then' }, text: `Then from ${plName || 'the playlist'}` }));
     if (note) out.push(el('div.np-note', { dataset: { key: 'note' }, text: note }));
     let number = 0;
+    if (elsewhere) out.push(this.#row(elsewhere, { kind: 'pl', index: -1, number: 0, current: true, queue, onplay: () => {} }));
     tracks.forEach((t, n) => {
       const row = rows[n];
-      const current = basePl === player.playingPlaylist && row === player.playingIndex && !queue.length && n === 0;
+      const current = !elsewhere && basePl === player.playingPlaylist && row === player.playingIndex && !queue.length && n === 0;
       // Fusion's shuffle: its upcoming songs can be dragged into another order.
       const movable = ours && !current;
       out.push(this.#row(t, { kind: movable ? 'shuffle' : 'pl', index: row, number: current ? 0 : ++number, current, queue, playlist: pl, editable: editable || movable, onplay: () => call('playlist.playTrack', { playlist: basePl, index: row }) }));

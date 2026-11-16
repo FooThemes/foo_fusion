@@ -11,7 +11,7 @@
 // The order is kept in the page's storage, so a reload carries on where it
 // was. While Fusion isn't loaded, foobar2000 just plays on in Default order.
 
-import { call, tryCall, on, onAny } from '../core/bridge.js';
+import { tryCall, on, onAny } from '../core/bridge.js';
 import { debounce } from '../core/util.js';
 import { Emitter } from '../core/emitter.js';
 import { logInfo } from '../core/log.js';
@@ -32,6 +32,7 @@ class Shuffle extends Emitter {
   #at = new Map(); // row -> position in order
   ours = null; // { guid, row, handle } of the song Fusion queued
   #lastQueue = [];
+  #left = new Map(); // handle -> when a song you queued left the queue
   oursQueued = false; // Fusion's song is in the queue now
   #busy = Promise.resolve();
 
@@ -54,7 +55,12 @@ class Shuffle extends Emitter {
   }
 
   async init() {
-    on('playback:queueChanged', debounce(() => this.#run(() => this.#ensure()), 150));
+    const ensureSoon = debounce(() => this.#run(() => this.#ensure()), 150);
+    on('playback:queueChanged', () => {
+      if (!this.mode) return;
+      this.#readQueue();
+      ensureSoon();
+    });
     player.on('track', () => this.#run(() => this.#onTrack()));
     // Songs added, removed or moved in the shuffled playlist (an autoplaylist
     // re-sorts as play counts change): the order is kept, each song followed
@@ -137,14 +143,6 @@ class Shuffle extends Emitter {
     return this.#run(() => this.#ensure());
   }
 
-  /** Previous: the song that played before in Fusion's order. */
-  async previous() {
-    if (this.pos <= 0) return call('playback.previous');
-    const pl = playlists.list.find((p) => p.guid === this.guid);
-    if (!pl) return call('playback.previous');
-    return call('playlist.playTrack', { playlistGuid: this.guid, index: this.order[this.pos - 1] });
-  }
-
   // One change at a time: queue edits answer with events that call back in.
   #run(fn) {
     this.#busy = this.#busy.then(fn, fn).catch((err) => console.error('[fusion] shuffle:', err));
@@ -218,22 +216,32 @@ class Shuffle extends Emitter {
     const pl = playlists.list[player.playingPlaylist];
     const row = player.playingIndex;
     const h = player.track?.handle;
-    const nextUp = pl && pl.guid === this.guid && row === this.order[this.pos + 1];
-    if ((h && this.ours && h === this.ours.handle) || (nextUp && !player.startedByUser)) {
-      // Fusion's queued song: the order moves on.
+    const inOrder = pl && pl.guid === this.guid && row >= 0 && this.#at.has(row);
+    const nextUp = inOrder && row === this.order[this.pos + 1];
+    // A song that was in the queue (yours, from any playlist).
+    const fromQueue = player.startKind === 'queue' || (!!h && (this.#lastQueue.some((it) => it.handle === h && !this.isOurs(it)) || Date.now() - (this.#left.get(h) || 0) < 15000));
+    let why;
+    if ((h && this.ours && h === this.ours.handle) || (nextUp && player.startKind === '')) {
+      why = 'next in order';
       this.pos = this.#at.get(row) ?? this.pos + 1;
       this.ours = null;
+    } else if (fromQueue) {
+      why = 'from the queue: order waits';
+      this.#left.delete(h);
+    } else if (player.startKind === 'history') {
+      // Previous, going back: if it's in the order, Next carries on from it.
+      why = 'went back';
+      if (inOrder) this.pos = this.#at.get(row);
     } else if (!player.startedByUser) {
-      // A song that came up through the queue (yours, from any playlist) or
-      // with Next: the shuffle waits, and carries on after it.
-    } else if (pl && pl.guid === this.guid && row >= 0 && this.#at.has(row)) {
-      // You played a song from the shuffled playlist: carry on from there.
+      why = 'moved on by itself: order waits';
+    } else if (inOrder) {
+      why = 'you played it: order carries on from it';
       this.pos = this.#at.get(row);
     } else if (pl && row >= 0) {
-      // You started a song in another playlist: shuffle that one now.
-      logInfo(`shuffle: now from ${pl.name}`);
+      logInfo(`shuffle: you started a song in ${pl.name}; shuffling that`);
       return this.#rebuild();
     }
+    logInfo(`shuffle: ${player.track?.title || h} (${why || 'not in a playlist'}), position ${this.pos + 1} of ${this.order.length}`);
     if (this.order.length && this.pos >= this.order.length - 1) {
       // The end of the order: a fresh one carries on from here.
       return this.#rebuild();
@@ -270,6 +278,8 @@ class Shuffle extends Emitter {
   async #readQueue() {
     const q = await tryCall('queue.get');
     const items = q?.items || [];
+    const still = new Set(items.map((it) => it.handle));
+    for (const it of this.#lastQueue) if (!this.isOurs(it) && !still.has(it.handle)) this.#left.set(it.handle, Date.now());
     this.#lastQueue = items;
     const was = this.oursQueued;
     this.oursQueued = items.some((it) => this.isOurs(it));

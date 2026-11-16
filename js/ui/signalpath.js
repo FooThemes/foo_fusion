@@ -27,10 +27,10 @@ const glyph = (name) => {
   return svg;
 };
 
-export function mountSignalPath(after, root) {
+export function mountSignalPath(controls, root) {
   const dot = el('span.sp-dot');
   const chip = el('button.sp-chip', { type: 'button', hidden: true, onclick: (e) => (e.stopPropagation(), toggle()) }, dot);
-  after.after(chip);
+  controls.prepend(chip);
   const pop = el('div.sp-pop', { hidden: true, role: 'dialog', 'aria-label': 'Signal path' });
   root.append(pop);
 

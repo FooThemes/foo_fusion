@@ -95,8 +95,9 @@ export function mountPlayerBar(root, app) {
   const volPop = el('div.vol-pop', { hidden: true }, volValue, el('div.vol-slider', { role: 'slider', 'aria-label': 'Volume', tabindex: 0 }, volTrack), el('button.btn-icon.vol-mute', { title: 'Mute', onclick: () => player.toggleMute() }, icon('mute')));
 
   root.append(nowBox, seekBox, controls, volPop);
-  // Signal path: a dot after the length, opening the path from file to device.
-  mountSignalPath(length, root);
+  // Signal path: a dot at the start of the controls, opening the path from
+  // file to device.
+  mountSignalPath(controls, root);
 
   function marquee(box) {
     box.classList.remove('marquee');

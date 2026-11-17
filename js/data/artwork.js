@@ -222,17 +222,28 @@ function ownUrl(pick, cssSize) {
       };
       // Animated, or (a JPEG XL the browser won't say about) maybe: the file
       // itself, which plays whatever animation it has.
-      if (got.animated !== false && animateGif(cssSize)) return raw();
+      if (got.animated !== false && animateGif(cssSize)) {
+        const url = raw();
+        const test = new Image();
+        test.src = url;
+        test.decode().then(
+          () => ownLogs > 0 && logInfo(`cover ${pick.name}: shown as the file (${test.naturalWidth}×${test.naturalHeight})`),
+          (e) => ownLogs-- > 0 && logInfo(`cover ${pick.name}: the browser can't show the file (${e?.name}: ${e?.message})`),
+        );
+        return url;
+      }
       try {
         // A still at this size. createImageBitmap first; an <img> if that
         // can't take the file (it may not, for an animated JPEG XL).
         let src;
         try {
           src = await createImageBitmap(got.blob);
-        } catch {
+        } catch (e1) {
+          if (ownLogs-- > 0) logInfo(`cover ${pick.name}: createImageBitmap failed (${e1?.name}: ${e1?.message})`);
           src = new Image();
           src.src = URL.createObjectURL(got.blob);
           await src.decode().catch((e) => {
+            if (ownLogs-- > 0) logInfo(`cover ${pick.name}: <img> decode failed too (${e?.name}: ${e?.message})`);
             URL.revokeObjectURL(src.src);
             throw e;
           });

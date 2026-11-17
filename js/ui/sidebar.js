@@ -39,6 +39,10 @@ export function mountSidebar(root, app) {
     leaveNowPlaying(FAVORITES);
     playlists.ensureFavorites();
   });
+  for (const [node, name] of [[navCollection, COLLECTION], [navFavorites, FAVORITES]]) {
+    node.addEventListener('pointerenter', () => playlists.byName(name) && hoverPreload(playlists.byName(name)));
+    node.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
+  }
   const queueBadge = el('span.badge', { hidden: true });
   const navNow = navItem('nowPlaying', 'Now playing', () => view.setMode('nowplaying'), queueBadge);
   const navStats = navItem('stats', 'Listening stats', () => view.setMode('stats'));
@@ -118,6 +122,8 @@ export function mountSidebar(root, app) {
             e.preventDefault();
             playlistMenu(p);
           },
+          onpointerenter: () => hoverPreload(p),
+          onpointerleave: () => clearTimeout(hoverTimer),
         },
         playlistIcon(p),
         el('span.label.ellipsis', { text: p.name }),
@@ -203,6 +209,16 @@ export function mountSidebar(root, app) {
   });
 
   return { focusSearch: () => search.focus() };
+}
+
+// Hovering a playlist: its tab made ready, so clicking it shows it at once.
+let hoverTimer = 0;
+function hoverPreload(p) {
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => {
+    const mode = isPage(view.mode) ? (isPage(store.get('view')) ? 'albums' : store.get('view')) : view.mode;
+    view.preloadPlaylist(p, mode).catch(() => {});
+  }, 120);
 }
 
 function navItem(iconName, label, onclick, extra) {

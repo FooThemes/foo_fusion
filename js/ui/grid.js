@@ -37,6 +37,33 @@ function holdDecoded(url) {
   im.decode().catch(() => {});
   genreDecoded.set(url, im);
 }
+// A genre tile's picture: its own, else a collage of its biggest albums
+// (null: neither). Worked out once per size, decoded and kept, so a grid
+// (now, or later: see prewarmGrid) shows it the same frame.
+const genreBusy = new Map(); // token -> promise
+function genreTileUrl(g, w, h, { collage = true } = {}) {
+  const token = `genre|${g.key}|${w}x${h}`;
+  if (genreTiles.has(token)) return Promise.resolve(genreTiles.get(token));
+  if (genreBusy.has(token)) return genreBusy.get(token);
+  const p = (async () => {
+    let url = null;
+    const files = await genreFiles(g.key);
+    if (files?.picture) url = await genrePictureUrl(files.picture, Math.max(w, h) * (window.devicePixelRatio || 1));
+    if (!url && collage && g.collageRows?.length) {
+      const tracks = await view.tracks(g.collageRows);
+      const handles = tracks.map((t) => t?.handle).filter(Boolean);
+      url = await collageUrl(handles, w, h);
+    }
+    if (url || collage) {
+      genreTiles.set(token, url);
+      holdDecoded(url);
+    }
+    return url;
+  })().finally(() => genreBusy.delete(token));
+  genreBusy.set(token, p);
+  return p;
+}
+
 // Whether or not a grid is showing: URLs that are no longer valid go.
 window.addEventListener('fusion:genrerefresh', () => {
   forgetCollages();
@@ -602,21 +629,8 @@ export class Grid {
     }
     img.classList.remove('instant');
     img.decoding = 'async';
-    let url = null;
-    const files = await genreFiles(g.key);
+    const url = await genreTileUrl(g, w, h);
     if (!live()) return;
-    if (files?.picture) url = await genrePictureUrl(files.picture, Math.max(w, h) * (window.devicePixelRatio || 1));
-    if (!url && g.collageRows?.length) {
-      const tracks = await view.tracks(g.collageRows);
-      if (!live()) return;
-      const handles = tracks.map((t) => t?.handle).filter(Boolean);
-      url = await collageUrl(handles, w, h);
-    }
-    if (!live()) return;
-    genreTiles.set(token, url);
-    // Decoded and kept: a new grid (coming back from Songs or Folders) shows
-    // it the same frame, not the placeholder first.
-    holdDecoded(url);
     if (!url) {
       img.removeAttribute('src');
       img.classList.remove('loaded');
@@ -794,4 +808,50 @@ function hueOf(name) {
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return ((h ^ (h >>> 16)) >>> 0) % 360;
+}
+
+/**
+ * A preloaded tab (view.js), not open yet: its first screen of pictures got
+ * ready now (resolved, loaded and decoded), so opening it shows them at once
+ * rather than tiles first and pictures after. Sized as the grid would lay
+ * the tiles out at this width.
+ */
+const prewarmed = new Set();
+const held = [];
+export function prewarmGrid(mode, groups, width, isCurrent) {
+  if (!groups?.length || !width || !['albums', 'artists', 'genres'].includes(mode)) return;
+  const round = mode === 'artists';
+  const min = round ? store.get('artistTileSize') : store.get('tileSize');
+  const inner = width - MARGIN * 2;
+  const cols = Math.max(1, Math.floor(inner / (min + PAD * 2)));
+  const art = Math.floor(inner / cols) - PAD * 2;
+  const tileH = art + PAD + (round ? 58 : 54);
+  const count = Math.min(groups.length, cols * (Math.ceil(window.innerHeight / tileH) + 1));
+  const sig = `${mode}|${art}|${groups.length}|${groups[0]?.key}`;
+  if (prewarmed.has(sig)) return;
+  prewarmed.add(sig);
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 30));
+  let i = 0;
+  const step = () => {
+    // A few at a time, between other work.
+    for (const end = Math.min(count, i + 8); i < end; i++) {
+      const g = groups[i];
+      if (mode === 'genres') {
+        genreTileUrl(g, art, art, { collage: isCurrent }).catch(() => {});
+        continue;
+      }
+      const handle = g.head?.handle;
+      if (!handle) continue;
+      const types = round ? (store.get('artistNoPicture') === 'cover' ? [`info:${g.key}`, 'artist', 'front'] : [`info:${g.key}`, 'artist']) : albumArtTypes(store.get('separateDiscs'));
+      const img = new Image();
+      img.decoding = 'async';
+      img.addEventListener('load', () => img.decode().catch(() => {}));
+      bindArt(img, handle, art, types);
+      // Kept (the last few hundred), so the decoded pictures stay decoded.
+      held.push(img);
+      if (held.length > 400) held.splice(0, held.length - 400);
+    }
+    if (i < count) idle(step, { timeout: 1000 });
+  };
+  idle(step, { timeout: 1000 });
 }

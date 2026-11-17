@@ -58,7 +58,7 @@ class View extends Emitter {
       p = tryCall('playlist.getGroupRuns', { playlist: pl.index, patterns }).then((res) => (res ? res.runs || [] : null));
       this.#runsCache.set(key, p);
       p.then((r) => r || this.#runsCache.delete(key));
-      while (this.#runsCache.size > 8) this.#runsCache.delete(this.#runsCache.keys().next().value);
+      while (this.#runsCache.size > 40) this.#runsCache.delete(this.#runsCache.keys().next().value);
     }
     return p;
   }
@@ -82,7 +82,7 @@ class View extends Emitter {
   #keepSnapshot(key, groups, total) {
     this.#snapshots.delete(key);
     this.#snapshots.set(key, { groups, total });
-    if (this.#snapshots.size > 16) this.#snapshots.delete(this.#snapshots.keys().next().value);
+    if (this.#snapshots.size > 40) this.#snapshots.delete(this.#snapshots.keys().next().value);
   }
 
   /**
@@ -108,9 +108,34 @@ class View extends Emitter {
       }
     }
     logInfo(`preloaded ${done.join(', ') || 'nothing'} for ${pl.name} in ${Math.round(performance.now() - t0)} ms`);
+    // Then the other playlists, each at the tab they'd open on (this one).
+    const t1 = performance.now();
+    const others = playlists.list.filter((p) => p.guid !== pl.guid && p.trackCount > 0 && !playlists.isHidden?.(p)).slice(0, 30);
+    let n = 0;
+    for (const other of others) {
+      await new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(r, { timeout: 2000 }) : setTimeout(r, 200)));
+      if (this.playlist?.guid !== pl.guid || this.filter) return;
+      if (await this.preloadPlaylist(other).catch(() => false)) n++;
+    }
+    if (n) logInfo(`preloaded ${this.mode} for ${n} other playlist${n === 1 ? '' : 's'} in ${Math.round(performance.now() - t1)} ms`);
   }
 
-  async #preloadTab(pl, mode) {
+  /**
+   * Another playlist's tab (the one showing now, as it opens on that) made
+   * ready: when you hover it in the sidebar, and for each after launch.
+   */
+  async preloadPlaylist(pl, mode = this.mode) {
+    if (!pl || !pl.trackCount || pl.guid === this.playlist?.guid || this.drill) return false;
+    if (!['albums', 'artists', 'genres', 'folders', 'songs'].includes(mode)) return false;
+    return this.#preloadTab(pl, mode, { other: true });
+  }
+
+  /** A preloaded tab's groups (for its covers to be got ready), if there are any. */
+  snapshotGroups(mode, pl) {
+    return this.#snapshots.get(this.#snapshotKey(mode, null, '', pl))?.groups || null;
+  }
+
+  async #preloadTab(pl, mode, { other = false } = {}) {
     const albumKey = store.get('separateDiscs') ? TF.albumDiscKey : TF.albumKey;
     if (mode === 'folders') return !!(await Promise.all([this.#groupRuns(pl, [TF.dirKey]), libraryRoots()]))[0];
     if (mode === 'songs') {
@@ -142,8 +167,10 @@ class View extends Emitter {
     // The first screenfuls' titles and covers.
     const first = groups.slice(0, HEAD_CHUNK).filter((g) => !g.head);
     if (first.length) await this.#fetchHeads(pl, first, ns);
-    if (this.playlist?.guid !== pl.guid) return false;
+    if (!other && this.playlist?.guid !== pl.guid) return false;
     this.#keepSnapshot(key, groups, groups.reduce((n, g) => n + g.count, 0));
+    // Its first screen of covers can be got ready now too (grid.js).
+    this.emit('preloaded', { mode, groups, pl });
     return true;
   }
 

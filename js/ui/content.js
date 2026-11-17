@@ -10,7 +10,7 @@ import { view, isPage } from '../data/view.js';
 import { logInfo } from '../core/log.js';
 import { player } from '../data/player.js';
 import { playlists, COLLECTION } from '../data/playlists.js';
-import { Grid } from './grid.js';
+import { Grid, prewarmGrid } from './grid.js';
 import { overlayScroll } from './oscroll.js';
 import { FolderTree } from './foldertree.js';
 import { SongList } from './songs.js';
@@ -88,7 +88,21 @@ export function mountContent(root) {
     return true;
   }
 
+  // Another kind of view with nothing to show yet (Songs, Folders, a tab
+  // not preloaded): the one on screen stays until the new one has something,
+  // rather than a blank page in between (at most a moment).
+  let holdTimer = 0;
+  let holdOver = false;
   function onChange() {
+    const kind = kindFor(view.mode);
+    const empty = !view.groups.length && !view.rows?.length;
+    if (current && kind !== currentKind && !isPage(kind) && view.loading && empty && !holdOver) {
+      if (!holdTimer) holdTimer = setTimeout(() => ((holdTimer = 0), (holdOver = true), onChange()), 1500);
+      return;
+    }
+    clearTimeout(holdTimer);
+    holdTimer = 0;
+    holdOver = false;
     const fresh = ensure();
     const key = [view.playlist?.guid, view.mode, view.drill?.key, view.filter, store.get('separateDiscs')].join('|');
     const keep = !fresh && key === lastKey;
@@ -201,6 +215,9 @@ export function mountContent(root) {
   }
 
   view.on('change', onChange);
+  // A tab made ready in the background (view.js): its first screen of
+  // pictures too, at the width the grid will have.
+  view.on('preloaded', ({ mode, groups, pl }) => prewarmGrid(mode, groups, scroller.clientWidth, pl?.guid === view.playlist?.guid));
   view.on('mode', () => {
     ensure();
     if (isPage(view.mode)) renderMessage();

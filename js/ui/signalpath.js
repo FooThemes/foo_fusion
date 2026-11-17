@@ -66,9 +66,8 @@ export function mountSignalPath(controls, root) {
     pop.append(
       el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })),
       el('p.sp-sub', { text: q.note }),
-      // Left out: what's known for certain not to touch this song.
+      // Only what touches this song: inactive and bypassed stages are left out.
       el('ol.sp-stages', null, ...p.stages.filter((st) => !st.idle && !st.hidden).map(stage)),
-      ...idleList(p.stages.filter((st) => st.idle && !st.hidden)),
       ...foot,
     );
   }
@@ -82,25 +81,6 @@ export function mountSignalPath(controls, root) {
     );
   }
 
-  // What's in the chain but doesn't touch this song: one line, opened on request.
-  let showIdle = false;
-  function idleList(idle) {
-    if (!idle.length) return [];
-    const head = el(
-      'button.sp-idle-toggle',
-      {
-        type: 'button',
-        'aria-expanded': String(showIdle),
-        onclick: () => {
-          showIdle = !showIdle;
-          render();
-        },
-      },
-      icon(showIdle ? 'chevronDown' : 'chevronRight'),
-      el('span', { text: `${idle.length} inactive: ${idle.map((s) => s.title).join(', ')}` }),
-    );
-    return [head, showIdle ? el('ol.sp-stages.sp-idle', null, ...idle.map(stage)) : null].filter(Boolean);
-  }
 
   signalPath.on('change', render);
   signalPath.init();

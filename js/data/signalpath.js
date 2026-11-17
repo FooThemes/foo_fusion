@@ -12,7 +12,7 @@ import { Emitter } from '../core/emitter.js';
 import { debounce } from '../core/util.js';
 import { logInfo } from '../core/log.js';
 import { player } from './player.js';
-import { measureDsp, describe as describeCheck } from './dspcheck.js';
+import { measureDsp } from './dspcheck.js';
 
 // Output Info's fields, read in one go ("?" when it isn't installed).
 const OUT = ['output_samplerate', 'output_bitdepth', 'output_channels', 'output_device', 'output_dsps', 'output_dsp_preset', 'output_volume', 'output_rg_mode', 'output_rg_source', 'output_rg_gain', 'output_buffer_length'];
@@ -162,9 +162,7 @@ async function build(dopSeen, check = null) {
   const asio = /asio/i.test(conf?.outputName || '');
   const dsdRaw = src.dsd && dopSeen === 'bypass' && !asio && !nativeOut;
   const dsdKept = src.dsd && !dsdRaw && (nativeOut || dopSeen === 'dop' || dopSeen === 'bypass' || looksDop);
-  // Known for certain (not just from the rate): what's bypassed is left out.
-  const dsdSure = dsdKept && (nativeOut || dopSeen === 'dop' || dopSeen === 'bypass');
-  const bypassed = (stage) => ({ ...stage, detail: 'Bypassed for DSD', note: '', grade: 'lossless', idle: true, hidden: dsdSure || dsdRaw });
+  const bypassed = (stage) => ({ ...stage, detail: 'Bypassed for DSD', note: '', grade: 'lossless', idle: true, hidden: true });
 
   // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
   // "auto" follows foobar2000's own playback order: track gain when it
@@ -184,7 +182,7 @@ async function build(dopSeen, check = null) {
     if (dsdKept || dsdRaw) stages.push(bypassed({ kind: 'rg', icon: 'gain', title: 'ReplayGain' }));
     else if (gain == null || Math.abs(gain) >= 0.005) {
       changes.push('ReplayGain');
-      stages.push({ kind: 'rg', icon: 'gain', title: 'ReplayGain', detail: gain != null ? `${which === 'album' ? 'Album' : 'Track'} gain ${signed(gain)} dB` : `${which === 'album' ? 'Album' : 'Track'} gain (not tagged)`, grade: gain == null ? 'lossless' : 'enhanced', note: '' });
+      stages.push({ kind: 'rg', icon: 'gain', title: 'ReplayGain', detail: gain != null ? `${which === 'album' ? 'Album' : 'Track'} gain ${signed(gain)} dB` : `${which === 'album' ? 'Album' : 'Track'} gain (not tagged)`, grade: gain == null ? 'lossless' : 'enhanced', note: '', clipGuard: /clip/.test(processing) });
     }
   }
 
@@ -209,39 +207,47 @@ async function build(dopSeen, check = null) {
       grade: act.acts ? 'enhanced' : 'lossless',
       note: act.note,
       idle: !act.acts,
+      hidden: !act.acts, // inactive: left out
+      unknown: !!act.unknown,
     });
   }
 
   // 3b. The DSP chain measured: the audio after it against the file itself
   // (dspcheck.js). It settles what the rules above could only guess.
-  if (check && dspList.length && !dsdKept) {
+  if (check && dspList.length && !dsdKept && !dsdRaw && check.kind !== 'silent') {
     let kind = check.kind;
-    // Taken before ReplayGain, by the component's docs; if it's in there after
-    // all, a level change of exactly its gain is ReplayGain's, not the DSPs'.
-    if (kind === 'gain' && rgGain != null && Math.abs(check.db - rgGain) < 0.05) kind = 'same';
+    // The stream turns out to include ReplayGain (the docs say it's taken
+    // before it): a level change no louder than its gain is ReplayGain's,
+    // lower when foobar2000 holds it back to prevent clipping.
+    const rgStage = stages.find((st) => st.kind === 'rg');
+    if (kind === 'gain' && rgStage && rgGain != null && check.db <= rgGain + 0.05) {
+      kind = 'same';
+      if (Math.abs(check.db - rgGain) >= 0.05) rgStage.detail += ` (${signed(check.db)} dB applied${rgStage.clipGuard && check.db < rgGain ? ', to prevent clipping' : ''})`;
+    }
     const dspStages = stages.filter((st) => st.kind === 'dsp');
+    const unknown = dspStages.filter((st) => st.unknown);
+    const dropChange = (st) => {
+      const at = changes.indexOf(st.title);
+      if (at >= 0) changes.splice(at, 1);
+    };
     if (kind === 'same') {
+      // Measured: they pass this song through untouched, so they're left out.
       for (const st of dspStages) {
-        const at = st.idle ? -1 : changes.indexOf(st.title);
-        if (at >= 0) changes.splice(at, 1);
-        // Measured: they pass this song through untouched, so they're left out.
+        dropChange(st);
         Object.assign(st, { idle: true, hidden: true, grade: 'lossless' });
       }
-    } else if (kind !== 'silent') {
-      // Something changes it: which DSP isn't known when the rules say none.
-      if (!dspStages.some((st) => !st.idle)) changes.push('DSP');
-      if (kind === 'rate') changes.push('sample rate');
+    } else if (kind === 'gain' || kind === 'changed') {
+      // The DSPs Fusion can't judge by name are what changes it.
+      const detail = kind === 'gain' ? `Changes the level: ${signed(check.db)} dB` : 'Changes the sound';
+      for (const st of unknown) st.detail = detail;
+      if (!unknown.length && !dspStages.some((st) => !st.hidden)) {
+        changes.push('DSP');
+        const at = stages.findIndex((st) => st.kind === 'volume' || st.kind === 'output');
+        stages.splice(at < 0 ? stages.length : at, 0, { kind: 'dsp', icon: 'dsp', title: 'DSP chain', detail, grade: 'enhanced', note: '' });
+      }
     }
-    if (kind !== 'silent') {
-      stages.push({
-        kind: 'check',
-        icon: 'check',
-        title: 'Checked',
-        detail: kind === 'same' ? `${dspStages.map((st) => st.title).join(', ')}: no change to this song` : describeCheck(check),
-        grade: kind === 'same' ? 'lossless' : kind === 'rate' ? 'high' : 'enhanced',
-        note: kind === 'same' ? 'After the DSPs, the audio matches the file sample for sample.' : kind === 'gain' ? 'After the DSPs, the audio is the file at another level.' : 'After the DSPs, the audio differs from the file.',
-      });
-    }
+    // A different rate or channel count: the DSP that does it is named by the
+    // rules above; nothing to add (the rest can't be compared then).
   }
 
   // 4. Volume: anything below 0 dB scales the samples.
@@ -320,7 +326,7 @@ async function build(dopSeen, check = null) {
   else if (['Windows mixer', 'bit depth', 'sample rate', 'DSD to PCM'].some((c) => changes.includes(c))) quality = 'high';
   else if (changes.length) quality = 'enhanced';
   else quality = 'lossless';
-  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept, dsdRaw, hasDsp: dspList.length > 0, hasEq: dspList.some((n) => /^equali[sz]er$/i.test(n)), layout: src.layout };
+  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept, dsdRaw, hasDsp: dspList.length > 0, hasEq: !dsdKept && !dsdRaw && dspList.some((n) => /^equali[sz]er$/i.test(n)), layout: src.layout };
 }
 
 /**
@@ -372,7 +378,9 @@ function dspActs(name, src, outRate) {
     }
     return { acts: true, detail: 'Resampling', note: '' };
   }
-  return { acts: true, detail: 'Active', note: '' };
+  // Not one Fusion knows: it may or may not change this song (the DSP check
+  // settles it when it can).
+  return { acts: true, detail: 'Active', note: '', unknown: true };
 }
 
 /**

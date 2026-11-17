@@ -6,6 +6,7 @@ import { debounce } from '../core/util.js';
 import { Emitter } from '../core/emitter.js';
 import * as store from '../core/store.js';
 import { logInfo } from '../core/log.js';
+import { osVolume } from './osvolume.js';
 
 export const ORDERS = ['default', 'repeat-playlist', 'repeat-track', 'random', 'shuffle-tracks', 'shuffle-albums', 'shuffle-folders'];
 export const ORDER_LABELS = {
@@ -169,6 +170,8 @@ class Player extends Emitter {
       this.emit('time');
     });
     on('playback:volumeChanged', (d) => this.#setVolume(d));
+    osVolume.on('change', () => this.#fromWindows());
+    osVolume.init();
     on('playback:orderChanged', (d) => {
       this.nativeOrder = ORDERS[d.orderIndex ?? d.order] || this.nativeOrder;
       this.onNativeOrder?.(this.nativeOrder);
@@ -262,8 +265,15 @@ class Player extends Emitter {
   }
 
   #setVolume(v) {
+    // Following Windows: the slider is Windows' volume, not foobar2000's.
+    if (osVolume.active) return;
     this.volume = v.volume ?? this.volume;
     this.muted = !!(v.muted ?? v.isMuted ?? this.muted);
+    this.emit('volume', this.volume);
+  }
+  #fromWindows() {
+    this.volume = Math.round(osVolume.scalar * 100);
+    this.muted = osVolume.muted;
     this.emit('volume', this.volume);
   }
 
@@ -353,9 +363,16 @@ class Player extends Emitter {
     return call('playback.setPosition', { position: seconds });
   }
   setVolume(volume) {
+    if (osVolume.active) {
+      // Shown at once; Windows confirms it a moment later.
+      this.volume = Math.round(volume);
+      this.emit('volume', this.volume);
+      return osVolume.set(volume / 100);
+    }
     return call('playback.setVolume', { volume: Math.round(volume) });
   }
   toggleMute() {
+    if (osVolume.active) return osVolume.setMute(!osVolume.muted);
     return call('playback.toggleMute');
   }
   /** Shuffle (tracks, albums, folders) is Fusion's own (shuffle.js); the rest are foobar2000's. */

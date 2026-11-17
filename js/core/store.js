@@ -98,6 +98,7 @@ const DEFAULTS = {
   smoothScroll: true,
   waveformSeekbar: false,
   releaseOnPause: true, // pausing on an ASIO output stops it (freeing the driver), keeping the place
+  volumeFollowsWindows: true, // the volume slider is Windows' volume; foobar2000's follows it on exclusive/ASIO outputs
   artistInfoFolder: '', // Kodi-style artist folders (artist.nfo, artist.jpg, fanart.jpg), e.g. E:\\Music\\_Artists
   showRemaining: false, // player bar shows -time remaining instead of the length
   // Original / English / romanised versions (see data/versions.js).

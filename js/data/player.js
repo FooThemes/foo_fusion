@@ -29,6 +29,7 @@ class Player extends Emitter {
   volume = 100;
   muted = false;
   nativeOrder = 'default'; // foobar2000's own playback order
+  leftBehind = null; // the song Previous just left: { handle, title, …, playlist, index }
   shuffle = null; // Fusion's shuffle (shuffle.js), when one is on it decides the order
   onNativeOrder = null; // shuffle.js: told when foobar2000's order changes
   history = loadHistory(); // songs played before the current one, oldest first (kept across reloads)
@@ -103,6 +104,11 @@ class Player extends Emitter {
       this.#goingBack = false;
       // Remember what played before (for "Previously" in Now playing).
       clearTimeout(this.#stopTimer);
+      // The song left by going back (the shuffle puts it next again).
+      if (back && this.track && this.track.handle !== t.handle) {
+        const { handle, title, artist, album, duration } = this.track;
+        this.leftBehind = { handle, title, artist, album, duration, playlist: this.playingPlaylist, index: this.playingIndex };
+      } else if (!back && this.track?.handle !== t.handle) this.leftBehind = null; // (not on a second announcement of the same song)
       // Going back through what played: the song left isn't added again, so
       // Previous keeps going further back.
       if (this.track && this.track.handle !== t.handle && !back) {
@@ -331,7 +337,9 @@ class Player extends Emitter {
 
   async #back() {
     const h = this.history.pop();
-    if (!h) return call('playback.previous');
+    // Nothing earlier: the song starts again (foobar2000's Previous would
+    // play the row above, which never played).
+    if (!h) return this.seek(0);
     saveHistory(this.history);
     this.#goingBack = true;
     // Its row, if it still holds that song; else its row in the shuffle's

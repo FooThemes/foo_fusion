@@ -11,7 +11,7 @@
 // The order is kept in the page's storage, so a reload carries on where it
 // was. While Fusion isn't loaded, foobar2000 just plays on in Default order.
 
-import { tryCall, on, onAny } from '../core/bridge.js';
+import { call, tryCall, on, onAny } from '../core/bridge.js';
 import { debounce } from '../core/util.js';
 import { Emitter } from '../core/emitter.js';
 import { logInfo } from '../core/log.js';
@@ -21,6 +21,11 @@ import { playlists } from './playlists.js';
 
 export const FUSION_SHUFFLES = ['shuffle-tracks', 'shuffle-albums', 'shuffle-folders'];
 const STORE_KEY = 'fusion.shuffle';
+// Songs from outside the shuffled playlist (played from the queue, then gone
+// back past) can be in the order too, so they come round again: they get ids
+// from here up, with their details kept in `foreign`.
+const FOREIGN = 1e9;
+export const isForeign = (id) => id >= FOREIGN;
 
 class Shuffle extends Emitter {
   mode = null; // one of FUSION_SHUFFLES, or null when foobar2000's order is in charge
@@ -29,7 +34,8 @@ class Shuffle extends Emitter {
   order = []; // its rows, in the order they play
   pos = -1; // where the playing song is in `order`
   #handles = []; // the file of each song in `order` (to follow them when rows move)
-  #at = new Map(); // row -> position in order
+  #at = new Map(); // row (or foreign id) -> position in order
+  #foreign = new Map(); // id -> { handle, guid, row, title, artist, album, duration }
   ours = null; // { guid, row, handle } of the song Fusion queued
   #lastQueue = [];
   #seen = ''; // the song last handled by #onTrack
@@ -53,6 +59,58 @@ class Shuffle extends Emitter {
   /** Whether a queue entry is the one Fusion added (not shown as queued). */
   isOurs(item) {
     return !!this.ours && item?.playlistGuid === this.ours.guid && item?.playlistItem === this.ours.row && (!this.ours.handle || item.handle === this.ours.handle);
+  }
+
+  /** For saving: the songs from elsewhere still in the order. */
+  foreignEntries() {
+    return [...this.#foreign].filter(([id]) => this.#at.has(id));
+  }
+
+  /** A song from outside the playlist in the order: its details. */
+  foreignTrack(id) {
+    return this.#foreign.get(id) || null;
+  }
+
+  /** Plays an entry of the order (a row, or a song from elsewhere). */
+  async play(id) {
+    if (!isForeign(id)) {
+      const pl = playlists.list.findIndex((p) => p.guid === this.guid);
+      return pl >= 0 && call('playlist.playTrack', { playlist: pl, index: id });
+    }
+    const at = await this.#locate(id);
+    if (at) return call('playlist.playTrack', at);
+    return call('playback.playPath', { path: this.#foreign.get(id)?.handle });
+  }
+
+  /** Where a song from elsewhere is now: { playlist, index }, checked by file. */
+  async #locate(id) {
+    const f = this.#foreign.get(id);
+    if (!f) return null;
+    const pl = playlists.list.findIndex((p) => p.guid === f.guid);
+    if (pl < 0) return null;
+    const r = await tryCall('playlist.getTracksAt', { playlist: pl, rows: [f.row], fields: ['handle'] });
+    if (r?.tracks?.[0]?.handle === f.handle) return { playlist: pl, index: f.row };
+    const res = await tryCall('playlist.getMatchingRows', { playlist: pl, query: `%path% IS "${String(f.handle).replace(/"/g, '')}"` });
+    const row = res?.items?.[0];
+    if (row == null) return null;
+    f.row = row;
+    return { playlist: pl, index: row };
+  }
+
+  #addForeign(t) {
+    let id = FOREIGN;
+    for (const k of this.#foreign.keys()) id = Math.max(id, k + 1);
+    const pl = playlists.list[t.playlist];
+    this.#foreign.set(id, { handle: t.handle, guid: pl?.guid || null, row: t.index ?? -1, title: t.title, artist: t.artist, album: t.album, duration: t.duration });
+    return id;
+  }
+
+  /** The order's id for a song: its row here, or its id from elsewhere; null if it isn't in the order. */
+  #idFor(playlist, row, handle) {
+    const pl = playlists.list[playlist];
+    if (pl && pl.guid === this.guid && row >= 0 && this.#at.has(row) && (this.#handles[this.#at.get(row)] ?? handle) === handle) return row;
+    for (const [id, f] of this.#foreign) if (f.handle === handle && this.#at.has(id)) return id;
+    return null;
   }
 
   async init() {
@@ -85,10 +143,11 @@ class Shuffle extends Emitter {
     const pl = playlists.list.find((p) => p.guid === saved.guid);
     if (pl && pl.trackCount === saved.count && Array.isArray(saved.order)) {
       Object.assign(this, { mode: saved.mode, guid: saved.guid, count: saved.count, order: saved.order, pos: saved.pos ?? -1, ours: saved.ours || null });
+      this.#foreign = new Map(saved.foreign || []);
       this.#index();
       player.emit('order', this.mode);
       await this.#run(async () => {
-        this.#handles = await rowHandles(pl, this.order);
+        this.#handles = (await rowHandles(pl, this.order)).map((h, i) => (isForeign(this.order[i]) ? this.#foreign.get(this.order[i])?.handle : h));
         await this.#onTrack();
       });
     } else {
@@ -112,6 +171,7 @@ class Shuffle extends Emitter {
     await this.#run(() => this.#removeOurs());
     Object.assign(this, { guid: null, order: [], pos: -1, ours: null });
     this.#at.clear();
+    this.#foreign.clear();
     save(null);
     if (!keepNative) await tryCall('playback.setPlaybackOrder', { name });
     player.emit('order', player.order);
@@ -159,6 +219,7 @@ class Shuffle extends Emitter {
     this.guid = pl.guid;
     this.count = pl.trackCount;
     this.order = await makeOrder(this.mode, pl, current);
+    this.#foreign.clear();
     this.pos = current >= 0 ? 0 : -1;
     this.#index();
     this.#handles = await rowHandles(pl, this.order);
@@ -182,6 +243,12 @@ class Shuffle extends Emitter {
     const handles = [];
     let pos = -1;
     this.#handles.forEach((h, i) => {
+      if (isForeign(this.order[i])) {
+        if (i === this.pos) pos = order.length;
+        order.push(this.order[i]);
+        handles.push(h);
+        return;
+      }
       const row = rowsOf.get(h)?.shift();
       if (row == null) return; // removed from the playlist
       if (i === this.pos) pos = order.length;
@@ -203,6 +270,37 @@ class Shuffle extends Emitter {
     this.#index();
     await this.#ensure();
     this.emit('change');
+  }
+
+  /**
+   * Previous: the song left goes next (into the order if it wasn't in it, a
+   * song from the queue say), and the song gone back to just before it.
+   */
+  #wentBack(id, handle) {
+    const left = player.leftBehind;
+    if (left && this.order.length) {
+      let leftId = this.#idFor(left.playlist, left.index, left.handle);
+      if (leftId == null) leftId = this.#addForeign(left);
+      if (this.order[this.pos] !== leftId) {
+        const order = this.order.slice();
+        const handles = this.#handles.slice();
+        let pos = this.pos;
+        const i = this.#at.get(leftId);
+        if (i != null) {
+          order.splice(i, 1);
+          handles.splice(i, 1);
+          if (i <= pos) pos--;
+        }
+        order.splice(pos + 1, 0, leftId);
+        handles.splice(pos + 1, 0, left.handle);
+        this.order = order;
+        this.#handles = handles;
+        this.pos = pos + 1;
+        this.#index();
+      }
+    }
+    if (id == null && player.track) id = this.#addForeign({ ...player.track, playlist: player.playingPlaylist, index: player.playingIndex });
+    if (id != null) this.#stepBack(id, handle);
   }
 
   /** Gone back to `row`: it takes the place before the song that was playing (order[pos]). */
@@ -246,8 +344,9 @@ class Shuffle extends Emitter {
     const key = `${h}|${player.trackStart || ''}`;
     if (key === this.#seen) return this.#ensure();
     this.#seen = key;
-    const inOrder = pl && pl.guid === this.guid && row >= 0 && this.#at.has(row);
-    const nextUp = inOrder && row === this.order[this.pos + 1];
+    const id = h ? this.#idFor(player.playingPlaylist, row, h) : null;
+    const inOrder = id != null;
+    const nextUp = inOrder && id === this.order[this.pos + 1];
     // A song that was in the queue (yours, from any playlist).
     const fromQueue = player.startKind === 'queue' || (!!h && (this.#lastQueue.some((it) => it.handle === h && !this.isOurs(it)) || Date.now() - (this.#left.get(h) || 0) < 15000));
     let why;
@@ -257,10 +356,10 @@ class Shuffle extends Emitter {
       // follow as they were), rather than the order jumping to wherever the
       // song happens to be in it.
       why = 'went back';
-      if (inOrder) this.#stepBack(row, h);
+      this.#wentBack(id, h);
     } else if ((h && this.ours && h === this.ours.handle) || (nextUp && player.startKind === '')) {
       why = 'next in order';
-      this.pos = this.#at.get(row) ?? this.pos + 1;
+      this.pos = (inOrder ? this.#at.get(id) : null) ?? this.pos + 1;
       this.ours = null;
     } else if (fromQueue) {
       why = 'from the queue: order waits';
@@ -269,7 +368,7 @@ class Shuffle extends Emitter {
       why = 'moved on by itself: order waits';
     } else if (inOrder) {
       why = 'you played it: order carries on from it';
-      this.pos = this.#at.get(row);
+      this.pos = this.#at.get(id);
     } else if (pl && row >= 0) {
       logInfo(`shuffle: you started a song in ${pl.name}; shuffling that`);
       return this.#rebuild();
@@ -295,18 +394,24 @@ class Shuffle extends Emitter {
     // Never queue the song that's playing (its track event may not have
     // been handled yet, leaving the place in the order behind).
     if (want != null && player.track?.handle && this.#handles[this.pos + 1] === player.track.handle) return;
-    const okay = mine.length === 1 && items[items.length - 1] === mine[0] && mine[0].playlistItem === want;
+    // The next song's place: a row here, or (a song from elsewhere) its row there.
+    let ref = want == null ? null : { guid: this.guid, row: want };
+    if (want != null && isForeign(want)) {
+      const at = await this.#locate(want);
+      ref = at ? { guid: playlists.list[at.playlist]?.guid, row: at.index } : null;
+    }
+    const okay = mine.length === 1 && items[items.length - 1] === mine[0] && !!ref && mine[0].playlistGuid === ref.guid && mine[0].playlistItem === ref.row;
     if (okay || !player.active) return save(this);
     if (mine.length) await tryCall('queue.remove', { indices: mine.map((it) => it.queueIndex) });
     this.ours = null;
-    if (want != null) {
+    if (ref?.guid) {
       // Counted as Fusion's (not yours) from the moment it's added: the queue
       // badge flicked up by one before the queue was read again.
       // Recorded as Fusion's before the queue is read again, so it's never
       // counted as yours (the badge flicked up by one on each Next).
-      this.ours = { guid: this.guid, row: want, handle: undefined };
+      this.ours = { guid: ref.guid, row: ref.row, handle: undefined };
       this.oursQueued = true;
-      const res = await tryCall('queue.add', { playlistGuid: this.guid, tracks: [want] });
+      const res = await tryCall('queue.add', { playlistGuid: ref.guid, tracks: [ref.row] });
       if (!res) {
         this.ours = null;
         this.oursQueued = false;
@@ -399,7 +504,7 @@ function load() {
 function save(s) {
   try {
     if (!s) localStorage.removeItem(STORE_KEY);
-    else localStorage.setItem(STORE_KEY, JSON.stringify({ mode: s.mode, guid: s.guid, count: s.count, order: s.order, pos: s.pos, ours: s.ours }));
+    else localStorage.setItem(STORE_KEY, JSON.stringify({ mode: s.mode, guid: s.guid, count: s.count, order: s.order, pos: s.pos, ours: s.ours, foreign: s.foreignEntries() }));
   } catch {
     /* storage unavailable: the order lasts until a reload */
   }

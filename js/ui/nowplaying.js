@@ -13,7 +13,7 @@ import { player, ORDER_LABELS } from '../data/player.js';
 import { nowPlayingUrl, isRawUrl, refreshArt } from '../data/artwork.js';
 import { playlists } from '../data/playlists.js';
 import { contextMenu } from './menus.js';
-import { shuffle } from '../data/shuffle.js';
+import { shuffle, isForeign } from '../data/shuffle.js';
 
 const UP_NEXT = 50;
 const PREVIOUS = 3; // songs played before the current one, shown dimmed (more on request)
@@ -192,9 +192,14 @@ export class NowPlaying {
       }
       if (!ours && (shuffled || order === 'repeat-track')) rows = !queue.length && basePl === player.playingPlaylist && player.playingIndex >= 0 ? [player.playingIndex] : [];
     }
-    const res = rows.length ? await tryCall('playlist.getTracksAt', { playlist: basePl, rows, fields: ['handle', 'title', 'artist', 'album', 'duration'] }) : null;
+    // Fusion's shuffle can hold songs from elsewhere (gone back past after
+    // playing from the queue): those come with their own details.
+    const own = rows.filter((r) => !(ours && isForeign(r)));
+    const res = own.length ? await tryCall('playlist.getTracksAt', { playlist: basePl, rows: own, fields: ['handle', 'title', 'artist', 'album', 'duration'] }) : null;
     if (gen !== this.gen) return;
-    const tracks = res?.tracks || [];
+    const got = res?.tracks || [];
+    let k = 0;
+    const tracks = rows.map((r) => (ours && isForeign(r) ? shuffle.foreignTrack(r) : got[k++]));
     const plName = playlists.isHidden(pl) ? 'Songs' : pl?.name;
 
     // What played before, dimmed, above the current song (any order): the
@@ -248,11 +253,12 @@ export class NowPlaying {
     let number = 0;
     if (elsewhere) out.push(this.#row(elsewhere, { kind: 'pl', index: -1, number: 0, current: true, queue, onplay: () => {} }));
     tracks.forEach((t, n) => {
+      if (!t) return;
       const row = rows[n];
       const current = !elsewhere && basePl === player.playingPlaylist && row === player.playingIndex && !queue.length && n === 0;
       // Fusion's shuffle: its upcoming songs can be dragged into another order.
       const movable = ours && !current;
-      out.push(this.#row(t, { kind: movable ? 'shuffle' : 'pl', index: row, number: current ? 0 : ++number, current, queue, playlist: pl, editable: editable || movable, onplay: () => call('playlist.playTrack', { playlist: basePl, index: row }) }));
+      out.push(this.#row(t, { kind: movable ? 'shuffle' : 'pl', index: row, number: current ? 0 : ++number, current, queue, playlist: pl, editable: editable || movable, onplay: () => (ours ? shuffle.play(row) : call('playlist.playTrack', { playlist: basePl, index: row })) }));
     });
     this.#swap(out);
   }

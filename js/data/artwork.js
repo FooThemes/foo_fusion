@@ -164,17 +164,17 @@ function webpAnimated(b) {
   return b.length > 21 && tag(0) === 'RIFF' && tag(8) === 'WEBP' && tag(12) === 'VP8X' && (b[20] & 0x02) !== 0;
 }
 
-/** An animated JPEG XL: asked of the browser's own decoder (false if it can't tell). */
+/** An animated JPEG XL: asked of the browser's own decoder; null if it can't tell. */
 async function jxlAnimated(blob) {
   try {
-    if (!window.ImageDecoder || !(await ImageDecoder.isTypeSupported('image/jxl'))) return false;
+    if (!window.ImageDecoder || !(await ImageDecoder.isTypeSupported('image/jxl'))) return null;
     const dec = new ImageDecoder({ data: blob.stream(), type: 'image/jxl' });
     await dec.tracks.ready;
     const animated = !!dec.tracks.selectedTrack?.animated;
     dec.close();
     return animated;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -195,6 +195,7 @@ function readOwn(pick) {
       const jxl = /\.jxl$/i.test(pick.name);
       const blob = new Blob([bytes], { type: jxl ? 'image/jxl' : 'image/webp' });
       const animated = jxl ? await jxlAnimated(blob) : webpAnimated(bytes);
+      if (ownLogs > 0) logInfo(`cover ${pick.name} in ${dirOf(pick.path).split('\\').pop()}: ${Math.round(bytes.length / 1024)} KB, animated: ${animated == null ? 'can\u2019t tell' : animated ? 'yes' : 'no'}`);
       return { blob, animated };
     })();
     ownBytes.set(key, p);
@@ -214,25 +215,45 @@ function ownUrl(pick, cssSize) {
     const p = (async () => {
       const got = await readOwn(pick);
       if (!got) return null;
-      if (got.animated && animateGif(cssSize)) {
+      const raw = () => {
         const url = URL.createObjectURL(got.blob);
         rawUrls.add(url);
         return url;
-      }
+      };
+      // Animated, or (a JPEG XL the browser won't say about) maybe: the file
+      // itself, which plays whatever animation it has.
+      if (got.animated !== false && animateGif(cssSize)) return raw();
       try {
-        const bmp = await createImageBitmap(got.blob);
+        // A still at this size. createImageBitmap first; an <img> if that
+        // can't take the file (it may not, for an animated JPEG XL).
+        let src;
+        try {
+          src = await createImageBitmap(got.blob);
+        } catch {
+          src = new Image();
+          src.src = URL.createObjectURL(got.blob);
+          await src.decode().catch((e) => {
+            URL.revokeObjectURL(src.src);
+            throw e;
+          });
+        }
+        const w = src.naturalWidth || src.width;
+        const h = src.naturalHeight || src.height;
         const px = sizeBucket(cssSize);
-        const scale = Math.min(1, px / Math.max(bmp.width, bmp.height));
-        const c = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * scale)), Math.max(1, Math.round(bmp.height * scale)));
-        c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-        bmp.close();
+        const scale = Math.min(1, px / Math.max(w, h));
+        const c = new OffscreenCanvas(Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
+        c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+        if (src instanceof HTMLImageElement) URL.revokeObjectURL(src.src);
+        else src.close();
         const url = URL.createObjectURL(await c.convertToBlob({ type: 'image/webp', quality: 0.88 }));
         rawUrls.add(url); // may be transparent
         storeCover(pick, px, url, true);
         return url;
       } catch (err) {
-        if (ownLogs-- > 0) logInfo(`cover ${pick.path}: can't be shown (${/\.jxl$/i.test(pick.name) ? 'this WebView2 can\u2019t decode JPEG XL' : err?.message || err})`);
-        return null;
+        // Couldn't be scaled (an animated JPEG XL, say): the file itself. If
+        // the browser can't show that either, the tile keeps its placeholder.
+        if (ownLogs-- > 0) logInfo(`cover ${pick.path}: not scaled (${err?.message || err}); showing the file as it is`);
+        return raw();
       }
     })();
     p.then((u) => (u ? ownResolved.set(key, u) : ownUrls.delete(key)));

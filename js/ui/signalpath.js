@@ -6,57 +6,17 @@ import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { signalPath, QUALITY } from '../data/signalpath.js';
 import { runMainMenuAny } from './menus.js';
-import { call, tryCall } from '../core/bridge.js';
-import { logInfo } from '../core/log.js';
 
 const openEq = () => runMainMenuAny(['View/Equalizer', 'View/DSP/Equalizer', 'Equalizer']);
 
 /**
- * foobar2000's Preferences at one page ("Playback", "Output", "DSP Manager").
- * The bridge can't open Preferences at a page, so a main menu command that
- * opens that page is used when foobar2000 has one (looked up by name, and
- * written to the log); otherwise Preferences opens where it was last.
+ * What clicking a step opens: only where it lands on the step's own
+ * controls. (Preferences can't be opened at a page from here, so ReplayGain,
+ * the output and the other DSPs have none.)
  */
-const PAGE_WORDS = {
-  Playback: ['replaygain settings', 'playback settings', 'playback preferences'],
-  Output: ['output settings', 'output preferences', 'output device settings', 'audio output'],
-  'DSP Manager': ['dsp manager', 'dsp settings', 'dsp preferences', 'configure dsp'],
-};
-const commandFor = new Map(); // page -> command { guid, subGuid, path } | null
-async function findCommand(name) {
-  if (commandFor.has(name)) return commandFor.get(name);
-  const words = PAGE_WORDS[name] || [name.toLowerCase()];
-  const found = [];
-  for (const query of [...new Set([name, ...words.map((w) => w.split(' ')[0])])]) {
-    const res = await tryCall('discovery.searchCommands', { query, scope: 'main', includeHidden: true });
-    const list = Array.isArray(res) ? res : res?.commands || res?.items || res?.results || [];
-    for (const c of list) found.push(c);
-  }
-  const label = (c) => String(c.path || c.name || c.label || '').toLowerCase().replace(/[.…]+$/, '');
-  const pick = found.find((c) => words.some((w) => label(c).endsWith(w) || label(c).includes(w))) || null;
-  logInfo(`signal path: commands for "${name}": ${[...new Set(found.map((c) => c.path || c.name || c.label))].slice(0, 25).join(' | ') || 'none'}${found[0] ? ` (fields ${Object.keys(found[0]).join(', ')})` : ''}; using ${pick ? pick.path || pick.name : 'Preferences'}`);
-  commandFor.set(name, pick);
-  return pick;
-}
-async function openPrefs(name) {
-  const cmd = await findCommand(name);
-  if (cmd?.guid) {
-    try {
-      return await call('discovery.executeMainMenuCommand', { guid: cmd.guid, ...(cmd.subGuid ? { subGuid: cmd.subGuid } : {}) });
-    } catch (err) {
-      logInfo(`signal path: ${cmd.path || cmd.name} didn't run (${err?.message || err})`);
-    }
-  }
-  return tryCall('misc.showPreferences');
-}
-
-/** What clicking a step opens (none for the source). */
 function stageAction(s) {
-  if (s.kind === 'rg') return { label: 'Playback preferences', run: () => openPrefs('Playback') };
-  if (s.kind === 'output' || s.kind === 'mixer') return { label: 'Output preferences', run: () => openPrefs('Output') };
   if (s.kind === 'volume') return { label: 'the volume', run: () => window.dispatchEvent(new CustomEvent('fusion:showvolume')) };
   if (s.kind === 'dsp' && s.icon === 'eq') return { label: 'the equalizer', run: openEq };
-  if (s.kind === 'dsp') return { label: 'the DSP Manager', run: () => openPrefs('DSP Manager') };
   return null;
 }
 

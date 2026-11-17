@@ -12,6 +12,17 @@ const CLIENT = { width: 445, height: 148 };
 const GUESS = { width: 447, height: 180 }; // the window, before measuring
 let fixed = null; // the window size worked out (minimum and maximum both)
 let saved = null; // the window as it was: bounds, maximised, on top, min size
+// Kept across a refresh of the skin: the page starts again but the window
+// is still the mini player's (and locked to its size).
+const SAVED_KEY = 'fusion.miniSaved';
+const keepSaved = (v) => {
+  try {
+    if (v) localStorage.setItem(SAVED_KEY, JSON.stringify(v));
+    else localStorage.removeItem(SAVED_KEY);
+  } catch {
+    /* fine */
+  }
+};
 let busy = false;
 
 export const isMini = () => document.body.classList.contains('mini');
@@ -28,17 +39,9 @@ export async function toggleMini(on = !isMini()) {
     if (on) {
       const [bounds, max, top, min, maxSize] = await Promise.all([tryCall('window.getBounds'), tryCall('window.isMaximized'), tryCall('window.isAlwaysOnTop'), tryCall('window.getMinSize', {}), tryCall('window.getMaxSize', {})]);
       saved = { bounds, max: flag(max, 'maximized', 'isMaximized', 'value'), top: flag(top, 'alwaysOnTop', 'enabled', 'value'), min, maxSize };
+      keepSaved(saved);
       if (saved.max) await tryCall('window.restore');
-      document.body.classList.add('mini');
-      window.dispatchEvent(new CustomEvent('fusion:mini', { detail: true }));
-      fixed = null;
-      await tryCall('window.setMinSize', GUESS);
-      await tryCall('window.setMaxSize', GUESS);
-      await tryCall('window.setSize', GUESS);
-      window.addEventListener('resize', keepMin);
-      setTimeout(fit, 200);
-      window.addEventListener('resize', unmaximize);
-      if (store.get('miniOnTop') !== false) await tryCall('window.setAlwaysOnTop', { enabled: true });
+      await enterMini();
     } else {
       window.removeEventListener('resize', keepMin);
       window.removeEventListener('resize', unmaximize);
@@ -46,6 +49,7 @@ export async function toggleMini(on = !isMini()) {
       window.dispatchEvent(new CustomEvent('fusion:mini', { detail: false }));
       const s = saved || {};
       saved = null;
+      keepSaved(null);
       const mx = s.maxSize;
       await tryCall('window.setMaxSize', { width: mx?.width ?? mx?.maxWidth ?? 0, height: mx?.height ?? mx?.maxHeight ?? 0 });
       const m = s.min;
@@ -90,4 +94,40 @@ function keepMin() {
 async function unmaximize() {
   if (!isMini()) return;
   if (flag(await tryCall('window.isMaximized'), 'maximized', 'isMaximized', 'value')) await tryCall('window.restore');
+}
+
+/** The page side of the mini player (the window's bounds already saved). */
+async function enterMini() {
+  document.body.classList.add('mini');
+  window.dispatchEvent(new CustomEvent('fusion:mini', { detail: true }));
+  fixed = null;
+  await tryCall('window.setMinSize', GUESS);
+  await tryCall('window.setMaxSize', GUESS);
+  await tryCall('window.setSize', GUESS);
+  window.addEventListener('resize', keepMin);
+  setTimeout(fit, 200);
+  window.addEventListener('resize', unmaximize);
+  await applyOnTop();
+}
+
+// On top or not, as the setting says (also when it's changed meanwhile).
+const applyOnTop = () => tryCall('window.setAlwaysOnTop', { enabled: store.get('miniOnTop') !== false });
+store.subscribe((k) => k === 'miniOnTop' && isMini() && applyOnTop());
+
+/** At start: the skin refreshed in the mini player comes back in it (the window still is). */
+export async function resumeMini() {
+  let s = null;
+  try {
+    s = JSON.parse(localStorage.getItem(SAVED_KEY));
+  } catch {
+    /* none */
+  }
+  if (!s || isMini() || busy) return;
+  busy = true;
+  try {
+    saved = s;
+    await enterMini();
+  } finally {
+    busy = false;
+  }
 }

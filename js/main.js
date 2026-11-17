@@ -13,6 +13,7 @@ import { mountSidebar } from './ui/sidebar.js';
 import { mountHeader } from './ui/header.js';
 import { mountContent } from './ui/content.js';
 import { mountPlayerBar } from './ui/playerbar.js';
+import { resumeMini } from './ui/mini.js';
 import { mountSettings } from './ui/settings.js';
 import { mountInfoPanel } from './ui/infopanel.js';
 import { mountSelectionBar } from './ui/selectionbar.js';
@@ -118,6 +119,7 @@ async function boot() {
   mountInfoPanel(document.getElementById('info-panel'));
   sidebar = mountSidebar(document.getElementById('sidebar'), app);
   mountPlayerBar(document.getElementById('playerbar'), app);
+  resumeMini(); // refreshed in the mini player: back in it
   mountKeyboard(app);
   installDiagnostics(view);
 

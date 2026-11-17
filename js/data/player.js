@@ -122,7 +122,8 @@ class Player extends Emitter {
       const held = this.#held;
       this.#held = null;
       this.#resuming = false;
-      if (held && held.handle === t.handle && held.position > 1) setTimeout(() => this.seek(held.position), 60);
+      // (Stopped again meanwhile: nothing to seek, no error.)
+      if (held && held.handle === t.handle && held.position > 1) setTimeout(() => this.state !== 'stopped' && this.seek(held.position).catch(() => {}), 60);
       this.track = t;
       this.duration = t.duration || (held && held.handle === t.handle ? this.duration : 0);
       this.#setPosition(held && held.handle === t.handle ? held.position : t.position || 0);
@@ -339,7 +340,16 @@ class Player extends Emitter {
     const h = this.history.pop();
     // Nothing earlier: the song starts again (foobar2000's Previous would
     // play the row above, which never played).
-    if (!h) return this.seek(0);
+    if (!h) {
+      // Paused with the output let go: it resumes from the start instead.
+      if (this.#held) {
+        this.#held.position = 0;
+        this.#setPosition(0);
+        this.emit('time');
+        return;
+      }
+      return this.seek(0).catch(() => {});
+    }
     saveHistory(this.history);
     this.#goingBack = true;
     // Its row, if it still holds that song; else its row in the shuffle's

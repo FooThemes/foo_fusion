@@ -9,7 +9,7 @@ import { player } from '../data/player.js';
 import { bindArt } from '../data/artwork.js';
 import { icon } from '../core/icons.js';
 import { lyricsFor, forgetLyrics, lineAt } from '../data/lyrics.js';
-import { runHandlesCommand, hasHandlesCommand } from './menus.js';
+import { runHandlesCommand, hasHandlesCommand, handlesOf } from './menus.js';
 import { overlayScroll } from './oscroll.js';
 import { tabBar } from './tabs.js';
 import { valueLink, albumLink } from './links.js';
@@ -51,6 +51,9 @@ export function mountInfoPanel(root) {
     let t = null;
     let source = '';
     const sel = [...view.selection];
+    // Several selected: the lyrics' Search covers them all.
+    searchRows = sel.length > 1 && view.playlist ? sel.sort((a, b) => a - b) : null;
+    labelSearch();
     if (sel.length && view.playlist) {
       const res = await tryCall('playlist.getTracksAt', { playlist: view.playlist.index, rows: [Math.min(...sel)] });
       t = res?.tracks?.[0] || null;
@@ -247,6 +250,15 @@ export function mountInfoPanel(root) {
   let raf = 0;
   let userScrolled = -Infinity;
   let retry = 0;
+  let searchRows = null; // the selected rows, when several are
+  let searchBtn = null;
+  let searchFound = false;
+  const labelSearch = () => {
+    if (!searchBtn) return;
+    const n = searchRows?.length || 0;
+    searchBtn.textContent = n > 1 ? `Search ${n} songs` : searchFound ? 'Search again' : 'Search';
+    searchBtn.title = n > 1 ? `Search for lyrics for the ${n} selected songs with foo_openlyrics` : 'Search for lyrics with foo_openlyrics';
+  };
   scroller.addEventListener('wheel', () => (userScrolled = performance.now()), { passive: true });
   scroller.addEventListener('pointerdown', (e) => e.target === scroller && (userScrolled = performance.now()));
 
@@ -266,8 +278,11 @@ export function mountInfoPanel(root) {
     lyricLines = [];
     lit = -1;
     if (openLyrics) {
+      searchFound = !!found;
+      searchBtn = el('button.btn-soft', { onclick: () => searchOpenLyrics(t) });
+      labelSearch();
       lyrTools.append(
-        el('button.btn-soft', { text: found ? 'Search again' : 'Search', title: 'Search for lyrics with foo_openlyrics', onclick: () => searchOpenLyrics(t) }),
+        searchBtn,
         el('button.btn-soft', { text: 'Edit', title: 'Edit in foo_openlyrics', onclick: () => runHandlesCommand('Edit lyrics', [t.handle]) }),
       );
     }
@@ -316,7 +331,10 @@ export function mountInfoPanel(root) {
       clear(lyr);
       lyr.append(el('p.info-note', { text: 'Searching with foo_openlyrics… (its progress shows in foobar2000’s own window)' }));
     }
-    await runHandlesCommand('Search for lyrics', [t.handle]);
+    // All the selected songs, when several are (the one shown among them).
+    const handles = searchRows ? await handlesOf(searchRows, Infinity) : [t.handle];
+    await runHandlesCommand('Search for lyrics', handles.length ? handles : [t.handle]);
+    for (const h of handles) forgetLyrics(h);
     forgetLyrics(t.handle);
     lyricsShown = t.handle;
     scheduleRetry(t, [3000, 6000, 10000, 20000, 35000]);

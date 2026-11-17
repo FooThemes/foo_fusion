@@ -13,6 +13,7 @@ import { debounce } from '../core/util.js';
 import { logInfo } from '../core/log.js';
 import { player } from './player.js';
 import { measureDsp } from './dspcheck.js';
+import { chainStamp, readChain, describeEq } from './dspchain.js';
 
 // Output Info's fields, read in one go ("?" when it isn't installed).
 const OUT = ['output_samplerate', 'output_bitdepth', 'output_channels', 'output_device', 'output_dsps', 'output_dsp_preset', 'output_volume', 'output_rg_mode', 'output_rg_source', 'output_rg_gain', 'output_buffer_length'];
@@ -36,9 +37,35 @@ class SignalPath extends Emitter {
     const again = debounce(() => this.refresh(), 250);
     player.on('track', again);
     player.on('state', again);
-    for (const e of ['playback:volumeChanged', 'audio:dspPresetChanged', 'audio:outputDeviceChanged', 'audio:replaygainModeChanged']) on(e, again);
+    on('playback:volumeChanged', again);
+    // Settings that change what happens to the sound: measured again.
+    for (const e of ['audio:dspPresetChanged', 'audio:outputDeviceChanged', 'audio:replaygainModeChanged']) on(e, () => this.#changed(e));
+    // The equalizer's curve, other DSPs' settings and the output's have no
+    // event: foobar2000 rewrites its chain file (config.fb2k-dsp) when they
+    // change, and the output config is read back. Watched while playing.
+    setInterval(() => player.state === 'playing' && this.#watch(), 2000);
     again();
   }
+
+  #stamp = null; // the chain file and output settings, as last seen
+  #chain = null; // the chain as foobar2000 saved it (readChain), or a promise of it
+  #gen = 0; // bumped when settings change: measurements taken before are dropped
+  async #watch() {
+    const [file, conf] = await Promise.all([chainStamp(), tryCall('config.getOutputConfig')]);
+    const stamp = `${file}|${JSON.stringify(conf)}`;
+    if (this.#stamp !== null && stamp !== this.#stamp) this.#changed('settings');
+    this.#stamp = stamp;
+  }
+  #changed(why) {
+    logInfo(`signal path: ${why === 'settings' ? 'DSP or output settings' : why} changed; checking again`);
+    this.#gen++;
+    this.#chain = null;
+    this.#checked.clear();
+    clearTimeout(this.#againSoon);
+    // A moment for foobar2000 to finish writing it all.
+    this.#againSoon = setTimeout(() => this.refresh(), 600);
+  }
+  #againSoon = 0;
 
   #probed = new Map(); // handle -> 'dop' | 'none' | null
   #checked = new Map(); // handle -> the DSP check's result (see dspcheck.js), 'pending', or null
@@ -51,14 +78,16 @@ class SignalPath extends Emitter {
       const r = this.#checked.get(h);
       return r && r !== 'pending' ? r : null;
     };
-    let path = player.active && player.track ? await build(this.#probed.get(player.track.handle), check(player.track.handle)) : null;
+    this.#chain ||= readChain();
+    const chain = await this.#chain;
+    let path = player.active && player.track ? await build(this.#probed.get(player.track.handle), check(player.track.handle), chain) : null;
     // A DSD song: check the audio itself for DoP (once per song), then redo.
     const h = player.track?.handle;
     if (path?.dsd && h && !this.#probed.has(h) && player.state === 'playing') {
       this.#probed.set(h, undefined);
       const found = await probeDop(() => player.track?.handle === h && player.state === 'playing');
       this.#probed.set(h, found);
-      if (player.track?.handle === h) path = await build(found, check(h));
+      if (player.track?.handle === h) path = await build(found, check(h), chain);
     }
     // DSPs in the chain: what they really do to this song, measured once.
     if (path?.hasDsp && !path.dsdKept && h && !this.#checked.has(h) && player.state === 'playing') this.#check(player.track);
@@ -87,10 +116,12 @@ class SignalPath extends Emitter {
       this.#checked.set(h, null);
       return;
     }
-    const still = () => player.track?.handle === h && player.state === 'playing';
+    const gen = this.#gen;
+    const still = () => player.track?.handle === h && player.state === 'playing' && this.#gen === gen;
     setTimeout(async () => {
-      if (!still()) return this.#checked.delete(h); // try again next time it plays
+      if (!still()) return this.#gen === gen && this.#checked.delete(h); // try again next time it plays
       const r = await measureDsp(track, still);
+      if (this.#gen !== gen) return; // settings changed meanwhile: measured again from there
       if ((!r || r.kind === 'silent') && tries < 1) {
         this.#checked.set(h, 'pending');
         setTimeout(() => (still() ? this.#check(track, tries + 1) : this.#checked.delete(h)), 8000);
@@ -102,7 +133,7 @@ class SignalPath extends Emitter {
   }
 }
 
-async function build(dopSeen, check = null) {
+async function build(dopSeen, check = null, chainFile = null) {
   const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%__channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`), '[%__channel_mask%]', '[%channels%]', '[%WAVEFORMATEXTENSIBLE_CHANNEL_MASK%]'].join(SEP);
   const [tf, conf, chain, rgMode, rgPre, vol] = await Promise.all([
     tryCall('titleformat.eval', { pattern }),
@@ -193,7 +224,7 @@ async function build(dopSeen, check = null) {
   const dspList = dsps.length ? dsps : o.output_dsps ? o.output_dsps.split(/\s*[,;]\s*/).filter(Boolean) : [];
   const outRateEarly = num(o.output_samplerate);
   for (const name of dspList) {
-    const act = dspActs(name, src, outRateEarly);
+    const act = dspActs(name, src, outRateEarly, chainFile);
     if (dsdKept || dsdRaw) {
       stages.push(bypassed({ kind: 'dsp', icon: /resampl/i.test(name) ? 'resample' : 'dsp', title: name }));
       continue;
@@ -201,7 +232,7 @@ async function build(dopSeen, check = null) {
     if (act.acts) changes.push(name);
     stages.push({
       kind: 'dsp',
-      icon: /resampl/i.test(name) ? 'resample' : 'dsp',
+      icon: /resampl/i.test(name) ? 'resample' : isEq(name) ? 'eq' : 'dsp',
       title: name,
       detail: act.detail,
       grade: act.acts ? 'enhanced' : 'lossless',
@@ -239,7 +270,7 @@ async function build(dopSeen, check = null) {
     } else if (kind === 'gain' || kind === 'changed') {
       // The DSPs Fusion can't judge by name are what changes it.
       const detail = kind === 'gain' ? `Changes the level: ${signed(check.db)} dB` : 'Changes the sound';
-      for (const st of unknown) st.detail = detail;
+      for (const st of unknown) st.detail = st.icon === 'eq' && st.detail && st.detail !== 'Active' ? `${st.detail} · ${detail.replace(/^Changes the /, '')}` : detail;
       if (!unknown.length && !dspStages.some((st) => !st.hidden)) {
         changes.push('DSP');
         const at = stages.findIndex((st) => st.kind === 'volume' || st.kind === 'output');
@@ -360,8 +391,15 @@ export function layoutOf(count, maskText, word, codec) {
 }
 export const channelFields = () => lastChannelFields;
 
-function dspActs(name, src, outRate) {
+const isEq = (name) => /^equali[sz]er$/i.test(name);
+
+function dspActs(name, src, outRate, chainFile) {
   const n = name.toLowerCase();
+  // foobar2000's Equalizer: its curve, from the chain file. Flat does nothing.
+  if (isEq(name) && chainFile?.eq) {
+    const flat = chainFile.eq.every((g) => g === 0);
+    return { acts: !flat, detail: describeEq(chainFile.eq), note: '', unknown: !flat };
+  }
   if (/skip track/.test(n)) return { acts: false, detail: 'No effect on audio', note: '' };
   if (/downmix.*stereo|stereo.*downmix/.test(n)) {
     const acts = src.channels > 2;

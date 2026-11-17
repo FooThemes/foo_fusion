@@ -18,6 +18,7 @@ const GLYPH = {
   volume: 'M4 9h3l4-4v14l-4-4H4zM15 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10',
   windows: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z',
   check: 'M4 12.5 9.5 18 20 6',
+  eq: 'M4 20v-6M8 20V8M12 20v-9M16 20V5M20 20v-7M3 20h18',
 };
 const glyph = (name) => {
   const ns = 'http://www.w3.org/2000/svg';
@@ -62,7 +63,7 @@ export function mountSignalPath(controls, root) {
     clear(pop);
     const foot = p.outputInfo ? [] : [el('p.sp-foot', null, icon('info'), el('span', { text: 'Install foo_outinfo to show the output format and applied ReplayGain.' }))];
     // foobar2000's Equalizer in the chain: its window, one click away.
-    if (p.hasEq) foot.unshift(el('button.sp-action', { type: 'button', onclick: () => runMainMenuAny(['View/Equalizer', 'View/DSP/Equalizer', 'Equalizer']) }, glyph('dsp'), el('span', { text: 'Open the equalizer' })));
+    if (p.hasEq) foot.unshift(el('button.sp-action', { type: 'button', onclick: () => runMainMenuAny(['View/Equalizer', 'View/DSP/Equalizer', 'Equalizer']) }, glyph('eq'), el('span', { text: 'Open the equalizer' })));
     pop.append(
       el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })),
       el('p.sp-sub', { text: q.note }),

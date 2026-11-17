@@ -1,0 +1,36 @@
+name: Feature request
+description: Something Fusion could do, or do better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What you'd like
+      description: What it should do, and where in Fusion.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What it's for, or what's awkward now.
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A sketch, a screenshot, or how another player does it.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Part of Fusion
+      options:
+        - Albums, artists or genres
+        - Songs or folders
+        - Playlists
+        - Play bar or mini player
+        - Now playing, lyrics or the info panel
+        - Signal path or volume
+        - Listening stats
+        - Settings
+        - Artist info script
+        - Something else

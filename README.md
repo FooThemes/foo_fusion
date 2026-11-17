@@ -144,8 +144,9 @@ again brings the full window back.
   nothing, kept in the `MOOD` tag as the original skin did. Favourites lists
   what you liked.
 - Original, English and romanised titles for music tagged that way (the
-  Language Variants plugin for Picard, included, writes those tags). You pick
-  which one leads.
+  Language Variants plugin for Picard, in
+  [PicardPlugins](https://github.com/FooThemes/PicardPlugins), writes those
+  tags). You pick which one leads.
 - Search within whatever you're looking at.
 - foobar2000's own context menu on songs and albums, and its main menu (the
   menu bar itself is hidden).
@@ -184,8 +185,9 @@ Optional:
 The first time it runs, Fusion makes a **Collection** autoplaylist (your whole
 library) unless you already have one.
 
-`fusion-tools-<version>.zip` on the same page has the artist info script and
-the Picard plugins (Language Variants, Genre Tidy and Only These Tags).
+`fusion-tools-<version>.zip` on the same page has the artist info script.
+The Picard plugins (Language Variants, Genre Tidy and Only These Tags) are in
+[FooThemes/PicardPlugins](https://github.com/FooThemes/PicardPlugins).
 
 ## Updating
 
@@ -216,7 +218,7 @@ js/core/      bridge to foobar2000, settings, icons, helpers
 js/data/      player, playlists, the library view, artwork, title formatting
 js/ui/        one module per part of the window
 dev/          a stand-in for foobar2000, and the demo library
-tools/        the artist info script and the Picard plugins
+tools/        the artist info script
 ```
 
 To work on it in a browser, serve the folder (`python -m http.server`) and
@@ -247,12 +249,14 @@ git push origin v3.0.0
 ```
 
 The Release workflow builds both zips with `python dev/tools/release.py` and
-publishes them. Tags with a `-` in them (`v3.0.0-beta.2`) become
-pre-releases. Running the script yourself puts the zips in `dist/`.
+attaches them. You can also make the release on GitHub's site instead of
+pushing a tag (with or without the `v`). For a tag that's already there,
+**Actions → Release → Run workflow** builds them. Tags with a `-` in them
+(`v3.0.0-beta.2`) become pre-releases. Running the script yourself puts the
+zips in `dist/`.
 
 ## Credits and licence
 
 The original Fusion design is NadirP's. This version is released under the
 MIT licence (see `LICENSE`) and contains none of the original skin's code or
-images. The Language Variants plugin bundles pykakasi (GPL-3.0-or-later),
-jaconv and pypinyin (MIT).
+images.

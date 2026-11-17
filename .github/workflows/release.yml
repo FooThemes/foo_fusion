@@ -1,34 +1,47 @@
-# Push a tag like v3.0.0 (or v3.0.0-beta.2) and this builds the downloads and
-# publishes them as a GitHub release. Tags with a "-" are marked pre-release.
+# Builds the downloads (fusion-<version>.zip and fusion-tools-<version>.zip)
+# and attaches them to the release:
+# - make a release on GitHub's site (it makes the tag), or push a tag; with or
+#   without a "v" (3.0.0 or v3.0.0). Tags with a "-" are marked pre-release.
+# - or, for a tag that's already there: Actions → Release → Run workflow, and
+#   give the tag.
 name: Release
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', '[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag (e.g. 3.0.0)
+        required: true
 permissions:
   contents: write
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Check the tag matches js/version.js
         run: |
           v=$(sed -n "s/.*VERSION = '\(.*\)'.*/\1/p" js/version.js)
-          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME but js/version.js says $v"; exit 1; }
+          [ "${TAG#v}" = "$v" ] || { echo "Tag $TAG but js/version.js says $v"; exit 1; }
       - name: Build
         run: python dev/tools/release.py
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        # A release made on GitHub's site (which makes the tag) gets the zips
-        # added to it; a tag pushed on its own gets a new release.
+        # A release made on GitHub's site already exists: the zips are added
+        # to it. A tag pushed on its own gets a new release.
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/*.zip --clobber
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip --clobber
           else
-            pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
-            gh release create "$GITHUB_REF_NAME" dist/*.zip --title "Fusion ${GITHUB_REF_NAME#v}" --generate-notes $pre
+            pre=""; case "$TAG" in *-*) pre="--prerelease";; esac
+            gh release create "$TAG" dist/*.zip --title "Fusion ${TAG#v}" --generate-notes $pre
           fi

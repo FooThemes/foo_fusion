@@ -1,6 +1,7 @@
 // Original, English and romanised versions of titles and names, from the
 // TITLE_ORIG / TITLE_EN / TITLE_ROM tags (and the same for ARTIST, ALBUM,
-// ALBUMARTIST, DISCSUBTITLE) that tools/picard/language_variants.py writes.
+// ALBUMARTIST, DISCSUBTITLE) that the Language Variants Picard plugin writes
+// (https://github.com/FooThemes/PicardPlugins).
 // The combined tag ("花火 (Fireworks)") stays for other players; Fusion builds
 // its own display from the parts, so which version leads is a setting here
 // rather than something baked into the files.

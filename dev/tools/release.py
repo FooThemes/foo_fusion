@@ -2,8 +2,10 @@
 
   fusion-<version>.zip        the theme: a fusion/ folder to drop into
                               <foobar2000 profile>\\webview-ui\\
-  fusion-tools-<version>.zip  the artist/genre information script and the
-                              Picard plugins
+  fusion-tools-<version>.zip  the artist/genre information script
+
+(The Picard plugins have their own repo and releases:
+https://github.com/FooThemes/PicardPlugins)
 
 The version comes from js/version.js. index.html is stamped first (see
 stamp.py) so WebView2 never mixes cached old files with new ones.
@@ -46,15 +48,9 @@ def main():
         z.write(ROOT / 'LICENSE', 'fusion/LICENSE')
         z.write(ROOT / 'README.md', 'fusion/README.md')
 
-    # The Language Variants plugin bundles its romanisation libraries (from PyPI).
-    picard = ROOT / 'tools' / 'picard'
-    subprocess.run([sys.executable, str(picard / 'build.py')], check=True, cwd=picard)
     tools = DIST / f'fusion-tools-{v}.zip'
     with zipfile.ZipFile(tools, 'w', zipfile.ZIP_DEFLATED) as z:
         z.write(ROOT / 'tools' / 'fusion-artist-info.py', 'artist-info/fusion-artist-info.py')
-        z.write(picard / 'genre_tidy.py', 'picard/genre_tidy.py')
-        z.write(picard / 'only_these_tags.py', 'picard/only_these_tags.py')
-        z.write(picard / 'dist' / 'language_variants.zip', 'picard/language_variants.zip')
         z.write(ROOT / 'LICENSE', 'LICENSE')
 
     for f in (theme, tools):

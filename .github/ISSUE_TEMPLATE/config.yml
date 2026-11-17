@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Picard plugins (Language Variants, Genre Tidy, Only These Tags)
+    url: https://github.com/FooThemes/PicardPlugins/issues
+    about: For the Picard plugins, open the issue there.
+  - name: foo_ui_webview2
+    url: https://github.com/NereaFantasia/foo_ui_webview2/issues
+    about: For problems in the component Fusion runs on, rather than in Fusion.

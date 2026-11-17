@@ -1,0 +1,76 @@
+name: Bug report
+description: Something in Fusion is broken or doesn't behave as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What went wrong, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: How to make it happen again. Say if it only happens sometimes.
+      placeholder: |
+        1. Open Albums
+        2. Click "Go to album" on the playing song
+        3. Albums opens, but not at the album
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshot or recording
+      description: Drag files in here. A short recording helps a lot with anything that flashes, jumps or freezes.
+  - type: input
+    id: fusion
+    attributes:
+      label: Fusion version
+      description: The first line of fusion.log, or the zip's name.
+      placeholder: "3.0.0"
+    validations:
+      required: true
+  - type: input
+    id: foobar
+    attributes:
+      label: foobar2000 version
+      description: Help → About. Say if it's 32- or 64-bit, and portable or installed.
+      placeholder: "2.26.2 64-bit, portable"
+    validations:
+      required: true
+  - type: input
+    id: webview
+    attributes:
+      label: foo_ui_webview2 version
+      description: Preferences → Components.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+  - type: dropdown
+    id: output
+    attributes:
+      label: Output
+      description: Only matters for playback, volume and the signal path.
+      options:
+        - Not about playback
+        - WASAPI (shared)
+        - WASAPI (exclusive)
+        - ASIO
+        - DSD (ASIO or DoP)
+        - Other
+  - type: textarea
+    id: components
+    attributes:
+      label: Components that might matter
+      description: For example foo_playcount, foo_openlyrics, foo_outinfo, foo_input_sacd, or DSPs in your chain.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Settings → More → Open the log file. Paste the lines from around when it happened.
+      render: text

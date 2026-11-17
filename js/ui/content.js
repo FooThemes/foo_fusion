@@ -38,6 +38,7 @@ export function mountContent(root) {
 
   let current = null;
   let currentKind = '';
+  let keptNowPlaying = null;
   let lastKey = '';
   const scrollMemo = new Map(); // view key -> scrollTop
   let pendingRestore = null; // key whose scroll position to restore once loaded
@@ -76,9 +77,12 @@ export function mountContent(root) {
   function ensure() {
     const kind = kindFor(view.mode);
     if (kind === currentKind && current) return false;
-    current?.destroy();
+    // Now playing is kept (off the page) rather than torn down: it stays up
+    // to date, and opening it again shows it as it is, with no reload.
+    if (currentKind === 'nowplaying' && current) current.park();
+    else current?.destroy();
     scroller.scrollTop = 0;
-    current = kind === 'songs' ? new SongList(scroller) : kind === 'nowplaying' ? new NowPlaying(scroller) : kind === 'stats' ? new StatsPage(scroller) : kind === 'folders' ? new FolderTree(scroller) : new Grid(scroller);
+    current = kind === 'songs' ? new SongList(scroller) : kind === 'nowplaying' ? (keptNowPlaying ? (keptNowPlaying.unpark(scroller), keptNowPlaying) : (keptNowPlaying = new NowPlaying(scroller))) : kind === 'stats' ? new StatsPage(scroller) : kind === 'folders' ? new FolderTree(scroller) : new Grid(scroller);
     currentKind = kind;
     scroller.dataset.kind = kind;
     return true;

@@ -205,6 +205,28 @@ class Shuffle extends Emitter {
     this.emit('change');
   }
 
+  /** Gone back to `row`: it takes the place before the song that was playing (order[pos]). */
+  #stepBack(row, handle) {
+    const i = this.#at.get(row);
+    if (i === this.pos - 1) return void (this.pos = i); // the one before: just a step
+    if (i === this.pos) return; // the same song again
+    const order = this.order.slice();
+    const handles = this.#handles.slice();
+    let at = this.pos;
+    if (i != null) {
+      order.splice(i, 1);
+      handles.splice(i, 1);
+      if (i < at) at--;
+    }
+    at = Math.max(0, at);
+    order.splice(at, 0, row);
+    handles.splice(at, 0, handle);
+    this.order = order;
+    this.#handles = handles;
+    this.pos = at;
+    this.#index();
+  }
+
   #index() {
     this.#at = new Map(this.order.map((row, i) => [row, i]));
   }
@@ -229,17 +251,20 @@ class Shuffle extends Emitter {
     // A song that was in the queue (yours, from any playlist).
     const fromQueue = player.startKind === 'queue' || (!!h && (this.#lastQueue.some((it) => it.handle === h && !this.isOurs(it)) || Date.now() - (this.#left.get(h) || 0) < 15000));
     let why;
-    if ((h && this.ours && h === this.ours.handle) || (nextUp && player.startKind === '')) {
+    if (player.startKind === 'history') {
+      // Previous: one step back, whatever the order says. The song gone back
+      // to goes just before the one left, so that's next again (and the rest
+      // follow as they were), rather than the order jumping to wherever the
+      // song happens to be in it.
+      why = 'went back';
+      if (inOrder) this.#stepBack(row, h);
+    } else if ((h && this.ours && h === this.ours.handle) || (nextUp && player.startKind === '')) {
       why = 'next in order';
       this.pos = this.#at.get(row) ?? this.pos + 1;
       this.ours = null;
     } else if (fromQueue) {
       why = 'from the queue: order waits';
       this.#left.delete(h);
-    } else if (player.startKind === 'history') {
-      // Previous, going back: if it's in the order, Next carries on from it.
-      why = 'went back';
-      if (inOrder) this.pos = this.#at.get(row);
     } else if (!player.startedByUser) {
       why = 'moved on by itself: order waits';
     } else if (inOrder) {

@@ -249,7 +249,15 @@ export function smoothBackdrop(img, box, { blur = 60, at = 1600, opacity = 0.45,
     if (now && !wasLoaded) paint();
     wasLoaded = now;
   }).observe(small, { attributes: true, attributeFilter: ['class'] });
-  const ro = new ResizeObserver(() => {
+  // Only a real change of size redraws: taken off the page (no size) and put
+  // back at the same size, it stays as it was (Now playing kept between visits).
+  let lastSize = '';
+  const ro = new ResizeObserver((entries) => {
+    const r = entries[entries.length - 1]?.contentRect;
+    if (!r || !r.width || !r.height) return;
+    const size = `${Math.round(r.width)}x${Math.round(r.height)}`;
+    if (size === lastSize) return;
+    lastSize = size;
     clearTimeout(timer);
     timer = setTimeout(paint, 120);
   });

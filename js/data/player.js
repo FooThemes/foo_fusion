@@ -334,14 +334,29 @@ class Player extends Emitter {
     if (!h) return call('playback.previous');
     saveHistory(this.history);
     this.#goingBack = true;
-    // Its row, if it still holds that song; else the file itself.
-    let atRow = false;
+    // Its row, if it still holds that song; else its row in the shuffle's
+    // playlist (or the one it played from), found by file, so the shuffle can
+    // place it; else the file itself.
+    let at = null;
     if (h.playlist >= 0 && h.index >= 0) {
       const r = await tryCall('playlist.getTracksAt', { playlist: h.playlist, rows: [h.index], fields: ['handle'] });
-      atRow = r?.tracks?.[0]?.handle === h.handle;
+      if (r?.tracks?.[0]?.handle === h.handle) at = { playlist: h.playlist, index: h.index };
+    }
+    if (!at) {
+      const { playlists } = await import('./playlists.js');
+      const shufflePl = playlists.list.findIndex((p) => p.guid === this.shuffle?.guid);
+      const path = String(h.handle).replace(/"/g, '');
+      for (const pl of [...new Set([shufflePl, h.playlist])].filter((x) => x >= 0)) {
+        const res = await tryCall('playlist.getMatchingRows', { playlist: pl, query: `%path% IS "${path}"` });
+        const row = res?.items?.[0];
+        if (row != null) {
+          at = { playlist: pl, index: row };
+          break;
+        }
+      }
     }
     try {
-      if (atRow) await call('playlist.playTrack', { playlist: h.playlist, index: h.index });
+      if (at) await call('playlist.playTrack', at);
       else await call('playback.playPath', { path: h.handle });
     } catch (err) {
       this.#goingBack = false;

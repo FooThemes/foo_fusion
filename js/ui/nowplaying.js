@@ -56,6 +56,15 @@ export class NowPlaying {
     this.render();
   }
 
+  /** Off the page but kept up to date, so going back shows it at once (no reload). */
+  park() {
+    this.wrap.remove();
+  }
+  unpark(scroller) {
+    this.scroller = scroller;
+    scroller.append(this.wrap);
+  }
+
   destroy() {
     this.backdrop.destroy();
     this.offStore();
@@ -190,7 +199,10 @@ export class NowPlaying {
 
     // What played before, dimmed, above the current song (any order): the
     // last few, or all that are kept when asked.
-    const history = queue.length ? [] : player.history.filter((h) => h.handle !== player.track?.handle);
+    // Shown with a queue too: the list keeps one layout (earlier songs, the
+    // playing one, the queue, then the playlist), so moving through the
+    // queue only shifts it a row.
+    const history = player.history.filter((h) => h.handle !== player.track?.handle);
     const prev = history.slice(-(this.allPrevious ? history.length : PREVIOUS));
 
     const out = [];
@@ -223,8 +235,13 @@ export class NowPlaying {
         }),
       ),
     );
-    this.listTitle.textContent = queue.length ? `Queue · ${queue.length}` : tracks.length || note ? `Up next${plName ? ` from ${plName}` : ''}` : '';
+    this.listTitle.textContent = queue.length ? 'Up next' : tracks.length || note ? `Up next${plName ? ` from ${plName}` : ''}` : '';
     const editable = pl && !pl.isLocked && !pl.isAutoplaylist;
+    if (queue.length) {
+      // The playing song, then the queue under its own heading.
+      if (player.active && player.track) out.push(this.#row(player.track, { kind: 'pl', index: player.playingIndex, number: 0, current: true, queue, onplay: () => {} }));
+      out.push(el('h3.np-list-title.np-then', { dataset: { key: 'queuehead' }, text: `Queue · ${queue.length}` }));
+    }
     queue.forEach((t, n) => out.push(this.#row(t, { kind: 'queue', index: n, number: n + 1, queue, onplay: () => playQueued(t, n) })));
     if (queue.length && (tracks.length || note)) out.push(el('h3.np-list-title.np-then', { dataset: { key: 'then' }, text: `Then from ${plName || 'the playlist'}` }));
     if (note) out.push(el('div.np-note', { dataset: { key: 'note' }, text: note }));

@@ -5,6 +5,7 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { signalPath, QUALITY } from '../data/signalpath.js';
+import { runMainMenuAny } from './menus.js';
 
 // Small symbols for the stages (drawn here: not in the icon set).
 const GLYPH = {
@@ -60,11 +61,14 @@ export function mountSignalPath(controls, root) {
     if (pop.hidden) return;
     clear(pop);
     const foot = p.outputInfo ? [] : [el('p.sp-foot', null, icon('info'), el('span', { text: 'Install foo_outinfo to show the output format and applied ReplayGain.' }))];
+    // foobar2000's Equalizer in the chain: its window, one click away.
+    if (p.hasEq) foot.unshift(el('button.sp-action', { type: 'button', onclick: () => runMainMenuAny(['View/Equalizer', 'View/DSP/Equalizer', 'Equalizer']) }, glyph('dsp'), el('span', { text: 'Open the equalizer' })));
     pop.append(
       el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })),
       el('p.sp-sub', { text: q.note }),
-      el('ol.sp-stages', null, ...p.stages.filter((st) => !st.idle).map(stage)),
-      ...idleList(p.stages.filter((st) => st.idle)),
+      // Left out: what's known for certain not to touch this song.
+      el('ol.sp-stages', null, ...p.stages.filter((st) => !st.idle && !st.hidden).map(stage)),
+      ...idleList(p.stages.filter((st) => st.idle && !st.hidden)),
       ...foot,
     );
   }

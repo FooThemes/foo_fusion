@@ -24,6 +24,7 @@ export const QUALITY = {
   enhanced: { label: 'Enhanced', note: 'Lossless source with processing applied.' },
   high: { label: 'High quality', note: 'Lossless source, format changed before output.' },
   low: { label: 'Low quality', note: 'Lossy source.' },
+  broken: { label: 'Not playable', note: "The output can't carry this format as it's sent." },
 };
 
 class SignalPath extends Emitter {
@@ -62,9 +63,13 @@ class SignalPath extends Emitter {
     // DSPs in the chain: what they really do to this song, measured once.
     if (path?.hasDsp && !path.dsdKept && h && !this.#checked.has(h) && player.state === 'playing') this.#check(player.track);
     // Logged once, and for each DSD song (the DoP check's outcome).
-    if (path && (!this.#logged || path.dsd)) {
+    // Logged once, and for each DSD or multichannel song (with what foobar2000
+    // reports about its channels).
+    const multi = path && path.layout && !/^(mono|stereo)$/.test(path.layout);
+    if (path && (!this.#logged || path.dsd || multi)) {
       this.#logged = true;
-      logInfo(`signal path: Output Info ${path.outputInfo ? 'found' : 'not found'}; ${path.stages.map((s) => `${s.title}: ${s.detail}`).join(' → ')} (${path.quality})`);
+      const ch = multi ? ` channels ${JSON.stringify(channelFields())}` : '';
+      logInfo(`signal path: Output Info ${path.outputInfo ? 'found' : 'not found'}; ${path.stages.map((s) => `${s.title}: ${s.detail}${s.hidden ? ' [left out]' : ''}`).join(' → ')} (${path.quality})${ch}`);
     }
     this.hasOutputInfo = path ? path.outputInfo : this.hasOutputInfo;
     this.path = path;
@@ -98,7 +103,7 @@ class SignalPath extends Emitter {
 }
 
 async function build(dopSeen, check = null) {
-  const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%__channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`)].join(SEP);
+  const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%__channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`), '[%__channel_mask%]', '[%channels%]', '[%WAVEFORMATEXTENSIBLE_CHANNEL_MASK%]'].join(SEP);
   const [tf, conf, chain, rgMode, rgPre, vol] = await Promise.all([
     tryCall('titleformat.eval', { pattern }),
     tryCall('config.getOutputConfig'),
@@ -110,6 +115,7 @@ async function build(dopSeen, check = null) {
   const v = String(tf?.result || '').split(SEP);
   const [codec, profile, bits, rate, channels, encoding, bitrate, rgTrack, rgAlbum] = v;
   const o = Object.fromEntries(OUT.map((f, i) => [f, clean(v[9 + i])]));
+  const [chMask, chWord, chTag] = v.slice(9 + OUT.length);
   const outputInfo = !!(o.output_samplerate || o.output_device);
 
   const src = {
@@ -122,6 +128,8 @@ async function build(dopSeen, check = null) {
     channels: num(channels),
     bitrate: num(bitrate),
   };
+  src.layout = layoutOf(src.channels, chMask || chTag, chWord, codec);
+  lastChannelFields = { channels, mask: chMask, word: chWord, tag: chTag, layout: src.layout };
   const stages = [];
   const changes = []; // what alters the sound on the way (for the grade)
 
@@ -130,7 +138,7 @@ async function build(dopSeen, check = null) {
     kind: 'source',
     icon: src.lossless ? 'lossless' : 'lossy',
     title: 'Source',
-    detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? (dsd(src.rate).toLowerCase() === src.codec.toLowerCase() ? '' : dsd(src.rate)) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, chans(src.channels), !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
+    detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? (dsd(src.rate).toLowerCase() === src.codec.toLowerCase() ? '' : dsd(src.rate)) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, src.layout, !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
     grade: src.lossless ? 'lossless' : 'low',
     note: '',
   });
@@ -147,9 +155,16 @@ async function build(dopSeen, check = null) {
   // own rate, DoP at exactly 1/16 of it.
   const nativeOut = src.dsd && ((!!earlyRate && !!src.rate && Math.abs(earlyRate - src.rate) < 1) || num(o.output_bitdepth) === 1);
   const looksDop = !!dopRate && !!earlyRate && Math.abs(earlyRate - dopRate) < 1;
-  // The audio itself, when checked: DoP markers found settle it.
-  const dsdKept = src.dsd && (nativeOut || dopSeen === 'dop' || dopSeen === 'bypass' || looksDop);
-  const bypassed = (stage) => ({ ...stage, detail: 'Bypassed for DSD', note: '', grade: 'lossless', idle: true });
+  // The audio itself, when checked: DoP markers found settle it. Silence in
+  // the stream means the DSD skipped foobar2000's PCM processing; only an
+  // ASIO driver can take it from there as DSD. Any other output (WASAPI) only
+  // takes PCM, so the DAC gets the raw DSD bits as PCM: noise.
+  const asio = /asio/i.test(conf?.outputName || '');
+  const dsdRaw = src.dsd && dopSeen === 'bypass' && !asio && !nativeOut;
+  const dsdKept = src.dsd && !dsdRaw && (nativeOut || dopSeen === 'dop' || dopSeen === 'bypass' || looksDop);
+  // Known for certain (not just from the rate): what's bypassed is left out.
+  const dsdSure = dsdKept && (nativeOut || dopSeen === 'dop' || dopSeen === 'bypass');
+  const bypassed = (stage) => ({ ...stage, detail: 'Bypassed for DSD', note: '', grade: 'lossless', idle: true, hidden: dsdSure || dsdRaw });
 
   // 2. ReplayGain: the gain actually applied (Output Info), else the mode and the song's tags.
   // "auto" follows foobar2000's own playback order: track gain when it
@@ -166,7 +181,7 @@ async function build(dopSeen, check = null) {
     const pre = tagGain != null ? num(rgPre?.withRg) : num(rgPre?.withoutRg);
     const gain = applied ?? (tagGain != null ? tagGain + (pre || 0) : pre || null);
     rgGain = gain;
-    if (dsdKept) stages.push(bypassed({ kind: 'rg', icon: 'gain', title: 'ReplayGain' }));
+    if (dsdKept || dsdRaw) stages.push(bypassed({ kind: 'rg', icon: 'gain', title: 'ReplayGain' }));
     else if (gain == null || Math.abs(gain) >= 0.005) {
       changes.push('ReplayGain');
       stages.push({ kind: 'rg', icon: 'gain', title: 'ReplayGain', detail: gain != null ? `${which === 'album' ? 'Album' : 'Track'} gain ${signed(gain)} dB` : `${which === 'album' ? 'Album' : 'Track'} gain (not tagged)`, grade: gain == null ? 'lossless' : 'enhanced', note: '' });
@@ -181,7 +196,7 @@ async function build(dopSeen, check = null) {
   const outRateEarly = num(o.output_samplerate);
   for (const name of dspList) {
     const act = dspActs(name, src, outRateEarly);
-    if (dsdKept) {
+    if (dsdKept || dsdRaw) {
       stages.push(bypassed({ kind: 'dsp', icon: /resampl/i.test(name) ? 'resample' : 'dsp', title: name }));
       continue;
     }
@@ -209,7 +224,8 @@ async function build(dopSeen, check = null) {
       for (const st of dspStages) {
         const at = st.idle ? -1 : changes.indexOf(st.title);
         if (at >= 0) changes.splice(at, 1);
-        Object.assign(st, { idle: true, grade: 'lossless', detail: st.idle ? st.detail : 'No change to this song' });
+        // Measured: they pass this song through untouched, so they're left out.
+        Object.assign(st, { idle: true, hidden: true, grade: 'lossless' });
       }
     } else if (kind !== 'silent') {
       // Something changes it: which DSP isn't known when the rules say none.
@@ -221,7 +237,7 @@ async function build(dopSeen, check = null) {
         kind: 'check',
         icon: 'check',
         title: 'Checked',
-        detail: kind === 'same' ? 'The DSPs leave this song unchanged' : describeCheck(check),
+        detail: kind === 'same' ? `${dspStages.map((st) => st.title).join(', ')}: no change to this song` : describeCheck(check),
         grade: kind === 'same' ? 'lossless' : kind === 'rate' ? 'high' : 'enhanced',
         note: kind === 'same' ? 'After the DSPs, the audio matches the file sample for sample.' : kind === 'gain' ? 'After the DSPs, the audio is the file at another level.' : 'After the DSPs, the audio differs from the file.',
       });
@@ -230,7 +246,7 @@ async function build(dopSeen, check = null) {
 
   // 4. Volume: anything below 0 dB scales the samples.
   const dB = o.output_volume && o.output_volume !== '-inf' ? num(o.output_volume) : num(vol?.volume);
-  if (dB != null && dB < -0.005 && dsdKept) stages.push(bypassed({ kind: 'volume', icon: 'volume', title: 'Volume' }));
+  if (dB != null && dB < -0.005 && (dsdKept || dsdRaw)) stages.push(bypassed({ kind: 'volume', icon: 'volume', title: 'Volume' }));
   else if (dB != null && dB < -0.005) {
     changes.push('volume');
     stages.push({ kind: 'volume', icon: 'volume', title: 'Volume', detail: `${dB.toFixed(1).replace('-', '−')} dB`, grade: 'enhanced', note: 'Digital attenuation. Set to 0 dB for bit-perfect output.' });
@@ -252,12 +268,14 @@ async function build(dopSeen, check = null) {
   // The output is DSD: the DSD file at its own rate, or (PCM made into DSD
   // on the way) exactly a standard DSD rate, DSD32 to DSD1024.
   const outDsd = !!outRate && (nativeOut || (!src.dsd && (outBits === 1 || isDsdRate(outRate))));
-  const fmtOut = dsdKept
+  const fmtOut = dsdRaw
+    ? [dsd(src.rate), 'raw DSD on a PCM output'].join(' · ')
+    : dsdKept
     ? [dsd(src.rate), outDsd ? 'native DSD' : dopSeen === 'bypass' ? 'sent directly' : looksDop ? `DoP (in ${khz(outRate || dopRate)} frames)` : '', chans(outCh)].filter(Boolean).join(' · ')
     : [outDsd ? dsd(outRate) : khz(outRate), !outDsd && outBits && `${outBits}-bit`, chans(outCh)].filter(Boolean).join(' · ');
   if (!src.dsd && outputInfo && src.rate && outRate && outRate !== src.rate && !dspList.some((n) => /resampl/i.test(n))) changes.push('sample rate');
   // DSD turned into PCM on the way, or PCM into DSD (a DSD processor or the output).
-  const dsdToPcm = outputInfo && src.dsd && !dsdKept && !!outRate && !outDsd;
+  const dsdToPcm = outputInfo && src.dsd && !dsdKept && !dsdRaw && !!outRate && !outDsd;
   const pcmToDsd = outputInfo && !src.dsd && outDsd;
   if (dsdToPcm) changes.push('DSD to PCM');
   if (pcmToDsd) changes.push('PCM to DSD');
@@ -268,14 +286,16 @@ async function build(dopSeen, check = null) {
     icon: 'output',
     title: outTitle,
     detail: [deviceName && deviceName !== module ? deviceName : '', fmtOut || (outputInfo ? '' : 'format unknown')].filter(Boolean).join(' · '),
-    grade: truncated || dsdToPcm ? 'high' : pcmToDsd ? 'enhanced' : 'lossless',
-    note: dsdKept
+    grade: dsdRaw ? 'broken' : truncated || dsdToPcm ? 'high' : pcmToDsd ? 'enhanced' : 'lossless',
+    note: dsdRaw
+      ? `The DSD decoder passes DSD straight through, but ${outTitle} only takes PCM, so the DAC plays it as noise. Use ASIO, or set the DSD decoder to output PCM or DoP.`
+      : dsdKept
       ? outDsd
         ? 'Native DSD.'
         : dopSeen === 'dop'
           ? 'DoP, verified from the stream.'
           : dopSeen === 'bypass'
-            ? 'DSD sent directly, bypassing the DSP chain.'
+            ? 'DSD sent directly through ASIO. ReplayGain, DSPs and volume are bypassed.'
             : 'DoP, assumed from the sample rate.'
       : dsdToPcm
         ? 'DSD converted to PCM.'
@@ -295,27 +315,55 @@ async function build(dopSeen, check = null) {
   }
 
   let quality;
-  if (!src.lossless) quality = 'low';
+  if (dsdRaw) quality = 'broken';
+  else if (!src.lossless) quality = 'low';
   else if (['Windows mixer', 'bit depth', 'sample rate', 'DSD to PCM'].some((c) => changes.includes(c))) quality = 'high';
   else if (changes.length) quality = 'enhanced';
   else quality = 'lossless';
-  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept, hasDsp: dspList.length > 0 };
+  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept, dsdRaw, hasDsp: dspList.length > 0, hasEq: dspList.some((n) => /^equali[sz]er$/i.test(n)), layout: src.layout };
 }
 
 /**
  * Whether a DSP changes this song, for the ones whose rules are known.
  * Others are taken to change it.
  */
+// The channel layout's name: from the file's channel mask when foobar2000
+// gives one, else the format's own standard order (FLAC, ALAC, AAC, Vorbis,
+// Opus, WavPack, AC3, DTS… define 6 channels as 5.1), else just a count (WAV
+// or AIFF without a mask can be any 6 channels).
+const SPEAKER_LFE = 0x8;
+const STANDARD = { 1: 'mono', 2: 'stereo', 3: '3.0', 4: '4.0', 5: '5.0', 6: '5.1', 7: '6.1', 8: '7.1' };
+const STANDARD_ORDER = /^(flac|alac|aac|vorbis|opus|wavpack|ac3|e-ac3|eac3|dts|truehd|mlp|tta|monkey|ape|dsd|dsf|dff|dst|mp3)/i;
+let lastChannelFields = null;
+export function layoutOf(count, maskText, word, codec) {
+  if (!count) return '';
+  const raw = String(maskText || '').trim();
+  const mask = /^0x[0-9a-f]+$/i.test(raw) ? parseInt(raw, 16) : /^\d+$/.test(raw) ? +raw : 0;
+  if (mask) {
+    let bits = 0;
+    for (let m = mask; m; m &= m - 1) bits++;
+    if (bits === count) {
+      const lfe = mask & SPEAKER_LFE ? 1 : 0;
+      if (!lfe && count <= 2) return count === 1 ? 'mono' : 'stereo';
+      return `${count - lfe}.${lfe}`;
+    }
+  }
+  if (/^\d\.\d$/.test(String(word || '').trim())) return String(word).trim(); // "5.1" from foobar2000 itself
+  if (count <= 2 || STANDARD_ORDER.test(codec || '')) return STANDARD[count] || `${count} ch`;
+  return `${count} ch`;
+}
+export const channelFields = () => lastChannelFields;
+
 function dspActs(name, src, outRate) {
   const n = name.toLowerCase();
   if (/skip track/.test(n)) return { acts: false, detail: 'No effect on audio', note: '' };
   if (/downmix.*stereo|stereo.*downmix/.test(n)) {
     const acts = src.channels > 2;
-    return { acts, detail: acts ? `${chans(src.channels)} → stereo` : 'Inactive (source is stereo)', note: '' };
+    return { acts, detail: acts ? `${src.layout || chans(src.channels)} → stereo` : 'Inactive (source is stereo)', note: '' };
   }
   if (/downmix.*mono|mono/.test(n)) {
     const acts = src.channels > 1;
-    return { acts, detail: acts ? `${chans(src.channels)} → mono` : 'Inactive (source is mono)', note: '' };
+    return { acts, detail: acts ? `${src.layout || chans(src.channels)} → mono` : 'Inactive (source is mono)', note: '' };
   }
   if (/resampl|sample rate/.test(n)) {
     if (outRate && src.rate) {

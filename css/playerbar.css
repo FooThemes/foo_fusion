@@ -519,6 +519,7 @@ body.mini .pb-play {
 [data-q='enhanced'] { --sp: #60a5fa; }
 [data-q='high'] { --sp: #4ade80; }
 [data-q='low'] { --sp: #fbbf24; }
+[data-q='broken'] { --sp: #f87171; }
 
 .sp-chip {
   display: grid;
@@ -705,4 +706,29 @@ body.mini .sp-chip {
   flex: none;
   width: 14px;
   height: 14px;
+}
+
+/* An action at the foot of the signal path (open the equalizer). */
+.sp-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.15));
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sp-action:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.08));
+}
+
+.sp-action .sp-glyph {
+  width: 16px;
+  height: 16px;
 }

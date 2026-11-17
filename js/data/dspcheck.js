@@ -36,13 +36,24 @@ function listen() {
   listening = true;
   const wv = window.chrome?.webview;
   if (!wv) return false;
+  // The buffer is taken while the event is being handled: asked for later
+  // (after an await), it came back already detached.
   wv.addEventListener('sharedbufferreceived', (e) => {
-    const d = e.additionalData || {};
-    if (d.purpose === 'audio.decodePcm') deliver(`buf:${d.taskId}`, e);
-    else if (d.purpose === 'audio.subscribeStream' && d.subscriptionId === STREAM_ID) {
+    const data = e.additionalData || {};
+    if (data.purpose !== 'audio.decodePcm' && !(data.purpose === 'audio.subscribeStream' && data.subscriptionId === STREAM_ID)) return;
+    let buffer = null;
+    try {
+      buffer = e.getBuffer();
+    } catch (err) {
+      logInfo(`dsp check: ${data.purpose} buffer couldn't be taken (${err?.message || err})`);
+      return;
+    }
+    const got1 = { buffer, data };
+    if (data.purpose === 'audio.decodePcm') deliver(`buf:${data.taskId}`, got1);
+    else {
       // A newer epoch (the format changed) replaces one nobody took yet.
-      if (got.has('stream')) release(got.get('stream').getBuffer());
-      deliver('stream', e);
+      if (got.has('stream')) release(got.get('stream').buffer);
+      deliver('stream', got1);
     }
   });
   on('audio:pcmReady', (d) => deliver(`ready:${d.taskId}`, d));
@@ -225,8 +236,8 @@ export async function measureDsp(track, stillPlaying) {
     if (!sub) return fail('stream subscription refused');
     const ev = await wait('stream', 3000);
     if (!ev) return fail('no stream buffer came');
-    streamBuf = ev.getBuffer();
-    const info = ev.additionalData;
+    streamBuf = ev.buffer;
+    const info = ev.data;
     await new Promise((r) => setTimeout(r, 1300));
     if (!stillPlaying()) return fail('stopped playing');
     const at = player.now(); // where playback is, as the snapshot is taken
@@ -237,7 +248,7 @@ export async function measureDsp(track, stillPlaying) {
     const start = Math.max(0, at - BEFORE);
     const res = await call('audio.decodePcm', { path: track.path || track.handle, start, end: at + AFTER });
     const [buf, ready] = await Promise.all([wait(`buf:${res.taskId}`, 15000), wait(`ready:${res.taskId}`, 15000)]);
-    if (buf) pcmBuf = buf.getBuffer();
+    if (buf) pcmBuf = buf.buffer;
     if (!ready || ready.failed) return fail(`decode failed: ${ready?.error || ready?.code || 'no answer'}`);
     if (!pcmBuf) return fail('no decode buffer came');
     const src = readDecoded(pcmBuf, ready.sampleRate, ready.channels, ready.frames);
@@ -255,11 +266,7 @@ export async function measureDsp(track, stillPlaying) {
     // Buffers for epochs nobody waited for.
     for (const [k, v] of got) {
       if (k.startsWith('stream:') || k.startsWith('buf:')) {
-        try {
-          release(v.getBuffer());
-        } catch {
-          /* gone */
-        }
+        release(v.buffer);
         got.delete(k);
       }
     }

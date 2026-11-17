@@ -4,12 +4,13 @@
 //
 // - shared (WASAPI shared, DirectSound): Windows applies its volume, so
 //   foobar2000 stays at 0 dB, and the slider follows Windows (keys, flyout).
-// - exclusive and ASIO: Windows' volume doesn't reach the output (setting it
-//   fails with E_HANDLE, and what it reports then isn't the level), so the
-//   slider's level is Fusion's own and foobar2000 applies it. Windows gets
-//   that level back as soon as it has the device again (stop, "Pause releases
-//   ASIO", a shared output), so leaving ASIO doesn't change the loudness.
-//   Mute there is foobar2000's volume at its lowest.
+// - exclusive and ASIO: Windows' volume doesn't reach the output, so
+//   foobar2000 applies the slider's level. The two stay linked anyway: the
+//   slider is sent to Windows (it takes it where it can; the rest is sent
+//   again when it has the device back), and a change made in Windows (keys,
+//   flyout) moves the slider. Reports right after the output changes or
+//   playback starts are ignored (Windows' reading can jump as the device is
+//   taken). Mute there is foobar2000's volume at its lowest.
 //
 // How loud a Windows level actually is depends on the device's driver (the
 // dB Windows reports isn't always what's applied), so the curve used on
@@ -192,6 +193,9 @@ class OsVolume extends Emitter {
   #seq = Date.now();
   #exclusive = null; // the output mode, as last seen
   #lastSync = '';
+  #quietUntil = 0;
+  #outName = null; // the output, as last seen
+  #syncing = null;
   #curve = (() => {
     try {
       return localStorage.getItem(CURVE_KEY) || '';
@@ -216,6 +220,8 @@ class OsVolume extends Emitter {
     setInterval(() => this.#read(), 250);
     // The output mode: on the event, and looked at now and then.
     on('audio:outputDeviceChanged', () => this.#checkMode());
+    on('playback:stateChanged', () => this.#quiet());
+    on('playback:trackChanged', () => this.#quiet());
     store.subscribe((k) => k === 'exclusiveCurve' && ((this.#lastSync = ''), this.#sync()));
     setInterval(() => this.#checkMode(), 3000);
   }
@@ -243,24 +249,41 @@ class OsVolume extends Emitter {
       logInfo(`volume: helper reporting (device ${v.device}, Windows at ${Math.round(v.scalar * 100)}%, ${v.db.toFixed(1)} dB${v.hw & 1 ? ', hardware volume' : ''}${v.muted ? ', muted' : ''}; ${this.#exclusive ? 'exclusive' : 'shared'} output, level ${Math.round(this.scalar * 100)}%)`);
     }
     const moved = first || !prev || Math.abs(v.scalar - prev.scalar) > 1e-4 || !!v.muted !== !!prev.muted;
-    if (moved && !first) await this.#checkMode(); // a jump as ASIO takes the device isn't the user's
-    if (this.#exclusive) {
-      // Windows doesn't have the device: its report isn't the level.
-      if (first) this.emit('change'), this.#sync();
+    if (moved && !first) await this.#checkMode();
+    if (first) {
+      // On an exclusive output the level carries on from last time; shared,
+      // Windows' is the level.
+      if (this.#exclusive) {
+        this.emit('change');
+        this.#sync();
+        this.#send();
+        return;
+      }
+    } else if (!moved) {
       return;
     }
-    this.#learnTaper(v);
+    if (!this.#exclusive) this.#learnTaper(v);
+    if (performance.now() < this.#quietUntil) return; // the device just changed hands
+    // Held by ASIO/exclusive, Windows can read 100% whatever it was: not a change.
+    if (this.#exclusive && v.scalar >= 0.999 && v.hr !== 0) return;
     if (this.#pending) {
       // The slider's own value stays until Windows reports it (a moment later),
       // so older reports don't pull it back while it's being moved.
       if ((Math.abs(v.scalar - this.#pending.scalar) < 0.006 && !!v.muted === this.#pending.muted) || performance.now() > this.#pending.until) this.#pending = null;
-      else return;
+      return;
     }
-    if (!moved && Math.abs(v.scalar - this.scalar) < 1e-4 && !!v.muted === this.muted) return;
+    if (Math.abs(v.scalar - this.scalar) < 1e-4 && !!v.muted === this.muted) return;
+    if (this.#exclusive) logInfo(`volume: Windows moved to ${Math.round(v.scalar * 100)}%${v.muted ? ', muted' : ''}; following`);
     this.#setLevel(v.scalar);
     this.muted = !!v.muted;
     this.emit('change');
     this.#sync();
+  }
+
+  /** Playback started or the output changed: Windows' next readings aren't a change of level. */
+  #quiet(ms = 2500) {
+    this.#quietUntil = performance.now() + ms;
+    this.#pending = null;
   }
 
   #setLevel(scalar) {
@@ -294,29 +317,64 @@ class OsVolume extends Emitter {
   async #checkMode() {
     const conf = await tryCall('config.getOutputConfig');
     if (!conf) return;
-    const name = `${conf.outputName || ''} ${conf.deviceName || ''}`;
+    const name = `${conf.outputName || ''} ${conf.deviceName || ''}`.trim();
     const exclusive = /asio|exclusive|kernel streaming|\bks\b/i.test(name);
-    if (exclusive === this.#exclusive) return;
-    const was = this.#exclusive;
-    this.#exclusive = exclusive;
-    logInfo(`volume: ${exclusive ? 'exclusive' : 'shared'} output, level ${Math.round(this.scalar * 100)}%${this.muted ? ', muted' : ''}`);
-    // Windows has the device back: it gets the level (and the mute) from here.
-    if (was && !exclusive) {
-      this.#hold();
-      await this.#send({ scalar: this.scalar, mute: this.muted });
+    if (name !== this.#outName) {
+      const first = this.#outName == null;
+      this.#outName = name;
+      this.#exclusive = exclusive;
+      if (!first) {
+        logInfo(`volume: output now “${name}” (${exclusive ? 'exclusive' : 'shared'}), level ${Math.round(this.scalar * 100)}%${this.muted ? ', muted' : ''}`);
+        // The level carries over: Windows gets it (it takes it if it has the
+        // device), and foobar2000's volume is set for the new mode.
+        this.#quiet(3000);
+        this.#send();
+      } else {
+        logInfo(`volume: output “${name}” (${exclusive ? 'exclusive' : 'shared'})`);
+      }
+      this.#lastSync = '';
     }
-    this.#lastSync = '';
+    // Every time: foobar2000's volume is checked against the slider, and put right.
     this.#sync();
   }
 
   /** foobar2000's volume, for the output mode: 0 dB shared; the level on exclusive/ASIO. */
-  async #sync() {
+  #target() {
+    if (!this.#exclusive) return 0;
+    if (this.muted) return -100;
+    const db = store.get('exclusiveCurve') === 'windows' ? this.#windowsDb(this.scalar) : 20 * Math.log10(Math.max(1e-5, this.scalar));
+    return Math.max(-100, Math.min(0, db));
+  }
+  #sync() {
     if (!this.active || this.#exclusive == null) return;
-    const follow = this.#exclusive;
-    const curve = store.get('exclusiveCurve') === 'windows' ? 'windows' : 'amp';
-    const target = !follow ? 0 : this.muted ? -100 : Math.max(-100, Math.min(0, curve === 'windows' ? this.#windowsDb(this.scalar) : 20 * Math.log10(Math.max(1e-5, this.scalar))));
-    const key = `${follow}|${target.toFixed(1)}`;
-    if (key === this.#lastSync) return;
+    // One at a time; the last asked for wins.
+    if (this.#syncing) return (this.#syncing.again = true), this.#syncing.done;
+    const job = { again: false };
+    job.done = (async () => {
+      try {
+        do {
+          job.again = false;
+          await this.#apply();
+        } while (job.again);
+      } finally {
+        this.#syncing = null;
+      }
+    })();
+    this.#syncing = job;
+    return job.done;
+  }
+  async #apply() {
+    const target = this.#target();
+    const key = `${this.#exclusive}|${target.toFixed(1)}`;
+    // Already set: still checked against what foobar2000 reports (anything
+    // else may have changed it), and set again if it's off.
+    if (key === this.#lastSync) {
+      const now = await tryCall('playback.getVolume');
+      if (!now || now.volumeDb == null) return;
+      const off = target <= -99 ? now.volumeDb > -99 : Math.abs(now.volumeDb - target) > 0.6;
+      if (!off && !now.muted && !now.isMuted) return;
+      logInfo(`volume: foobar2000 was at ${Number(now.volumeDb).toFixed(1)} dB${now.muted || now.isMuted ? ' (muted)' : ''}, not ${target.toFixed(1)}; setting it again`);
+    }
     this.#lastSync = key;
     await tryCall('playback.mute', { muted: false });
     await this.#setFoobarDb(target);
@@ -324,7 +382,7 @@ class OsVolume extends Emitter {
 
   /** The device let go (stopped, or paused with "Pause releases ASIO"): Windows gets the level. */
   pushToDevice() {
-    if (this.active && this.#exclusive) return this.#send({ scalar: this.scalar });
+    if (this.active) return this.#send();
   }
 
   async #setFoobarDb(db) {
@@ -368,27 +426,27 @@ class OsVolume extends Emitter {
   set(scalar) {
     this.#setLevel(scalar);
     this.emit('change');
-    if (this.#exclusive) return this.#sync(); // Windows gets it when it has the device again
     this.#hold();
-    return this.#send({ scalar: this.scalar });
-  }
-  #hold() {
-    this.#pending = { scalar: this.scalar, muted: this.muted, until: performance.now() + 1500 };
+    if (this.#exclusive) this.#sync();
+    return this.#send();
   }
   setMute(muted) {
     this.muted = !!muted;
     this.emit('change');
-    if (this.#exclusive) {
-      // Windows can't mute a device ASIO or an exclusive stream holds:
-      // foobar2000's volume goes to its lowest instead.
-      return this.#sync();
-    }
     this.#hold();
-    return this.#send({ mute: this.muted });
+    // Windows can't mute a device ASIO or an exclusive stream holds:
+    // foobar2000's volume goes to its lowest instead.
+    if (this.#exclusive) this.#sync();
+    return this.#send();
   }
-  #send(cmd) {
+  #hold() {
+    this.#pending = { scalar: this.scalar, muted: this.muted, until: performance.now() + 1500 };
+  }
+  // Always the whole state (level and mute): one write can replace another
+  // before the helper reads it.
+  #send() {
     ++this.#seq;
-    return call('file.write', { path: `${this.#profile}\\fusion-volume-v${VERSION}-set.json`, content: JSON.stringify({ seq: this.#seq, ...cmd }) });
+    return call('file.write', { path: `${this.#profile}\\fusion-volume-v${VERSION}-set.json`, content: JSON.stringify({ seq: this.#seq, scalar: this.scalar, mute: this.muted }) });
   }
 }
 

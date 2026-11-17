@@ -6,9 +6,10 @@
 //   so foobar2000 stays at 0 dB;
 // - exclusive and ASIO: Windows' volume doesn't reach the device, so
 //   foobar2000 attenuates by the same dB instead. The volume keys, Windows'
-//   own pop-up and switching outputs all stay in step;
-// - a device with hardware volume: Windows sets it even in exclusive mode, so
-//   foobar2000 stays at 0 dB there too (or it would be lowered twice).
+//   own pop-up and switching outputs all stay in step. That holds for a DAC
+//   with hardware volume too: while ASIO or an exclusive stream holds it,
+//   Windows can't reach its volume control (setting it fails with E_HANDLE,
+//   though Windows keeps the value), so foobar2000 has to do it.
 //
 // The page can't reach Windows' audio API, so a small PowerShell helper does
 // (written to the profile and started from here; it quits with foobar2000).
@@ -23,7 +24,7 @@ import * as store from '../core/store.js';
 
 // Bump with any change to the script: a helper from an older Fusion keeps
 // running until foobar2000 restarts, and a new one runs beside it.
-const VERSION = 1;
+const VERSION = 2;
 
 const SCRIPT = `param([string]$Dir)
 $ErrorActionPreference = 'Stop'
@@ -38,35 +39,35 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IAudioEndpointVolume {
-  int RegisterControlChangeNotify(IntPtr p);
-  int UnregisterControlChangeNotify(IntPtr p);
-  int GetChannelCount(out uint c);
-  int SetMasterVolumeLevel(float db, ref Guid ctx);
-  int SetMasterVolumeLevelScalar(float v, ref Guid ctx);
-  int GetMasterVolumeLevel(out float db);
-  int GetMasterVolumeLevelScalar(out float v);
-  int SetChannelVolumeLevel(uint ch, float db, ref Guid ctx);
-  int SetChannelVolumeLevelScalar(uint ch, float v, ref Guid ctx);
-  int GetChannelVolumeLevel(uint ch, out float db);
-  int GetChannelVolumeLevelScalar(uint ch, out float v);
-  int SetMute([MarshalAs(UnmanagedType.Bool)] bool m, ref Guid ctx);
-  int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
-  int GetVolumeStepInfo(out uint step, out uint count);
-  int VolumeStepUp(ref Guid ctx);
-  int VolumeStepDown(ref Guid ctx);
-  int QueryHardwareSupport(out uint mask);
-  int GetVolumeRange(out float min, out float max, out float inc);
+  [PreserveSig] int RegisterControlChangeNotify(IntPtr p);
+  [PreserveSig] int UnregisterControlChangeNotify(IntPtr p);
+  [PreserveSig] int GetChannelCount(out uint c);
+  [PreserveSig] int SetMasterVolumeLevel(float db, ref Guid ctx);
+  [PreserveSig] int SetMasterVolumeLevelScalar(float v, ref Guid ctx);
+  [PreserveSig] int GetMasterVolumeLevel(out float db);
+  [PreserveSig] int GetMasterVolumeLevelScalar(out float v);
+  [PreserveSig] int SetChannelVolumeLevel(uint ch, float db, ref Guid ctx);
+  [PreserveSig] int SetChannelVolumeLevelScalar(uint ch, float v, ref Guid ctx);
+  [PreserveSig] int GetChannelVolumeLevel(uint ch, out float db);
+  [PreserveSig] int GetChannelVolumeLevelScalar(uint ch, out float v);
+  [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool m, ref Guid ctx);
+  [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
+  [PreserveSig] int GetVolumeStepInfo(out uint step, out uint count);
+  [PreserveSig] int VolumeStepUp(ref Guid ctx);
+  [PreserveSig] int VolumeStepDown(ref Guid ctx);
+  [PreserveSig] int QueryHardwareSupport(out uint mask);
+  [PreserveSig] int GetVolumeRange(out float min, out float max, out float inc);
 }
 [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IMMDevice {
-  int Activate(ref Guid iid, int ctx, IntPtr p, [MarshalAs(UnmanagedType.IUnknown)] out object o);
-  int OpenPropertyStore(int access, out IntPtr store);
-  int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
+  [PreserveSig] int Activate(ref Guid iid, int ctx, IntPtr p, [MarshalAs(UnmanagedType.IUnknown)] out object o);
+  [PreserveSig] int OpenPropertyStore(int access, out IntPtr store);
+  [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
 }
 [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IMMDeviceEnumerator {
-  int EnumAudioEndpoints(int flow, int mask, out IntPtr devices);
-  int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice device);
+  [PreserveSig] int EnumAudioEndpoints(int flow, int mask, out IntPtr devices);
+  [PreserveSig] int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice device);
 }
 [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumerator {}
 public static class FusionVol {
@@ -91,17 +92,18 @@ public static class FusionVol {
     v.GetVolumeRange(out min, out max, out inc);
     return string.Format(CultureInfo.InvariantCulture, "{{\\"scalar\\":{0},\\"db\\":{1},\\"muted\\":{2},\\"hw\\":{3},\\"min\\":{4},\\"max\\":{5},\\"device\\":\\"{6}\\"}}", s, db, m ? "true" : "false", hw, min, max, id.Replace("\\\\", "\\\\\\\\"));
   }
-  public static void SetScalar(float s) { string id; var g = Guid.Empty; Endpoint(out id).SetMasterVolumeLevelScalar(Math.Max(0f, Math.Min(1f, s)), ref g); }
-  public static void SetMute(bool m) { string id; var g = Guid.Empty; Endpoint(out id).SetMute(m, ref g); }
+  public static int SetScalar(float s) { string id; var g = Guid.Empty; return Endpoint(out id).SetMasterVolumeLevelScalar(Math.Max(0f, Math.Min(1f, s)), ref g); }
+  public static int SetMute(bool m) { string id; var g = Guid.Empty; return Endpoint(out id).SetMute(m, ref g); }
 }
 '@
   $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
   Log "started, version ${VERSION}, for process $parent"
-  $state = Join-Path $Dir 'fusion-volume.json'
+  $state = Join-Path $Dir 'fusion-volume-v${VERSION}.json'
   $tmp = $state + '.tmp'
-  $cmd = Join-Path $Dir 'fusion-volume-set.json'
+  $cmd = Join-Path $Dir 'fusion-volume-v${VERSION}-set.json'
   $last = ''
   $seq = -1
+  $lastHr = 0
   $stamp = $null
   if (Test-Path $cmd) { try { $seq = [long]((Get-Content $cmd -Raw | ConvertFrom-Json).seq) } catch {} }
   $n = 0
@@ -116,8 +118,13 @@ public static class FusionVol {
           $c = Get-Content $cmd -Raw | ConvertFrom-Json
           if ([long]$c.seq -gt $seq) {
             $seq = [long]$c.seq
-            if ($null -ne $c.scalar) { [FusionVol]::SetScalar([float]$c.scalar) }
-            if ($null -ne $c.mute) { [FusionVol]::SetMute([bool]$c.mute) }
+            $hr = 0
+            if ($null -ne $c.scalar) { $hr = [FusionVol]::SetScalar([float]$c.scalar) }
+            if ($null -ne $c.mute) { $hr = [FusionVol]::SetMute([bool]$c.mute) }
+            # E_HANDLE while ASIO or an exclusive stream holds the device: Windows
+            # keeps the value but can't reach the hardware. Logged once.
+            if ($hr -ne 0 -and $hr -ne $lastHr) { Log ('setting the volume returned 0x{0:X8}' -f $hr) }
+            $lastHr = $hr
           }
         }
       }
@@ -189,7 +196,7 @@ class OsVolume extends Emitter {
   }
 
   async #read() {
-    const res = await tryCall('file.read', { path: `${this.#profile}\\fusion-volume.json` });
+    const res = await tryCall('file.read', { path: `${this.#profile}\\fusion-volume-v${VERSION}.json` });
     const text = String(res?.content ?? '').replace(/^﻿/, '');
     if (!text) return;
     let v;
@@ -225,7 +232,7 @@ class OsVolume extends Emitter {
   /** foobar2000's volume, for the output mode: 0 dB, or Windows' level. */
   async #sync() {
     if (!this.active || this.#exclusive == null) return;
-    const follow = this.#exclusive && !this.hw;
+    const follow = this.#exclusive;
     const target = follow ? (this.muted ? 'mute' : Math.max(-100, this.db)) : 0;
     const key = `${follow}|${target === 'mute' ? 'mute' : target.toFixed(1)}`;
     if (key === this.#lastSync) return;
@@ -279,7 +286,7 @@ class OsVolume extends Emitter {
     return this.#send({ mute: !!muted });
   }
   #send(cmd) {
-    return call('file.write', { path: `${this.#profile}\\fusion-volume-set.json`, content: JSON.stringify({ seq: ++this.#seq, ...cmd }) });
+    return call('file.write', { path: `${this.#profile}\\fusion-volume-v${VERSION}-set.json`, content: JSON.stringify({ seq: ++this.#seq, ...cmd }) });
   }
 }
 

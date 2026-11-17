@@ -237,7 +237,7 @@ const SHOTS = {
   },
   // The mini player (Alt+M), at twice the size so it stays sharp.
   mini: async (b) => {
-    const p = await open(b, { size: { width: 480, height: 200 }, scale: 2 });
+    const p = await open(b, { size: { width: 445, height: 148 }, scale: 2 });
     await p.evaluate(async () => (await import('/js/ui/mini.js')).toggleMini(true));
     await wait(p, 1500);
     await p.screenshot({ path: path.join(OUT, 'mini.jpg'), type: 'jpeg', quality: 90 });

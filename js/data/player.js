@@ -219,6 +219,8 @@ class Player extends Emitter {
     clearTimeout(this.#stopTimer);
     this.#stopTimer = setTimeout(() => {
       // Stopped by a pause that let go of the output: still shown as paused.
+      // The device is let go: the DAC gets Windows' level again (osvolume.js).
+      setTimeout(() => osVolume.pushToDevice(), 400);
       if (this.#held) return this.#setState('paused', {});
       this.#setState('stopped', {});
       this.playingIndex = -1;
@@ -273,7 +275,7 @@ class Player extends Emitter {
   }
   #fromWindows() {
     this.volume = Math.round(osVolume.scalar * 100);
-    this.muted = osVolume.muted;
+    this.muted = osVolume.isMuted;
     this.emit('volume', this.volume);
   }
 
@@ -372,7 +374,7 @@ class Player extends Emitter {
     return call('playback.setVolume', { volume: Math.round(volume) });
   }
   toggleMute() {
-    if (osVolume.active) return osVolume.setMute(!osVolume.muted);
+    if (osVolume.active) return osVolume.setMute(!osVolume.isMuted);
     return call('playback.toggleMute');
   }
   /** Shuffle (tracks, albums, folders) is Fusion's own (shuffle.js); the rest are foobar2000's. */

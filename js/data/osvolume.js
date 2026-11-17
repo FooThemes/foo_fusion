@@ -9,7 +9,11 @@
 //   own pop-up and switching outputs all stay in step. That holds for a DAC
 //   with hardware volume too: while ASIO or an exclusive stream holds it,
 //   Windows can't reach its volume control (setting it fails with E_HANDLE,
-//   though Windows keeps the value), so foobar2000 has to do it.
+//   though Windows keeps the value). The DAC keeps the level Windows last set
+//   (applied in every mode), so foobar2000 makes up only the difference, and
+//   the level is pushed to the DAC again when the device is let go.
+// - mute: Windows can't mute a held device at all (nor keeps it), so on
+//   exclusive and ASIO outputs it's foobar2000's mute.
 //
 // The page can't reach Windows' audio API, so a small PowerShell helper does
 // (written to the profile and started from here; it quits with foobar2000).
@@ -24,7 +28,7 @@ import * as store from '../core/store.js';
 
 // Bump with any change to the script: a helper from an older Fusion keeps
 // running until foobar2000 restarts, and a new one runs beside it.
-const VERSION = 2;
+const VERSION = 3;
 
 const SCRIPT = `param([string]$Dir)
 $ErrorActionPreference = 'Stop'
@@ -129,6 +133,7 @@ public static class FusionVol {
         }
       }
       $now = [FusionVol]::Get()
+      $now = $now.Substring(0, $now.Length - 1) + ',"hr":' + $lastHr + ',"seq":' + $seq + '}'
       if ($now -ne $last) {
         [IO.File]::WriteAllText($tmp, $now)
         Move-Item -Path $tmp -Destination $state -Force
@@ -164,6 +169,10 @@ class OsVolume extends Emitter {
   db = 0;
   muted = false;
   hw = false; // the device has hardware volume
+  hwDb = null; // the level the DAC itself is at (Windows' last that reached it)
+  #localMute = false; // muted in foobar2000 (exclusive/ASIO: Windows can't)
+  #pending = null; // { scalar, until }: what the slider asked for, until Windows reports it
+  #lastSeq = 0;
   #profile = '';
   #seq = Date.now();
   #exclusive = null; // the output mode, as last seen
@@ -197,7 +206,7 @@ class OsVolume extends Emitter {
 
   async #read() {
     const res = await tryCall('file.read', { path: `${this.#profile}\\fusion-volume-v${VERSION}.json` });
-    const text = String(res?.content ?? '').replace(/^﻿/, '');
+    const text = String(res?.content ?? '').replace(/^\uFEFF/, '');
     if (!text) return;
     let v;
     try {
@@ -205,17 +214,35 @@ class OsVolume extends Emitter {
     } catch {
       return; // caught mid-write: next time
     }
-    const changed = !this.active || Math.abs(v.scalar - this.scalar) > 1e-4 || Math.abs(v.db - this.db) > 0.01 || !!v.muted !== this.muted || !!(v.hw & 1) !== this.hw;
-    if (!this.active) logInfo(`volume: following Windows (device ${v.device}, ${Math.round(v.scalar * 100)}%, ${v.db.toFixed(1)} dB${v.hw ? ', hardware volume' : ''}${v.muted ? ', muted' : ''})`);
+    const first = !this.active;
+    if (first) logInfo(`volume: following Windows (device ${v.device}, ${Math.round(v.scalar * 100)}%, ${v.db.toFixed(1)} dB${v.hw & 1 ? ', hardware volume' : ''}${v.muted ? ', muted' : ''})`);
     this.active = true;
+    const hw = !!(v.hw & 1);
+    // The DAC's own level: Windows' while Windows has the device (shared), and
+    // after a change that reached it (the helper says so); else where it was.
+    const hwBefore = this.hwDb;
+    if (hw && (this.hwDb == null || !this.#exclusive || (v.seq === this.#lastSeq && v.hr === 0 && v.seq > 0))) this.hwDb = v.db;
+    if (hwBefore != null && this.hwDb !== hwBefore && this.#exclusive) logInfo(`volume: the DAC is now at ${this.hwDb.toFixed(1)} dB`);
+    // The slider's own value stays until Windows reports it (a moment later),
+    // so older reports don't pull it back while it's being moved.
+    if (this.#pending) {
+      if (Math.abs(v.scalar - this.#pending.scalar) < 0.006 || performance.now() > this.#pending.until) this.#pending = null;
+      else return;
+    }
+    const changed = first || Math.abs(v.scalar - this.scalar) > 1e-4 || Math.abs(v.db - this.db) > 0.01 || !!v.muted !== this.muted || hw !== this.hw || this.hwDb !== hwBefore;
     this.scalar = v.scalar;
     this.db = v.db;
     this.muted = !!v.muted;
-    this.hw = !!(v.hw & 1); // ENDPOINT_HARDWARE_SUPPORT_VOLUME
+    this.hw = hw;
     if (changed) {
       this.emit('change');
       this.#sync();
     }
+  }
+
+  /** Muted: in Windows, or (exclusive/ASIO) in foobar2000. */
+  get isMuted() {
+    return this.muted || this.#localMute;
   }
 
   async #checkMode() {
@@ -224,22 +251,41 @@ class OsVolume extends Emitter {
     const name = `${conf.outputName || ''} ${conf.deviceName || ''}`;
     const exclusive = /asio|exclusive|kernel streaming|\bks\b/i.test(name);
     if (exclusive !== this.#exclusive) {
+      const was = this.#exclusive;
       this.#exclusive = exclusive;
+      if (was && !exclusive) {
+        // Windows has the device back: the DAC gets its level (Windows may
+        // not send it until the next change), and a foobar2000 mute moves over.
+        if (this.hw && this.hwDb != null && Math.abs(this.db - this.hwDb) > 0.05) await this.#send({ scalar: this.scalar });
+        if (this.#localMute) {
+          this.#localMute = false;
+          await this.#send({ mute: true });
+        }
+      }
       this.#sync();
     }
   }
 
-  /** foobar2000's volume, for the output mode: 0 dB, or Windows' level. */
+  /** foobar2000's volume, for the output mode: 0 dB, or what Windows' level needs on top of the DAC's. */
   async #sync() {
     if (!this.active || this.#exclusive == null) return;
     const follow = this.#exclusive;
-    const target = follow ? (this.muted ? 'mute' : Math.max(-100, this.db)) : 0;
+    // A DAC with its own volume keeps the level Windows last set: foobar2000
+    // makes up the rest (it can only lower, so the DAC's level is the ceiling).
+    const dac = this.hw && this.hwDb != null ? this.hwDb : 0;
+    const muted = this.muted || this.#localMute;
+    const target = follow ? (muted ? 'mute' : Math.max(-100, Math.min(0, this.db - dac))) : 0;
     const key = `${follow}|${target === 'mute' ? 'mute' : target.toFixed(1)}`;
     if (key === this.#lastSync) return;
     this.#lastSync = key;
     if (target === 'mute') return void tryCall('playback.mute', { muted: true });
     await tryCall('playback.mute', { muted: false });
     await this.#setFoobarDb(target);
+  }
+
+  /** The device let go (stopped, or paused with "Pause releases ASIO"): Windows' level pushed to the DAC again. */
+  pushToDevice() {
+    if (this.active && this.hw && this.#exclusive && this.hwDb != null && Math.abs(this.db - this.hwDb) > 0.05) return this.#send({ scalar: this.scalar });
   }
 
   async #setFoobarDb(db) {
@@ -280,13 +326,25 @@ class OsVolume extends Emitter {
 
   /** Sets Windows' volume (0..1). */
   set(scalar) {
-    return this.#send({ scalar: Math.max(0, Math.min(1, scalar)) });
+    scalar = Math.max(0, Math.min(1, scalar));
+    this.#pending = { scalar, until: performance.now() + 1500 };
+    this.scalar = scalar;
+    return this.#send({ scalar });
   }
   setMute(muted) {
+    // Windows can't mute a device ASIO or an exclusive stream holds.
+    if (this.#exclusive) {
+      this.#localMute = !!muted && !this.muted;
+      if (!muted && this.muted) this.#send({ mute: false });
+      this.emit('change');
+      this.#lastSync = '';
+      return this.#sync();
+    }
     return this.#send({ mute: !!muted });
   }
   #send(cmd) {
-    return call('file.write', { path: `${this.#profile}\\fusion-volume-v${VERSION}-set.json`, content: JSON.stringify({ seq: ++this.#seq, ...cmd }) });
+    this.#lastSeq = ++this.#seq;
+    return call('file.write', { path: `${this.#profile}\\fusion-volume-v${VERSION}-set.json`, content: JSON.stringify({ seq: this.#seq, ...cmd }) });
   }
 }
 

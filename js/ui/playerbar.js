@@ -81,7 +81,17 @@ export function mountPlayerBar(root, app) {
   const more = el('button.btn-icon', { 'data-settings-toggle': '', title: 'Settings (right-click for the menu)', onclick: () => app.toggleSettings(), oncontextmenu: (e) => (e.preventDefault(), mainMenu()) }, icon('more'));
   const miniBtn = el('button.btn-icon.pb-mini', { title: 'Mini player (Alt+M)', onclick: () => toggleMini() }, icon('mini'));
   const fullBtn = el('button.btn-icon.pb-full', { title: 'Back to the full window (Alt+M)', onclick: () => toggleMini(false) }, icon('fullscreen'));
-  const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, miniBtn, fullBtn, more);
+  // The mini player's own "always on top" (the setting of the same name).
+  const pinBtn = el('button.btn-icon.pb-pin', { onclick: () => store.set('miniOnTop', store.get('miniOnTop') === false) }, icon('pin'));
+  const showPin = () => {
+    const on = store.get('miniOnTop') !== false;
+    pinBtn.classList.toggle('on', on);
+    pinBtn.title = on ? 'Always on top: on' : 'Always on top: off';
+    pinBtn.setAttribute('aria-pressed', String(on));
+  };
+  showPin();
+  store.subscribe((k) => k === 'miniOnTop' && showPin());
+  const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, miniBtn, pinBtn, fullBtn, more);
   // The mini player shows a bigger cover: fetch one that size.
   window.addEventListener('fusion:mini', () => {
     hideVolume();

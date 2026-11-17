@@ -196,7 +196,7 @@ export function mountSettings(root, app) {
         link('library', 'Configure media library…', foobar('config.showLibraryPreferences')),
       ]),
       section('Fusion', [
-        toggle('Mini player stays on top', 'miniOnTop', 'Alt+M, or the mini player button in the play bar, shrinks the window to just the play bar.'),
+        toggle('Mini player stays on top', 'miniOnTop', 'Alt+M, or the mini player button in the play bar, shrinks the window to just the play bar. The pin in its corner switches this too.'),
         toggle('Diagnostics', 'diagnostics', 'Write timings and other details to fusion.log in foobar2000’s profile folder, for tracking down slowness or a fault. Warnings and errors are logged either way.'),
         link('info', 'Open the log file', openLog),
         link('reset', 'Reset Fusion settings', async () => {

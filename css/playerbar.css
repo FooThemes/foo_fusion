@@ -374,6 +374,7 @@ button.heart.pb-heart.hate {
 /* Mini player (ui/mini.js): the window is just the play bar, laid out as a
    cover on the left with the title, seek bar and controls beside it. */
 .pb-full,
+.pb-pin,
 body.mini .pb-mini,
 body.mini .pb-order,
 body.mini .pb-lyrics,
@@ -386,7 +387,8 @@ body.mini .selection-bar {
   display: none !important;
 }
 
-body.mini .pb-full {
+body.mini .pb-full,
+body.mini .pb-pin {
   display: flex !important;
   position: absolute;
   top: 4px;
@@ -396,18 +398,31 @@ body.mini .pb-full {
   opacity: 0.7;
 }
 
-body.mini .pb-full:hover {
+body.mini .pb-pin {
+  right: 36px;
+  opacity: 0.45;
+}
+
+/* On top: the pin lit. */
+body.mini .pb-pin.on {
+  opacity: 1;
+  color: var(--accent);
+}
+
+body.mini .pb-full:hover,
+body.mini .pb-pin:hover {
   opacity: 1;
 }
 
-body.mini .pb-full .icon {
+body.mini .pb-full .icon,
+body.mini .pb-pin .icon {
   width: 16px;
   height: 16px;
 }
 
-/* Its title clears the enlarge button. */
+/* Its title clears the pin and enlarge buttons. */
 body.mini .pb-text {
-  padding-right: 30px;
+  padding-right: 62px;
 }
 
 /* Volume across the controls row (the mini player has no room above). */

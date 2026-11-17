@@ -1,8 +1,8 @@
 # Fusion for foobar2000
 
-Fusion is a foobar2000 skin built around your album covers. Albums are a grid
-you can open in place, artists and genres get their own pages, and the player
-sits along the bottom. It runs as a theme for
+Fusion is a foobar2000 skin inspired by Xbox Music. 
+Albums are a grid you can open in place, artists and genres get 
+their own pages, and the player sits along the bottom. It runs as a theme for
 [foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2) on
 foobar2000 v2, 64-bit included.
 
@@ -12,7 +12,7 @@ It began as a rebuild of
 [Fusion v2.4.1.1 by NadirP](https://web.archive.org/web/20150926162833/http://nadirp.deviantart.com/art/Fusion-v2-4-1-1-Discontinued-Project-464482526).
 The original was discontinued in 2015 and depended on WSH Panel Mod and UI
 Hacks, which were never made for 64-bit foobar2000. Version 3 keeps its look
-and layout but is written from scratch, and does quite a bit more.
+and layout but is written from scratch, runs a lot faster, and does quite a bit more.
 
 ## Albums
 

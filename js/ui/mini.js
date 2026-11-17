@@ -64,21 +64,33 @@ export async function toggleMini(on = !isMini()) {
   }
 }
 
-/** The window exactly the mini player's size: its frame measured, the minimum and maximum set to it. */
-async function fit() {
+/**
+ * The window exactly the mini player's size: its frame measured, the minimum
+ * and maximum set to it. The frame is only trusted when it looks like one
+ * (while foobar2000 is starting, the page can still be at another size than
+ * the window): until then, tried again; in the end, the plain guess.
+ */
+async function fit(tries = 0) {
   if (!isMini()) return;
   const b = await tryCall('window.getBounds');
-  if (!b?.width || !innerWidth) return;
   const r = window.devicePixelRatio || 1;
-  const want = {
-    width: Math.round(CLIENT.width * r + (b.width - innerWidth * r)),
-    height: Math.round(CLIENT.height * r + (b.height - innerHeight * r)),
-  };
-  if (fixed && fixed.width === want.width && fixed.height === want.height && Math.abs(b.width - want.width) <= 1 && Math.abs(b.height - want.height) <= 1) return;
+  const fw = b?.width - innerWidth * r;
+  const fh = b?.height - innerHeight * r;
+  const sane = b?.width > 0 && innerWidth > 0 && innerHeight > 0 && fw >= 0 && fw <= 40 * r && fh >= 0 && fh <= 80 * r;
+  if (!sane) {
+    if (tries < 10) return void setTimeout(() => fit(tries + 1), 300);
+    return lock(GUESS, b);
+  }
+  return lock({ width: Math.round(CLIENT.width * r + fw), height: Math.round(CLIENT.height * r + fh) }, b);
+}
+async function lock(want, b) {
+  if (!isMini()) return;
+  const same = (x) => x && Math.abs(x.width - want.width) <= 1 && Math.abs(x.height - want.height) <= 1;
+  if (same(fixed) && same(b)) return;
   fixed = want;
   await tryCall('window.setMinSize', want);
   await tryCall('window.setMaxSize', want);
-  if (Math.abs(b.width - want.width) > 1 || Math.abs(b.height - want.height) > 1) await tryCall('window.setSize', want);
+  if (!same(b)) await tryCall('window.setSize', want);
 }
 
 // Anything that changes its size (a display's scale, a resize that got
@@ -86,7 +98,7 @@ async function fit() {
 let keepTimer = 0;
 function keepMin() {
   clearTimeout(keepTimer);
-  keepTimer = setTimeout(fit, 150);
+  keepTimer = setTimeout(() => fit(), 150);
 }
 
 // No maximising in the mini player (a double-click on the bar, Win+Up, the
@@ -105,7 +117,7 @@ async function enterMini() {
   await tryCall('window.setMaxSize', GUESS);
   await tryCall('window.setSize', GUESS);
   window.addEventListener('resize', keepMin);
-  setTimeout(fit, 200);
+  setTimeout(() => fit(), 200);
   window.addEventListener('resize', unmaximize);
   await applyOnTop();
 }

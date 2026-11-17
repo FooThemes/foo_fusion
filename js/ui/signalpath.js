@@ -12,31 +12,39 @@ import { logInfo } from '../core/log.js';
 const openEq = () => runMainMenuAny(['View/Equalizer', 'View/DSP/Equalizer', 'Equalizer']);
 
 /**
- * foobar2000's Preferences at one page (by its name: "Playback", "Output",
- * "DSP Manager"), found among the pages it lists. If it can't open at a
- * page, Preferences opens as usual.
+ * foobar2000's Preferences at one page ("Playback", "Output", "DSP Manager").
+ * The bridge can't open Preferences at a page, so a main menu command that
+ * opens that page is used when foobar2000 has one (looked up by name, and
+ * written to the log); otherwise Preferences opens where it was last.
  */
-let loggedPages = false;
+const PAGE_WORDS = {
+  Playback: ['replaygain settings', 'playback settings', 'playback preferences'],
+  Output: ['output settings', 'output preferences', 'output device settings', 'audio output'],
+  'DSP Manager': ['dsp manager', 'dsp settings', 'dsp preferences', 'configure dsp'],
+};
+const commandFor = new Map(); // page -> command { guid, subGuid, path } | null
+async function findCommand(name) {
+  if (commandFor.has(name)) return commandFor.get(name);
+  const words = PAGE_WORDS[name] || [name.toLowerCase()];
+  const found = [];
+  for (const query of [...new Set([name, ...words.map((w) => w.split(' ')[0])])]) {
+    const res = await tryCall('discovery.searchCommands', { query, scope: 'main', includeHidden: true });
+    const list = Array.isArray(res) ? res : res?.commands || res?.items || res?.results || [];
+    for (const c of list) found.push(c);
+  }
+  const label = (c) => String(c.path || c.name || c.label || '').toLowerCase().replace(/[.…]+$/, '');
+  const pick = found.find((c) => words.some((w) => label(c).endsWith(w) || label(c).includes(w))) || null;
+  logInfo(`signal path: commands for "${name}": ${[...new Set(found.map((c) => c.path || c.name || c.label))].slice(0, 25).join(' | ') || 'none'}${found[0] ? ` (fields ${Object.keys(found[0]).join(', ')})` : ''}; using ${pick ? pick.path || pick.name : 'Preferences'}`);
+  commandFor.set(name, pick);
+  return pick;
+}
 async function openPrefs(name) {
-  const res = await tryCall('config.getPreferencesPages');
-  const pages = Array.isArray(res) ? res : res?.pages || res?.items || [];
-  const want = name.toLowerCase();
-  const page = pages.find((p) => String(p.name || p.title || '').toLowerCase() === want);
-  let guid = page?.guid || page?.id || null;
-  if (!guid) {
-    const std = await tryCall('config.getPreferencesStandardGuids');
-    const key = Object.keys(std || {}).find((k) => k.toLowerCase().replace(/[^a-z]/g, '') === want.replace(/[^a-z]/g, '') || k.toLowerCase().includes(want.split(' ')[0]));
-    guid = key ? std[key] : null;
-  }
-  if (!loggedPages) {
-    loggedPages = true;
-    logInfo(`signal path: preferences pages: ${pages.length} listed${pages[0] ? ` (fields ${Object.keys(pages[0]).join(', ')})` : ''}; "${name}" is ${guid || 'not found'}`);
-  }
-  if (guid) {
+  const cmd = await findCommand(name);
+  if (cmd?.guid) {
     try {
-      return await call('misc.showPreferences', { guid, page: guid, pageGuid: guid });
+      return await call('discovery.executeMainMenuCommand', { guid: cmd.guid, ...(cmd.subGuid ? { subGuid: cmd.subGuid } : {}) });
     } catch (err) {
-      logInfo(`signal path: Preferences at a page didn't open (${err?.message || err})`);
+      logInfo(`signal path: ${cmd.path || cmd.name} didn't run (${err?.message || err})`);
     }
   }
   return tryCall('misc.showPreferences');

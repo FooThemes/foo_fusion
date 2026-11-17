@@ -45,7 +45,7 @@ const P = {
   tag: '<path d="M4 4h7.5L20 12.5 12.5 20 4 11.5z"/><circle cx="8" cy="8" r="1.2"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   // A pushpin: keep the window on top.
-  pin: '<path d="M9 4h6M10 4v6l-3 4h10l-3-4V4M12 14v6"/>',
+  pin: '<path d="M16 3H8v2h1v5l-3 3v2h5v6l1 1 1-1v-6h5v-2l-3-3V5h1z" fill="currentColor" stroke="none"/>',
   fullscreen: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>',
   // Equaliser bars; they bounce (CSS) while something is playing.
   nowPlaying: '<path class="eq eq1" d="M5 18v-5"/><path class="eq eq2" d="M9 18V8"/><path class="eq eq3" d="M13 18V5"/><path class="eq eq4" d="M17 18v-7"/>',

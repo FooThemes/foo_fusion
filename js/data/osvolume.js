@@ -264,8 +264,10 @@ class OsVolume extends Emitter {
     }
     if (!this.#exclusive) this.#learnTaper(v);
     if (performance.now() < this.#quietUntil) return; // the device just changed hands
-    // Held by ASIO/exclusive, Windows can read 100% whatever it was: not a change.
-    if (this.#exclusive && v.scalar >= 0.999 && v.hr !== 0) return;
+    // Held by ASIO/exclusive, Windows can read 100% whatever it was: a jump
+    // there isn't a change.
+    // (A step up to 100% from nearby, as scrolling Windows' volume does, is real.)
+    if (this.#exclusive && v.scalar >= 0.999 && v.hr !== 0 && (!prev || prev.scalar < 0.9)) return;
     if (this.#pending) {
       // The slider's own value stays until Windows reports it (a moment later),
       // so older reports don't pull it back while it's being moved.

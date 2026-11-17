@@ -98,7 +98,7 @@ class SignalPath extends Emitter {
     if (path && (!this.#logged || path.dsd || multi)) {
       this.#logged = true;
       const ch = multi ? ` channels ${JSON.stringify(channelFields())}` : '';
-      logInfo(`signal path: Output Info ${path.outputInfo ? 'found' : 'not found'}; ${path.stages.map((s) => `${s.title}: ${s.detail}${s.hidden ? ' [left out]' : ''}`).join(' → ')} (${path.quality})${ch}`);
+      logInfo(`signal path: Output Info ${path.outputInfo ? 'found' : 'not found'}; ${path.stages.map((s) => `${s.title}: ${String(s.detail ?? '').replace(/\n/g, ' · ')}${s.hidden ? ' [left out]' : ''}`).join(' → ')} (${path.quality})${ch}`);
     }
     this.hasOutputInfo = path ? path.outputInfo : this.hasOutputInfo;
     this.path = path;
@@ -322,7 +322,7 @@ async function build(dopSeen, check = null, chainFile = null) {
     kind: 'output',
     icon: 'output',
     title: outTitle,
-    detail: [deviceName && deviceName !== module ? deviceName : '', fmtOut || (outputInfo ? '' : 'format unknown')].filter(Boolean).join(' · '),
+    detail: [deviceName && deviceName !== module ? deviceName : '', fmtOut || (outputInfo ? '' : 'format unknown')].filter(Boolean).join('\n'), // the device, then the format, on their own lines
     grade: dsdRaw ? 'broken' : truncated || dsdToPcm ? 'high' : pcmToDsd ? 'enhanced' : 'lossless',
     note: dsdRaw
       ? `The DSD decoder passes DSD straight through, but ${outTitle} only takes PCM, so the DAC plays it as noise. Use ASIO, or set the DSD decoder to output PCM or DoP.`

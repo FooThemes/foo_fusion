@@ -322,6 +322,7 @@ export function mountPlayerBar(root, app) {
     const v = wheelBase != null && performance.now() - wheelAt < 1500 ? wheelBase : player.muted ? 0 : player.volume;
     setVolFill(v);
     setIcon(volBtn.querySelector('.icon'), player.muted || v === 0 ? 'mute' : 'volume');
+    volBtn.title = player.muted ? `Volume: muted (${Math.round(player.volume)}%)` : `Volume: ${Math.round(v)}%`;
   }
   // The mini player has no room above the bar: there the slider lies across
   // the controls row instead of standing up from the volume button.

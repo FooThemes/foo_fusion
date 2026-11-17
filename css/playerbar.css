@@ -645,6 +645,7 @@ body.mini .pb-play {
 }
 
 .sp-detail {
+  white-space: pre-line;
   color: color-mix(in srgb, var(--accent) 65%, #fff);
   font-size: 13.5px;
 }

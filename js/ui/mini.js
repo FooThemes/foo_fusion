@@ -6,15 +6,11 @@
 import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
 
-const SIZE = { width: 480, height: 200 };
-// The most it can grow to: wider is fine, taller is just empty space.
-const MAX = { width: 1000, height: 320 };
-const MIN = { width: 400, height: 180 }; // the window, as foobar2000 measures it
-// The least the page itself needs (cover, two lines, the controls). If the
-// window still gets smaller than this (foobar2000 counts in device pixels on
-// a scaled display, or its frame takes more), the minimum grows to fit.
-const NEED = { width: 360, height: 128 };
-let floor = { ...MIN }; // the minimum set now (grows if the page doesn't fit)
+// One fixed size: the page area of the mini player, in CSS pixels (the
+// window adds its frame and title bar, measured when it opens).
+const CLIENT = { width: 445, height: 136 };
+const GUESS = { width: 447, height: 168 }; // the window, before measuring
+let fixed = null; // the window size worked out (minimum and maximum both)
 let saved = null; // the window as it was: bounds, maximised, on top, min size
 let busy = false;
 
@@ -35,11 +31,12 @@ export async function toggleMini(on = !isMini()) {
       if (saved.max) await tryCall('window.restore');
       document.body.classList.add('mini');
       window.dispatchEvent(new CustomEvent('fusion:mini', { detail: true }));
-      floor = { ...MIN };
-      await tryCall('window.setMinSize', floor);
-      await tryCall('window.setMaxSize', scaled(MAX));
-      await tryCall('window.setSize', SIZE);
+      fixed = null;
+      await tryCall('window.setMinSize', GUESS);
+      await tryCall('window.setMaxSize', GUESS);
+      await tryCall('window.setSize', GUESS);
       window.addEventListener('resize', keepMin);
+      setTimeout(fit, 200);
       window.addEventListener('resize', unmaximize);
       if (store.get('miniOnTop') !== false) await tryCall('window.setAlwaysOnTop', { enabled: true });
     } else {
@@ -63,27 +60,29 @@ export async function toggleMini(on = !isMini()) {
   }
 }
 
-// The maximum in the window's own pixels (foobar2000 counts device pixels).
-const scaled = (sz) => {
+/** The window exactly the mini player's size: its frame measured, the minimum and maximum set to it. */
+async function fit() {
+  if (!isMini()) return;
+  const b = await tryCall('window.getBounds');
+  if (!b?.width || !innerWidth) return;
   const r = window.devicePixelRatio || 1;
-  return { width: Math.round(sz.width * r), height: Math.round(sz.height * r) };
-};
+  const want = {
+    width: Math.round(CLIENT.width * r + (b.width - innerWidth * r)),
+    height: Math.round(CLIENT.height * r + (b.height - innerHeight * r)),
+  };
+  if (fixed && fixed.width === want.width && fixed.height === want.height && Math.abs(b.width - want.width) <= 1 && Math.abs(b.height - want.height) <= 1) return;
+  fixed = want;
+  await tryCall('window.setMinSize', want);
+  await tryCall('window.setMaxSize', want);
+  if (Math.abs(b.width - want.width) > 1 || Math.abs(b.height - want.height) > 1) await tryCall('window.setSize', want);
+}
 
-/** Too small after all: raise the minimum by what's missing, and grow to it. */
+// Anything that changes its size (a display's scale, a resize that got
+// through) puts it back.
 let keepTimer = 0;
 function keepMin() {
   clearTimeout(keepTimer);
-  keepTimer = setTimeout(() => {
-    if (!isMini()) return;
-    const dw = NEED.width - innerWidth;
-    const dh = NEED.height - innerHeight;
-    if (dw <= 0 && dh <= 0) return;
-    const r = window.devicePixelRatio || 1;
-    if (dw > 0) floor.width += Math.ceil(dw * r);
-    if (dh > 0) floor.height += Math.ceil(dh * r);
-    tryCall('window.setMinSize', floor);
-    tryCall('window.setSize', { width: Math.max(floor.width, Math.round(innerWidth * r)), height: Math.max(floor.height, Math.round(innerHeight * r)) });
-  }, 150);
+  keepTimer = setTimeout(fit, 150);
 }
 
 // No maximising in the mini player (a double-click on the bar, Win+Up, the

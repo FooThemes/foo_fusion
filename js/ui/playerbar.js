@@ -84,7 +84,7 @@ export function mountPlayerBar(root, app) {
   const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, miniBtn, fullBtn, more);
   // The mini player shows a bigger cover: fetch one that size.
   window.addEventListener('fusion:mini', () => {
-    volPop.hidden = true;
+    hideVolume();
     artTrack = undefined;
     renderTrack();
   });
@@ -318,7 +318,8 @@ export function mountPlayerBar(root, app) {
 
   // --- volume --------------------------------------------------------------
   function renderVolume() {
-    const v = player.muted ? 0 : player.volume;
+    // Mid-scroll, the value asked for (reports from Windows lag behind).
+    const v = wheelBase != null && performance.now() - wheelAt < 1500 ? wheelBase : player.muted ? 0 : player.volume;
     setVolFill(v);
     setIcon(volBtn.querySelector('.icon'), player.muted || v === 0 ? 'mute' : 'volume');
   }
@@ -329,20 +330,54 @@ export function mountPlayerBar(root, app) {
     volValue.textContent = Math.round(v);
   }
   function toggleVolume() {
-    volPop.hidden = !volPop.hidden;
-    if (!volPop.hidden) {
-      const across = isMini();
-      volPop.classList.toggle('across', across);
-      const r = (across ? controls : volBtn).getBoundingClientRect();
-      Object.assign(volPop.style, across ? { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', bottom: 'auto' } : { left: r.left + r.width / 2 - 30 + 'px', top: '', width: '', height: '', bottom: '' });
-      setVolFill(player.muted ? 0 : player.volume);
-      setTimeout(() => document.addEventListener('mousedown', closeVolume), 0);
-    }
+    if (!volPop.hidden) return hideVolume();
+    volPop.hidden = false;
+    const across = isMini();
+    volPop.classList.toggle('across', across);
+    const r = (across ? controls : volBtn).getBoundingClientRect();
+    Object.assign(volPop.style, across ? { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', bottom: 'auto' } : { left: r.left + r.width / 2 - 30 + 'px', top: '', width: '', height: '', bottom: '' });
+    setVolFill(player.muted ? 0 : player.volume);
+    // While it's open, the wheel anywhere in the window turns the volume
+    // (nothing underneath scrolls), and Esc closes it.
+    window.addEventListener('wheel', wheelWhileOpen, { capture: true, passive: false });
+    window.addEventListener('keydown', keyWhileOpen, true);
+    setTimeout(() => !volPop.hidden && document.addEventListener('mousedown', closeVolume), 0);
+  }
+  function hideVolume() {
+    volPop.hidden = true;
+    window.removeEventListener('wheel', wheelWhileOpen, { capture: true });
+    window.removeEventListener('keydown', keyWhileOpen, true);
+    document.removeEventListener('mousedown', closeVolume);
   }
   function closeVolume(e) {
     if (volPop.contains(e.target) || volBtn.contains(e.target)) return;
-    volPop.hidden = true;
-    document.removeEventListener('mousedown', closeVolume);
+    hideVolume();
+  }
+  function wheelWhileOpen(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    wheelVolume(e);
+  }
+  function keyWhileOpen(e) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    hideVolume();
+  }
+  // Steps go from the last value asked for (not what's been reported back
+  // yet), so a quick run of wheel notches never steps back.
+  let wheelBase = null;
+  let wheelAt = 0;
+  function wheelVolume(e) {
+    if (!e.deltaY) return;
+    const now = performance.now();
+    const from = wheelBase != null && now - wheelAt < 1500 ? wheelBase : player.muted ? 0 : player.volume;
+    const to = clamp(Math.round((from - Math.sign(e.deltaY) * 5) / 5) * 5, 0, 100);
+    wheelBase = to;
+    wheelAt = now;
+    if (!volPop.hidden) setVolFill(to);
+    if (player.muted && to > 0) player.toggleMute();
+    player.setVolume(to);
   }
   const volSlider = volPop.querySelector('.vol-slider');
   volSlider.addEventListener('pointerdown', (e) => {
@@ -362,8 +397,8 @@ export function mountPlayerBar(root, app) {
     volSlider.addEventListener('pointermove', move);
     volSlider.addEventListener('pointerup', up);
   });
-  volSlider.addEventListener('wheel', (e) => player.setVolume(clamp(player.volume - Math.sign(e.deltaY) * 5, 0, 100)), { passive: true });
-  volBtn.addEventListener('wheel', (e) => player.setVolume(clamp(player.volume - Math.sign(e.deltaY) * 5, 0, 100)), { passive: true });
+  // Closed, the wheel over the volume button still turns it.
+  volBtn.addEventListener('wheel', (e) => volPop.hidden && wheelVolume(e), { passive: true });
 
   // --- playback order ------------------------------------------------------
   function renderOrder() {

@@ -98,6 +98,7 @@ const DEFAULTS = {
   smoothScroll: true,
   waveformSeekbar: false,
   releaseOnPause: true, // pausing on an ASIO output stops it (freeing the driver), keeping the place
+  exclusiveCurve: 'amp', // how the level maps to foobar2000's dB on exclusive/ASIO outputs: 'amp' or 'windows'
   volumeFollowsWindows: true, // the volume slider is Windows' volume; foobar2000's follows it on exclusive/ASIO outputs
   artistInfoFolder: '', // Kodi-style artist folders (artist.nfo, artist.jpg, fanart.jpg), e.g. E:\\Music\\_Artists
   showRemaining: false, // player bar shows -time remaining instead of the length

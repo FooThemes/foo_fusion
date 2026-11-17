@@ -7,6 +7,8 @@ import { tryCall } from '../core/bridge.js';
 import * as store from '../core/store.js';
 
 const SIZE = { width: 480, height: 200 };
+// The most it can grow to: wider is fine, taller is just empty space.
+const MAX = { width: 1000, height: 320 };
 const MIN = { width: 400, height: 180 }; // the window, as foobar2000 measures it
 // The least the page itself needs (cover, two lines, the controls). If the
 // window still gets smaller than this (foobar2000 counts in device pixels on
@@ -28,22 +30,27 @@ export async function toggleMini(on = !isMini()) {
   busy = true;
   try {
     if (on) {
-      const [bounds, max, top, min] = await Promise.all([tryCall('window.getBounds'), tryCall('window.isMaximized'), tryCall('window.isAlwaysOnTop'), tryCall('window.getMinSize', {})]);
-      saved = { bounds, max: flag(max, 'maximized', 'isMaximized', 'value'), top: flag(top, 'alwaysOnTop', 'enabled', 'value'), min };
+      const [bounds, max, top, min, maxSize] = await Promise.all([tryCall('window.getBounds'), tryCall('window.isMaximized'), tryCall('window.isAlwaysOnTop'), tryCall('window.getMinSize', {}), tryCall('window.getMaxSize', {})]);
+      saved = { bounds, max: flag(max, 'maximized', 'isMaximized', 'value'), top: flag(top, 'alwaysOnTop', 'enabled', 'value'), min, maxSize };
       if (saved.max) await tryCall('window.restore');
       document.body.classList.add('mini');
       window.dispatchEvent(new CustomEvent('fusion:mini', { detail: true }));
       floor = { ...MIN };
       await tryCall('window.setMinSize', floor);
+      await tryCall('window.setMaxSize', scaled(MAX));
       await tryCall('window.setSize', SIZE);
       window.addEventListener('resize', keepMin);
+      window.addEventListener('resize', unmaximize);
       if (store.get('miniOnTop') !== false) await tryCall('window.setAlwaysOnTop', { enabled: true });
     } else {
       window.removeEventListener('resize', keepMin);
+      window.removeEventListener('resize', unmaximize);
       document.body.classList.remove('mini');
       window.dispatchEvent(new CustomEvent('fusion:mini', { detail: false }));
       const s = saved || {};
       saved = null;
+      const mx = s.maxSize;
+      await tryCall('window.setMaxSize', { width: mx?.width ?? mx?.maxWidth ?? 0, height: mx?.height ?? mx?.maxHeight ?? 0 });
       const m = s.min;
       await tryCall('window.setMinSize', { width: m?.width ?? m?.minWidth ?? 0, height: m?.height ?? m?.minHeight ?? 0 });
       const b = s.bounds;
@@ -55,6 +62,12 @@ export async function toggleMini(on = !isMini()) {
     busy = false;
   }
 }
+
+// The maximum in the window's own pixels (foobar2000 counts device pixels).
+const scaled = (sz) => {
+  const r = window.devicePixelRatio || 1;
+  return { width: Math.round(sz.width * r), height: Math.round(sz.height * r) };
+};
 
 /** Too small after all: raise the minimum by what's missing, and grow to it. */
 let keepTimer = 0;
@@ -71,4 +84,11 @@ function keepMin() {
     tryCall('window.setMinSize', floor);
     tryCall('window.setSize', { width: Math.max(floor.width, Math.round(innerWidth * r)), height: Math.max(floor.height, Math.round(innerHeight * r)) });
   }, 150);
+}
+
+// No maximising in the mini player (a double-click on the bar, Win+Up, the
+// system menu): it's put straight back.
+async function unmaximize() {
+  if (!isMini()) return;
+  if (flag(await tryCall('window.isMaximized'), 'maximized', 'isMaximized', 'value')) await tryCall('window.restore');
 }

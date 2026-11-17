@@ -106,6 +106,10 @@ export function mountSettings(root, app) {
         toggle('Waveform seek bar', 'waveformSeekbar', 'Draws the playing song’s waveform in place of the plain bar'),
         toggle('Pause releases ASIO', 'releaseOnPause', 'Pausing on an ASIO output frees the device for other programs. Play resumes from the same point.'),
         toggle('Volume follows Windows', 'volumeFollowsWindows', "The volume slider and volume keys set Windows' volume. On exclusive and ASIO outputs foobar2000's volume matches it, so switching outputs doesn't change the loudness. Takes effect after a restart."),
+        select('Volume on ASIO and exclusive outputs', 'exclusiveCurve', [
+          ['amp', 'Plain', 'The level as a plain fraction: 50% is half the signal (−6 dB). Use this if Windows’ dB figures sound quieter than shared mode.'],
+          ['windows', 'Windows’ dB', 'The dB Windows reports for the same level in shared mode'],
+        ]),
         toggle('Animate scrolling to an opened album', 'smoothScroll', 'Glides to an album when it opens below the fold, rather than jumping'),
       ]),
       section('Expanded album', [

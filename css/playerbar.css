@@ -577,12 +577,35 @@ body.mini .pb-play {
   z-index: 60;
   width: min(420px, calc(100vw - 32px));
   max-height: calc(100vh - var(--bar-h) - 40px);
-  overflow: auto;
-  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--menu-bg, #2a2a2a);
   color: #eee;
   border-radius: 8px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.sp-pop[hidden] {
+  display: none;
+}
+
+/* The heading, fixed; the steps scroll below it when there are many. */
+.sp-top {
+  flex: none;
+  padding: 18px 20px 0;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.sp-top.scrolled {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.sp-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 16px;
 }
 
 .sp-head {
@@ -700,6 +723,29 @@ body.mini .sp-chip {
 /* Stages that don't touch this song: one line, opened on request. */
 
 
+
+/* A step that opens its settings. */
+.sp-link {
+  cursor: pointer;
+}
+
+.sp-link:hover .sp-name > span:first-child,
+.sp-link:focus-visible .sp-name > span:first-child {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sp-link:hover .sp-node {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sp-link:focus-visible {
+  outline: none;
+}
+
+.sp-link:focus-visible .sp-node {
+  box-shadow: 0 0 0 2px var(--accent);
+}
 
 /* An action at the foot of the signal path (open the equalizer). */
 .sp-action {

@@ -93,6 +93,8 @@ export function mountPlayerBar(root, app) {
   store.subscribe((k) => k === 'miniOnTop' && showPin());
   const controls = el('div.pb-controls', null, heart, orderBtn, prev, play, next, lyricsBtn, volBtn, miniBtn, pinBtn, fullBtn, more);
   // The mini player shows a bigger cover: fetch one that size.
+  // The signal path's Volume step: the volume pop-up, opened.
+  window.addEventListener('fusion:showvolume', () => volPop.hidden && toggleVolume());
   window.addEventListener('fusion:mini', () => {
     hideVolume();
     artTrack = undefined;

@@ -6,6 +6,51 @@ import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { signalPath, QUALITY } from '../data/signalpath.js';
 import { runMainMenuAny } from './menus.js';
+import { call, tryCall } from '../core/bridge.js';
+import { logInfo } from '../core/log.js';
+
+const openEq = () => runMainMenuAny(['View/Equalizer', 'View/DSP/Equalizer', 'Equalizer']);
+
+/**
+ * foobar2000's Preferences at one page (by its name: "Playback", "Output",
+ * "DSP Manager"), found among the pages it lists. If it can't open at a
+ * page, Preferences opens as usual.
+ */
+let loggedPages = false;
+async function openPrefs(name) {
+  const res = await tryCall('config.getPreferencesPages');
+  const pages = Array.isArray(res) ? res : res?.pages || res?.items || [];
+  const want = name.toLowerCase();
+  const page = pages.find((p) => String(p.name || p.title || '').toLowerCase() === want);
+  let guid = page?.guid || page?.id || null;
+  if (!guid) {
+    const std = await tryCall('config.getPreferencesStandardGuids');
+    const key = Object.keys(std || {}).find((k) => k.toLowerCase().replace(/[^a-z]/g, '') === want.replace(/[^a-z]/g, '') || k.toLowerCase().includes(want.split(' ')[0]));
+    guid = key ? std[key] : null;
+  }
+  if (!loggedPages) {
+    loggedPages = true;
+    logInfo(`signal path: preferences pages: ${pages.length} listed${pages[0] ? ` (fields ${Object.keys(pages[0]).join(', ')})` : ''}; "${name}" is ${guid || 'not found'}`);
+  }
+  if (guid) {
+    try {
+      return await call('misc.showPreferences', { guid, page: guid, pageGuid: guid });
+    } catch (err) {
+      logInfo(`signal path: Preferences at a page didn't open (${err?.message || err})`);
+    }
+  }
+  return tryCall('misc.showPreferences');
+}
+
+/** What clicking a step opens (none for the source). */
+function stageAction(s) {
+  if (s.kind === 'rg') return { label: 'Playback preferences', run: () => openPrefs('Playback') };
+  if (s.kind === 'output' || s.kind === 'mixer') return { label: 'Output preferences', run: () => openPrefs('Output') };
+  if (s.kind === 'volume') return { label: 'the volume', run: () => window.dispatchEvent(new CustomEvent('fusion:showvolume')) };
+  if (s.kind === 'dsp' && s.icon === 'eq') return { label: 'the equalizer', run: openEq };
+  if (s.kind === 'dsp') return { label: 'the DSP Manager', run: () => openPrefs('DSP Manager') };
+  return null;
+}
 
 // Small symbols for the stages (drawn here: not in the icon set).
 const GLYPH = {
@@ -27,6 +72,9 @@ const GLYPH = {
   rear: 'M12 4v11M8 11l4 4 4-4M5 20h14',
   swap: 'M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4',
   skip: 'M5 6l8 6-8 6zM17 6v12',
+  // Two channels leaning into each other; two songs overlapping.
+  crossfeed: 'M5 6v12M19 6v12M5 9c5 0 9 6 14 6M5 15c5 0 9-6 14-6',
+  crossfade: 'M3 18 12 6M12 18 21 6M3 18h18',
 };
 const glyph = (name) => {
   const ns = 'http://www.w3.org/2000/svg';
@@ -71,20 +119,36 @@ export function mountSignalPath(controls, root) {
     clear(pop);
     const foot = p.outputInfo ? [] : [el('p.sp-foot', null, icon('info'), el('span', { text: 'Install foo_outinfo to show the output format and applied ReplayGain.' }))];
     // foobar2000's Equalizer in the chain: its window, one click away.
-    if (p.hasEq) foot.unshift(el('button.sp-action', { type: 'button', onclick: () => runMainMenuAny(['View/Equalizer', 'View/DSP/Equalizer', 'Equalizer']) }, glyph('eq'), el('span', { text: 'Open the equalizer' })));
+    if (p.hasEq) foot.unshift(el('button.sp-action', { type: 'button', onclick: openEq }, glyph('eq'), el('span', { text: 'Open the equalizer' })));
+    const was = pop.querySelector('.sp-scroll')?.scrollTop || 0;
     pop.append(
-      el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })),
-      el('p.sp-sub', { text: q.note }),
+      // The heading stays at the top while a long chain scrolls under it.
+      el('div.sp-top', null, el('div.sp-head', null, el('span.sp-title', { text: 'Signal path: ' }), el('span.sp-grade', { text: q.label }), el('span.sp-dot', { dataset: { q: p.quality } })), el('p.sp-sub', { text: q.note })),
+      el('div.sp-scroll', null,
       // Only what touches this song: inactive and bypassed stages are left out.
       el('ol.sp-stages', null, ...p.stages.filter((st) => !st.idle && !st.hidden).map(stage)),
       ...foot,
+      ),
     );
+    const scroll = pop.querySelector('.sp-scroll');
+    scroll.scrollTop = was;
+    // A faint edge under the heading once the steps scroll beneath it.
+    const edge = () => pop.querySelector('.sp-top')?.classList.toggle('scrolled', scroll.scrollTop > 0);
+    scroll.addEventListener('scroll', edge, { passive: true });
+    edge();
   }
   // A stage: its symbol on the line, name, detail and note.
   function stage(s) {
+    const act = stageAction(s);
+    const run = () => {
+      toggle(false);
+      act.run();
+    };
     return el(
-      'li.sp-stage' + (s.idle ? '.idle' : ''),
-      { title: s.note || '' },
+      'li.sp-stage' + (s.idle ? '.idle' : '') + (act ? '.sp-link' : ''),
+      act
+        ? { title: (s.note ? s.note + '\n\n' : '') + `Click to open ${act.label}`, tabindex: 0, role: 'button', onclick: run, onkeydown: (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), run()) }
+        : { title: s.note || '' },
       el('span.sp-node', null, glyph(s.icon)),
       el('div.sp-text', null, el('div.sp-name', null, el('span', { text: s.title }), el('span.sp-dot', { dataset: { q: s.grade } })), el('div.sp-detail', { text: s.detail || '' }), s.note ? el('div.sp-note', { text: s.note }) : null),
     );

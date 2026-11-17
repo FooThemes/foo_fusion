@@ -169,7 +169,7 @@ async function build(dopSeen, check = null, chainFile = null) {
     kind: 'source',
     icon: src.lossless ? 'lossless' : 'lossy',
     title: 'Source',
-    detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? (dsd(src.rate).toLowerCase() === src.codec.toLowerCase() ? '' : dsd(src.rate)) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, src.layout, !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
+    detail: [src.codec + (profile && !/^lossless$/i.test(profile) ? ` ${profile}` : ''), src.dsd ? (dsd(src.rate).toLowerCase() === src.codec.toLowerCase() ? '' : dsd(src.rate)) : khz(src.rate), src.bits && !src.dsd && `${src.bits}-bit`, layoutName(src), !src.lossless && src.bitrate && `${src.bitrate} kbps`].filter(Boolean).join(' · '),
     grade: src.lossless ? 'lossless' : 'low',
     note: '',
   });
@@ -223,8 +223,12 @@ async function build(dopSeen, check = null, chainFile = null) {
   const dsps = (chain?.dsps || []).map((d) => d.name).filter(Boolean);
   const dspList = dsps.length ? dsps : o.output_dsps ? o.output_dsps.split(/\s*[,;]\s*/).filter(Boolean) : [];
   const outRateEarly = num(o.output_samplerate);
+  // The channels as they reach each DSP (a downmix before an upmix: the
+  // upmix gets stereo).
+  let cur = { channels: src.channels, layout: src.layout, rate: src.rate };
   for (const name of dspList) {
-    const act = dspActs(name, src, outRateEarly, chainFile);
+    const act = dspActs(name, cur, outRateEarly, chainFile, cur !== src && cur.channels !== src.channels);
+    if (act.acts && act.to) cur = { ...cur, ...act.to };
     if (dsdKept || dsdRaw) {
       stages.push(bypassed({ kind: 'dsp', icon: dspIcon(name), title: name }));
       continue;
@@ -393,12 +397,15 @@ export const channelFields = () => lastChannelFields;
 
 const isEq = (name) => /^equali[sz]er$/i.test(name);
 
-/** A channel layout as shown in the DSP steps: "4.0 Quad", "5.1 Multi-channel". */
+/** A channel layout as shown: "stereo", "4.0 Quad", "5.1 Multi-channel". */
 function layoutName(src) {
   const l = src.layout || chans(src.channels);
   if (l === '4.0') return '4.0 Quad';
   return /^\d\.\d$/.test(l) ? `${l} Multi-channel` : l;
 }
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const LAYOUT = { 1: 'mono', 2: 'stereo', 4: '4.0', 6: '5.1', 8: '7.1' };
+const to = (channels) => ({ channels, layout: LAYOUT[channels] });
 
 /** The glyph for a DSP, by its name. */
 function dspIcon(name) {
@@ -407,20 +414,24 @@ function dspIcon(name) {
   if (/resampl|sample rate/.test(n)) return 'resample';
   if (/limiter/.test(n)) return 'limiter';
   if (/downmix/.test(n)) return 'downmix';
-  if (/mono to stereo|stereo to 4|to 4 channels/.test(n)) return 'upmix';
+  if (/mono to stereo|stereo to 4|to 4 channels|upmix/.test(n)) return 'upmix';
   if (/rear/.test(n)) return 'rear';
   if (/reverse stereo|swap/.test(n)) return 'swap';
+  if (/crossfeed/.test(n)) return 'crossfeed';
+  if (/crossfade|fade/.test(n)) return 'crossfade';
   if (/skip/.test(n)) return 'skip';
   return 'dsp';
 }
 
 /**
  * What a DSP does to this song, for the ones Fusion knows (foobar2000's own,
- * and foo_skip): whether it acts, a line on it, and whether only the DSP
- * check can tell (`unknown`).
+ * and some common components): whether it acts, a line on it, the channels
+ * it leaves (`to`), and whether only the DSP check can tell (`unknown`).
+ * `src` is the audio as it reaches the DSP (`changed`: not as the file has it).
  */
-function dspActs(name, src, outRate, chainFile) {
+function dspActs(name, src, outRate, chainFile, changed = false) {
   const n = name.toLowerCase();
+  const is = `Inactive (${changed ? 'it gets' : 'source is'} ${layoutName(src)})`;
   // foobar2000's Equalizer: its curve, from the chain file. Flat does nothing.
   if (isEq(name) && chainFile?.eq) {
     const flat = chainFile.eq.every((g) => g === 0);
@@ -428,30 +439,42 @@ function dspActs(name, src, outRate, chainFile) {
   }
   // foo_skip: skips songs by your rules; what plays isn't changed.
   if (/skip track/.test(n)) return { acts: false, detail: 'Skips songs by your rules; doesn’t touch the audio', note: '' };
+  if (/skip silence/.test(n)) return { acts: true, detail: 'Skips silence at the start and end of songs', note: '', unknown: true };
   if (/downmix.*stereo|stereo.*downmix/.test(n)) {
     const acts = src.channels > 2;
-    return { acts, detail: acts ? `${layoutName(src)} → stereo` : `Inactive (source is ${src.channels === 1 ? 'mono' : 'stereo'})`, note: '' };
+    return { acts, detail: acts ? `${cap(layoutName(src))} → stereo` : is, note: '', to: to(2) };
   }
   if (/downmix.*mono/.test(n)) {
     const acts = src.channels > 1;
-    return { acts, detail: acts ? `${layoutName(src)} → mono` : 'Inactive (source is mono)', note: '' };
+    return { acts, detail: acts ? `${cap(layoutName(src))} → mono` : is, note: '', to: to(1) };
   }
   if (/mono to stereo/.test(n)) {
     const acts = src.channels === 1;
-    return { acts, detail: acts ? 'Mono → stereo (the same in both channels)' : `Inactive (source is ${layoutName(src)})`, note: '' };
+    return { acts, detail: acts ? 'Mono → stereo (the same in both channels)' : is, note: '', to: to(2) };
   }
   if (/stereo to 4|to 4 channels/.test(n)) {
     const acts = src.channels === 2;
-    return { acts, detail: acts ? 'Stereo → 4.0 Quad (front copied to the rear)' : `Inactive (source is ${layoutName(src)})`, note: '' };
+    return { acts, detail: acts ? 'Stereo → 4.0 Quad (front copied to the rear)' : is, note: '', to: to(4) };
+  }
+  const up = n.match(/upmix.*?(\d)\.(\d)/);
+  if (up) {
+    const target = +up[1] + +up[2];
+    const acts = src.channels < target;
+    return { acts, detail: acts ? `${cap(layoutName(src))} → ${layoutName(to(target))}` : is, note: '', to: to(target) };
   }
   if (/rear/.test(n)) {
     const acts = src.channels === 2;
-    return { acts, detail: acts ? 'Stereo moved to the rear speakers' : `Inactive (source is ${layoutName(src)})`, note: '' };
+    return { acts, detail: acts ? 'Stereo moved to the rear speakers' : is, note: '', to: to(4) };
   }
   if (/reverse stereo/.test(n)) {
     const acts = src.channels === 2;
-    return { acts, detail: acts ? 'Left and right swapped' : `Inactive (source is ${layoutName(src)})`, note: '' };
+    return { acts, detail: acts ? 'Left and right swapped' : is, note: '' };
   }
+  if (/crossfeed/.test(n)) {
+    const acts = src.channels === 2;
+    return { acts, detail: acts ? 'Blends some of each side into the other, for headphones' : is, note: '', unknown: acts };
+  }
+  if (/crossfade|fade/.test(n)) return { acts: true, detail: 'Fades songs into each other', note: '', unknown: true };
   if (/hard.*limiter/.test(n)) return { acts: true, detail: 'Hard limiter (−6 dB)', note: '', unknown: true };
   if (/limiter/.test(n)) return { acts: true, detail: 'Limits peaks to prevent clipping', note: '', unknown: true };
   if (/resampl|sample rate/.test(n)) {

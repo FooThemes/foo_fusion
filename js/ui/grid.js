@@ -354,6 +354,11 @@ export class Grid {
     this.sizer.style.height = this.top - 16 + this.rowCount * this.tileH + extra + 60 + 'px';
   }
 
+  /** The middle of a column's tiles, from the grid's left edge (where the open album's pointer goes). */
+  tileCenterX(col) {
+    return MARGIN + col * this.tileW + this.tileW / 2;
+  }
+
   rowTop(row) {
     const er = this.expandedRow;
     return this.top + row * this.tileH + (er >= 0 && row > er ? this.panelSpace : 0);

@@ -203,7 +203,8 @@ export class TrackPanel {
     const top = g.rowTop(row) + g.tileH;
     this.node.style.transform = `translateY(${top}px)`;
     const col = this.index % g.cols;
-    const nx = 40 + col * g.tileW + g.tileW / 2;
+    // The tile's own middle, as the grid places it, at any cover size.
+    const nx = g.tileCenterX(col);
     this.notch.style.left = nx - 8 + 'px';
     this.node.style.setProperty('--nx', nx + 'px');
   }

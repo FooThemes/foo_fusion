@@ -8,8 +8,8 @@ import * as store from '../core/store.js';
 
 // One fixed size: the page area of the mini player, in CSS pixels (the
 // window adds its frame and title bar, measured when it opens).
-const CLIENT = { width: 445, height: 136 };
-const GUESS = { width: 447, height: 168 }; // the window, before measuring
+const CLIENT = { width: 445, height: 148 };
+const GUESS = { width: 447, height: 180 }; // the window, before measuring
 let fixed = null; // the window size worked out (minimum and maximum both)
 let saved = null; // the window as it was: bounds, maximised, on top, min size
 let busy = false;

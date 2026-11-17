@@ -226,13 +226,13 @@ async function build(dopSeen, check = null, chainFile = null) {
   for (const name of dspList) {
     const act = dspActs(name, src, outRateEarly, chainFile);
     if (dsdKept || dsdRaw) {
-      stages.push(bypassed({ kind: 'dsp', icon: /resampl/i.test(name) ? 'resample' : 'dsp', title: name }));
+      stages.push(bypassed({ kind: 'dsp', icon: dspIcon(name), title: name }));
       continue;
     }
     if (act.acts) changes.push(name);
     stages.push({
       kind: 'dsp',
-      icon: /resampl/i.test(name) ? 'resample' : isEq(name) ? 'eq' : 'dsp',
+      icon: dspIcon(name),
       title: name,
       detail: act.detail,
       grade: act.acts ? 'enhanced' : 'lossless',
@@ -393,6 +393,32 @@ export const channelFields = () => lastChannelFields;
 
 const isEq = (name) => /^equali[sz]er$/i.test(name);
 
+/** A channel layout as shown in the DSP steps: "4.0 Quad", "5.1 Multi-channel". */
+function layoutName(src) {
+  const l = src.layout || chans(src.channels);
+  if (l === '4.0') return '4.0 Quad';
+  return /^\d\.\d$/.test(l) ? `${l} Multi-channel` : l;
+}
+
+/** The glyph for a DSP, by its name. */
+function dspIcon(name) {
+  const n = name.toLowerCase();
+  if (isEq(name)) return 'eq';
+  if (/resampl|sample rate/.test(n)) return 'resample';
+  if (/limiter/.test(n)) return 'limiter';
+  if (/downmix/.test(n)) return 'downmix';
+  if (/mono to stereo|stereo to 4|to 4 channels/.test(n)) return 'upmix';
+  if (/rear/.test(n)) return 'rear';
+  if (/reverse stereo|swap/.test(n)) return 'swap';
+  if (/skip/.test(n)) return 'skip';
+  return 'dsp';
+}
+
+/**
+ * What a DSP does to this song, for the ones Fusion knows (foobar2000's own,
+ * and foo_skip): whether it acts, a line on it, and whether only the DSP
+ * check can tell (`unknown`).
+ */
 function dspActs(name, src, outRate, chainFile) {
   const n = name.toLowerCase();
   // foobar2000's Equalizer: its curve, from the chain file. Flat does nothing.
@@ -400,15 +426,34 @@ function dspActs(name, src, outRate, chainFile) {
     const flat = chainFile.eq.every((g) => g === 0);
     return { acts: !flat, detail: describeEq(chainFile.eq), note: '', unknown: !flat };
   }
-  if (/skip track/.test(n)) return { acts: false, detail: 'No effect on audio', note: '' };
+  // foo_skip: skips songs by your rules; what plays isn't changed.
+  if (/skip track/.test(n)) return { acts: false, detail: 'Skips songs by your rules; doesn’t touch the audio', note: '' };
   if (/downmix.*stereo|stereo.*downmix/.test(n)) {
     const acts = src.channels > 2;
-    return { acts, detail: acts ? `${src.layout || chans(src.channels)} → stereo` : 'Inactive (source is stereo)', note: '' };
+    return { acts, detail: acts ? `${layoutName(src)} → stereo` : `Inactive (source is ${src.channels === 1 ? 'mono' : 'stereo'})`, note: '' };
   }
-  if (/downmix.*mono|mono/.test(n)) {
+  if (/downmix.*mono/.test(n)) {
     const acts = src.channels > 1;
-    return { acts, detail: acts ? `${src.layout || chans(src.channels)} → mono` : 'Inactive (source is mono)', note: '' };
+    return { acts, detail: acts ? `${layoutName(src)} → mono` : 'Inactive (source is mono)', note: '' };
   }
+  if (/mono to stereo/.test(n)) {
+    const acts = src.channels === 1;
+    return { acts, detail: acts ? 'Mono → stereo (the same in both channels)' : `Inactive (source is ${layoutName(src)})`, note: '' };
+  }
+  if (/stereo to 4|to 4 channels/.test(n)) {
+    const acts = src.channels === 2;
+    return { acts, detail: acts ? 'Stereo → 4.0 Quad (front copied to the rear)' : `Inactive (source is ${layoutName(src)})`, note: '' };
+  }
+  if (/rear/.test(n)) {
+    const acts = src.channels === 2;
+    return { acts, detail: acts ? 'Stereo moved to the rear speakers' : `Inactive (source is ${layoutName(src)})`, note: '' };
+  }
+  if (/reverse stereo/.test(n)) {
+    const acts = src.channels === 2;
+    return { acts, detail: acts ? 'Left and right swapped' : `Inactive (source is ${layoutName(src)})`, note: '' };
+  }
+  if (/hard.*limiter/.test(n)) return { acts: true, detail: 'Hard limiter (−6 dB)', note: '', unknown: true };
+  if (/limiter/.test(n)) return { acts: true, detail: 'Limits peaks to prevent clipping', note: '', unknown: true };
   if (/resampl|sample rate/.test(n)) {
     if (outRate && src.rate) {
       const acts = outRate !== src.rate;

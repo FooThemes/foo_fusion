@@ -19,6 +19,14 @@ const GLYPH = {
   windows: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z',
   check: 'M4 12.5 9.5 18 20 6',
   eq: 'M4 20v-6M8 20V8M12 20v-9M16 20V5M20 20v-7M3 20h18',
+  // A wave held between two ceilings.
+  limiter: 'M3 6h18M3 18h18M4 12c2-5 4-5 5 0s3 5 5 0 3-5 5 0',
+  // Several channels into fewer, and fewer into several.
+  downmix: 'M4 4l8 8M20 4l-8 8M12 12v8M9 17l3 3 3-3',
+  upmix: 'M12 20v-8M12 12 5 5M12 12l7-7M5 9V5h4M19 9V5h-4',
+  rear: 'M12 4v11M8 11l4 4 4-4M5 20h14',
+  swap: 'M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4',
+  skip: 'M5 6l8 6-8 6zM17 6v12',
 };
 const glyph = (name) => {
   const ns = 'http://www.w3.org/2000/svg';

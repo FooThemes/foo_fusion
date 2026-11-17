@@ -331,7 +331,7 @@ async function makePictureUrl(file, px, trim) {
   }
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const type = /\.png$/i.test(file.name) ? 'image/png' : /\.gif$/i.test(file.name) ? 'image/gif' : /\.webp$/i.test(file.name) ? 'image/webp' : 'image/jpeg';
+  const type = /\.png$/i.test(file.name) ? 'image/png' : /\.gif$/i.test(file.name) ? 'image/gif' : /\.webp$/i.test(file.name) ? 'image/webp' : /\.jxl$/i.test(file.name) ? 'image/jxl' : 'image/jpeg';
   const blob = new Blob([bytes], { type });
   if (!px && !trim) return URL.createObjectURL(blob);
   try {

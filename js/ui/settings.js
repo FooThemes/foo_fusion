@@ -134,9 +134,9 @@ export function mountSettings(root, app) {
       ]),
       section('Tile sizes', [range('Albums', 'tileSize', 110, 260, 10), range('Artists', 'artistTileSize', 100, 240, 10)]),
       section('Covers', [
-        select('Animated GIF covers', 'gifCovers', [
-          ['large', 'Large covers only', 'The open album and Now Playing animate; tiles show a still frame (much lighter with big GIFs)'],
-          ['everywhere', 'Everywhere', 'Every GIF cover animates, tiles included'],
+        select('Animated covers (GIF, WebP, JPEG XL)', 'gifCovers', [
+          ['large', 'Large covers only', 'The open album and Now Playing animate; tiles show a still frame (much lighter with big animations)'],
+          ['everywhere', 'Everywhere', 'Every animated cover moves, tiles included'],
           ['never', 'Never', 'Still frames everywhere'],
         ]),
       ]),

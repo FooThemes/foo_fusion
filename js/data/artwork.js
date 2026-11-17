@@ -120,6 +120,133 @@ const dirPick = new Map(); // folder -> its cover file { name, path, size } | nu
 // large sidebar art; smaller covers use foobar2000's small still copy, which
 // the disk cache keeps like any other cover.
 
+// --- WebP and JPEG XL covers -----------------------------------------------
+// foobar2000 may not list these, or read them, so Fusion finds and reads them
+// itself (when foobar2000's patterns pick one, or it finds no cover at all):
+// animated ones play where animated GIFs do; stills are scaled and kept in
+// the disk cache like any other cover. JPEG XL needs a WebView2 that decodes
+// it (Chromium 155 and later); if it can't, the log says so once.
+const OWN = /\.(webp|jxl)$/i;
+const ownBytes = new Map(); // path|size -> Promise<{ blob, animated } | null>
+const ownUrls = new Map(); // path|size|bucket|animate -> Promise<URL | null>
+const ownResolved = new Map(); // same key -> URL, once known
+let ownLogs = 10;
+
+/** A track's WebP/JPEG XL cover: the file, null (it has another kind or none) or undefined (not known yet). */
+function ownPick(path) {
+  const p = coverFile('front', path);
+  if (p === undefined) return undefined;
+  return p && OWN.test(p.name) ? p : null;
+}
+
+/** A WebP or JPEG XL cover in this folder, by the usual cover names (and foobar2000's own). */
+async function findOwnCover(dir, images, patterns) {
+  const bases = [...new Set([...patterns.filter((p) => !/[*?%$\\/]/.test(p)).map((p) => p.replace(/\.[^.]+$/, '').toLowerCase()), 'cover', 'folder', 'front'])].slice(0, 6);
+  const names = bases.flatMap((b) => [`${b}.webp`, `${b}.jxl`]);
+  for (const n of names) {
+    const im = images.find((x) => x.name.toLowerCase() === n);
+    if (im) return { name: im.name, path: im.path, size: im.size };
+  }
+  // Not listed (foobar2000 may leave these out): looked for directly, but
+  // only where foobar2000 found no cover at all.
+  for (const n of names) {
+    const path = `${dir}\\${n}`;
+    if (!(await tryCall('file.exists', { path }))?.exists) continue;
+    const info = await tryCall('file.getInfo', { path });
+    return { name: n, path, size: info?.size || 0 };
+  }
+  return null;
+}
+
+/** An animated WebP: the extended header's animation flag. */
+function webpAnimated(b) {
+  const tag = (i) => String.fromCharCode(b[i], b[i + 1], b[i + 2], b[i + 3]);
+  return b.length > 21 && tag(0) === 'RIFF' && tag(8) === 'WEBP' && tag(12) === 'VP8X' && (b[20] & 0x02) !== 0;
+}
+
+/** An animated JPEG XL: asked of the browser's own decoder (false if it can't tell). */
+async function jxlAnimated(blob) {
+  try {
+    if (!window.ImageDecoder || !(await ImageDecoder.isTypeSupported('image/jxl'))) return false;
+    const dec = new ImageDecoder({ data: blob.stream(), type: 'image/jxl' });
+    await dec.tracks.ready;
+    const animated = !!dec.tracks.selectedTrack?.animated;
+    dec.close();
+    return animated;
+  } catch {
+    return false;
+  }
+}
+
+function readOwn(pick) {
+  const key = `${pick.path}|${pick.size}`;
+  if (!ownBytes.has(key)) {
+    const p = (async () => {
+      const file = await tryCall('file.read', { path: pick.path, encoding: 'binary' });
+      if (!file?.content) return null;
+      let bin;
+      try {
+        bin = atob(file.content);
+      } catch {
+        return null;
+      }
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const jxl = /\.jxl$/i.test(pick.name);
+      const blob = new Blob([bytes], { type: jxl ? 'image/jxl' : 'image/webp' });
+      const animated = jxl ? await jxlAnimated(blob) : webpAnimated(bytes);
+      return { blob, animated };
+    })();
+    ownBytes.set(key, p);
+    // Only the last few files' bytes are kept (big animations can be large).
+    while (ownBytes.size > 8) ownBytes.delete(ownBytes.keys().next().value);
+  }
+  return ownBytes.get(key);
+}
+
+const ownKey = (pick, cssSize) => `${pick.path}|${pick.size}|${sizeBucket(cssSize)}|${animateGif(cssSize)}`;
+
+/** The URL to show a WebP/JPEG XL cover at this size: the animation itself, or a scaled still. */
+function ownUrl(pick, cssSize) {
+  if (!pick) return Promise.resolve(null);
+  const key = ownKey(pick, cssSize);
+  if (!ownUrls.has(key)) {
+    const p = (async () => {
+      const got = await readOwn(pick);
+      if (!got) return null;
+      if (got.animated && animateGif(cssSize)) {
+        const url = URL.createObjectURL(got.blob);
+        rawUrls.add(url);
+        return url;
+      }
+      try {
+        const bmp = await createImageBitmap(got.blob);
+        const px = sizeBucket(cssSize);
+        const scale = Math.min(1, px / Math.max(bmp.width, bmp.height));
+        const c = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * scale)), Math.max(1, Math.round(bmp.height * scale)));
+        c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+        bmp.close();
+        const url = URL.createObjectURL(await c.convertToBlob({ type: 'image/webp', quality: 0.88 }));
+        rawUrls.add(url); // may be transparent
+        storeCover(pick, px, url, true);
+        return url;
+      } catch (err) {
+        if (ownLogs-- > 0) logInfo(`cover ${pick.path}: can't be shown (${/\.jxl$/i.test(pick.name) ? 'this WebView2 can\u2019t decode JPEG XL' : err?.message || err})`);
+        return null;
+      }
+    })();
+    p.then((u) => (u ? ownResolved.set(key, u) : ownUrls.delete(key)));
+    ownUrls.set(key, p);
+  }
+  return ownUrls.get(key);
+}
+
+/** A WebP/JPEG XL cover's URL if it's already loaded (shown at once), else undefined. */
+function ownReady(pick, cssSize) {
+  const url = ownResolved.get(ownKey(pick, cssSize));
+  return url && loadedUrls.has(url) ? url : undefined;
+}
+
 /** Should a GIF cover at this size animate? */
 export function animateGif(cssSize) {
   const mode = store.get('gifCovers');
@@ -187,9 +314,12 @@ function probeDir(dir, sample) {
           const images = res?.images || [];
           const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
           // The file foobar2000 itself would use, by its search patterns.
-          const pick = await pickByPatterns((await artPatterns()).front, images, sample);
-          const kind = pick && /\.(png|gif)$/i.test(pick.name) ? 'keep' : 'scale';
-          if (probeLogs-- > 0 && images.some((im) => /\.(png|gif)$/i.test(im.name))) logInfo(`cover check ${dir.split('\\').pop()}: [${images.map((im) => im.name).join(', ')}] -> ${pick?.name || 'none'} (${kind})`);
+          const patterns = (await artPatterns()).front;
+          // The file foobar2000 itself would use; failing that, a WebP or JPEG
+          // XL cover (foobar2000 may not list or read those).
+          const pick = (await pickByPatterns(patterns, images, sample)) || (await findOwnCover(dir, images, patterns));
+          const kind = pick && OWN.test(pick.name) ? 'own' : pick && /\.(png|gif)$/i.test(pick.name) ? 'keep' : 'scale';
+          if (probeLogs-- > 0 && (kind === 'own' || images.some((im) => /\.(png|gif)$/i.test(im.name)))) logInfo(`cover check ${dir.split('\\').pop()}: [${images.map((im) => im.name).join(', ')}] -> ${pick?.name || 'none'} (${kind})`);
           dirKind.set(dir, kind);
           dirPick.set(dir, pick ? { name: pick.name, path: pick.path, size: pick.size } : null);
           rememberCover(dir, pick);
@@ -324,6 +454,12 @@ function parentReady(handle, cssSize) {
 async function loadParentCover(dir, px) {
   const res = await tryCall('artwork.getFolderImages', { directory: dir });
   const images = res?.images || [];
+  const own = images.length ? null : await findOwnCover(dir, images, (await artPatterns()).front);
+  if (own) {
+    dirPick.set(dir, own);
+    rememberCover(dir, own);
+    return ownUrl(own, px);
+  }
   if (!images.length) {
     // Remembered too (on disk, for later sessions): a box set with no cover
     // of its own goes straight to the disc's cover instead of looking again.
@@ -341,6 +477,7 @@ async function loadParentCover(dir, px) {
   dirPick.set(dir, pick ? { name: pick.name, path: pick.path, size: pick.size } : null);
   rememberCover(dir, pick);
   if (!pick) return null;
+  if (OWN.test(pick.name)) return ownUrl(pick, px);
   const file = await tryCall('file.read', { path: pick.path, encoding: 'binary' });
   if (!file?.content) return null;
   let bin;
@@ -372,6 +509,12 @@ async function loadParentCover(dir, px) {
 
 /** Art for the playing track (cached per track by the caller). */
 export async function nowPlayingUrl(cssSize, type = 'front', handle = null) {
+  // A WebP or JPEG XL cover: Fusion's own (foobar2000 may not read it).
+  if (handle && type === 'front') {
+    let own = ownPick(handle);
+    if (own === undefined && (await probeDir(dirOf(handle), handle)) === 'own') own = dirPick.get(dirOf(handle));
+    if (own) return ownUrl(own, cssSize);
+  }
   // PNG/GIF folder covers unscaled, as for the grid.
   const keep = handle && type === 'front' && (unscaled(handle, cssSize) ?? ((await probeDir(dirOf(handle), handle)) === 'keep' && !(isGifCover(handle) && !animateGif(cssSize))));
   const res = await tryCall('artwork.getFb2kUrl', { type, maxSize: keep ? 0 : sizeBucket(cssSize) });
@@ -587,7 +730,8 @@ export function bindArt(img, path, cssSize, types = ['front'], { hold = false } 
   // once, with no fade, so tiles don't flash.
   let ready = null;
   for (const t of types) {
-    const r = t === 'parent' ? parentReady(path, cssSize) : t === 'front' && unscaled(path, cssSize) ? readyRaw(path, t) : readyUrl(path, t, cssSize);
+    const own = t === 'front' ? ownPick(path) : null;
+    const r = own ? ownReady(own, cssSize) : t === 'parent' ? parentReady(path, cssSize) : t === 'front' && unscaled(path, cssSize) ? readyRaw(path, t) : readyUrl(path, t, cssSize);
     if (r === undefined) break; // still unknown: load normally
     if (r) {
       ready = r;
@@ -605,7 +749,7 @@ export function bindArt(img, path, cssSize, types = ['front'], { hold = false } 
         break;
       }
       // An animated GIF here: the still copy on disk won't do.
-      if (t === 'front' && /\.gif$/i.test(pick.name) && animateGif(cssSize)) break;
+      if (t === 'front' && /\.(gif|webp|jxl)$/i.test(pick.name) && animateGif(cssSize)) break;
       const disk = cachedUrl(pick, sizeBucket(cssSize));
       if (!disk) break;
       const instant = loadedUrls.has(disk);
@@ -669,8 +813,11 @@ export function bindArt(img, path, cssSize, types = ['front'], { hold = false } 
     }
     const type = types[i];
     const keep = type === 'front' && unscaled(path, cssSize);
+    const own = type === 'front' ? ownPick(path) : null;
     let url;
-    if (type.startsWith('info:')) {
+    if (own) {
+      url = await ownUrl(own, cssSize);
+    } else if (type.startsWith('info:')) {
       const files = await artistFiles(type.slice(5), path);
       const pick = files?.picture || null;
       const k = 'info:' + type.slice(5).toLowerCase();
@@ -678,9 +825,25 @@ export function bindArt(img, path, cssSize, types = ['front'], { hold = false } 
       rememberCover(k, pick && { name: pick.path, size: pick.size });
       url = pick ? await infoUrl(pick, sizeBucket(cssSize)) : null;
     } else url = type === 'parent' ? await parentCoverUrl(path, cssSize) : keep ? await originalUrl(path, type) : await artUrl(path, type, cssSize);
+    // Nothing from foobar2000 and the folder not checked yet: it may have a
+    // WebP or JPEG XL cover foobar2000 doesn't read.
+    if (type === 'front' && !url && own === undefined && (await probeDir(dirOf(path), path)) === 'own') {
+      if (img.dataset.artToken !== token) return;
+      url = await ownUrl(dirPick.get(dirOf(path)), cssSize);
+    }
     // Folder not checked yet: find out, and switch to the original if it's a PNG/GIF.
-    if (type === 'front' && keep === undefined && url) {
+    if (type === 'front' && keep === undefined && own === undefined && url) {
       probeDir(dirOf(path), path).then(async (kind) => {
+        if (kind === 'own' && img.dataset.artToken === token) {
+          // foobar2000 showed its own still of a WebP/JPEG XL: Fusion's (animated, where it should be).
+          const u = await ownUrl(dirPick.get(dirOf(path)), cssSize);
+          if (u && img.dataset.artToken === token) {
+            img.src = u;
+            img.classList.toggle('alpha', rawUrls.has(u));
+            markLoaded(u);
+          }
+          return;
+        }
         if (kind !== 'keep' || img.dataset.artToken !== token) return;
         if (isGifCover(path) && !animateGif(cssSize)) return; // a still copy is enough here
         const raw = await originalUrl(path, type);

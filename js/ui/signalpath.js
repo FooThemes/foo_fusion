@@ -16,6 +16,7 @@ const GLYPH = {
   output: 'M5 9h4l5-4v14l-5-4H5zM17 9a4 4 0 0 1 0 6',
   volume: 'M4 9h3l4-4v14l-4-4H4zM15 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10',
   windows: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z',
+  check: 'M4 12.5 9.5 18 20 6',
 };
 const glyph = (name) => {
   const ns = 'http://www.w3.org/2000/svg';

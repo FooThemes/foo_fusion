@@ -12,6 +12,7 @@ import { Emitter } from '../core/emitter.js';
 import { debounce } from '../core/util.js';
 import { logInfo } from '../core/log.js';
 import { player } from './player.js';
+import { measureDsp, describe as describeCheck } from './dspcheck.js';
 
 // Output Info's fields, read in one go ("?" when it isn't installed).
 const OUT = ['output_samplerate', 'output_bitdepth', 'output_channels', 'output_device', 'output_dsps', 'output_dsp_preset', 'output_volume', 'output_rg_mode', 'output_rg_source', 'output_rg_gain', 'output_buffer_length'];
@@ -39,20 +40,27 @@ class SignalPath extends Emitter {
   }
 
   #probed = new Map(); // handle -> 'dop' | 'none' | null
+  #checked = new Map(); // handle -> the DSP check's result (see dspcheck.js), 'pending', or null
 
   async refresh() {
     // Paused by stopping (ASIO released): nothing is playing to describe, so
     // the last path stays.
     if (player.released) return this.path;
-    let path = player.active && player.track ? await build(this.#probed.get(player.track.handle)) : null;
+    const check = (h) => {
+      const r = this.#checked.get(h);
+      return r && r !== 'pending' ? r : null;
+    };
+    let path = player.active && player.track ? await build(this.#probed.get(player.track.handle), check(player.track.handle)) : null;
     // A DSD song: check the audio itself for DoP (once per song), then redo.
     const h = player.track?.handle;
     if (path?.dsd && h && !this.#probed.has(h) && player.state === 'playing') {
       this.#probed.set(h, undefined);
       const found = await probeDop(() => player.track?.handle === h && player.state === 'playing');
       this.#probed.set(h, found);
-      if (player.track?.handle === h) path = await build(found);
+      if (player.track?.handle === h) path = await build(found, check(h));
     }
+    // DSPs in the chain: what they really do to this song, measured once.
+    if (path?.hasDsp && !path.dsdKept && h && !this.#checked.has(h) && player.state === 'playing') this.#check(player.track);
     // Logged once, and for each DSD song (the DoP check's outcome).
     if (path && (!this.#logged || path.dsd)) {
       this.#logged = true;
@@ -63,9 +71,33 @@ class SignalPath extends Emitter {
     this.emit('change', path);
     return path;
   }
+
+  // A couple of seconds in (past any fade-in), then again later if the music
+  // was too quiet to tell or the check couldn't run.
+  #check(track, tries = 0) {
+    const h = track.handle;
+    this.#checked.set(h, 'pending');
+    if (track.subsong > 0 || /\.cue$/i.test(track.path || '')) {
+      logInfo(`dsp check: skipped (part of a ${/\.cue$/i.test(track.path || '') ? 'CUE sheet' : 'multi-track file'})`);
+      this.#checked.set(h, null);
+      return;
+    }
+    const still = () => player.track?.handle === h && player.state === 'playing';
+    setTimeout(async () => {
+      if (!still()) return this.#checked.delete(h); // try again next time it plays
+      const r = await measureDsp(track, still);
+      if ((!r || r.kind === 'silent') && tries < 1) {
+        this.#checked.set(h, 'pending');
+        setTimeout(() => (still() ? this.#check(track, tries + 1) : this.#checked.delete(h)), 8000);
+        return;
+      }
+      this.#checked.set(h, r);
+      if (player.track?.handle === h) this.refresh();
+    }, tries ? 0 : 2000);
+  }
 }
 
-async function build(dopSeen) {
+async function build(dopSeen, check = null) {
   const pattern = ['%codec%', '[%codec_profile%]', '[%__bitspersample%]', '[%samplerate%]', '[%__channels%]', '[%__encoding%]', '[%bitrate%]', '[%replaygain_track_gain%]', '[%replaygain_album_gain%]', ...OUT.map((f) => `%${f}%`)].join(SEP);
   const [tf, conf, chain, rgMode, rgPre, vol] = await Promise.all([
     tryCall('titleformat.eval', { pattern }),
@@ -126,12 +158,14 @@ async function build(dopSeen) {
   if (source === 'auto') source = /shuffle|random/.test(player.nativeOrder) ? 'track' : 'album';
   const processing = String(rgMode?.processingMode || '').toLowerCase();
   const rgOn = o.output_rg_mode ? !/none|off|disabled/i.test(o.output_rg_mode) : source !== 'none' && source !== '' && /gain/.test(processing);
+  let rgGain = null;
   if (rgOn) {
     const applied = o.output_rg_gain ? num(o.output_rg_gain) : null;
     const which = /album/.test(o.output_rg_source || source) ? 'album' : 'track';
     const tagGain = num(which === 'album' ? rgAlbum || rgTrack : rgTrack || rgAlbum);
     const pre = tagGain != null ? num(rgPre?.withRg) : num(rgPre?.withoutRg);
     const gain = applied ?? (tagGain != null ? tagGain + (pre || 0) : pre || null);
+    rgGain = gain;
     if (dsdKept) stages.push(bypassed({ kind: 'rg', icon: 'gain', title: 'ReplayGain' }));
     else if (gain == null || Math.abs(gain) >= 0.005) {
       changes.push('ReplayGain');
@@ -161,6 +195,37 @@ async function build(dopSeen) {
       note: act.note,
       idle: !act.acts,
     });
+  }
+
+  // 3b. The DSP chain measured: the audio after it against the file itself
+  // (dspcheck.js). It settles what the rules above could only guess.
+  if (check && dspList.length && !dsdKept) {
+    let kind = check.kind;
+    // Taken before ReplayGain, by the component's docs; if it's in there after
+    // all, a level change of exactly its gain is ReplayGain's, not the DSPs'.
+    if (kind === 'gain' && rgGain != null && Math.abs(check.db - rgGain) < 0.05) kind = 'same';
+    const dspStages = stages.filter((st) => st.kind === 'dsp');
+    if (kind === 'same') {
+      for (const st of dspStages) {
+        const at = st.idle ? -1 : changes.indexOf(st.title);
+        if (at >= 0) changes.splice(at, 1);
+        Object.assign(st, { idle: true, grade: 'lossless', detail: st.idle ? st.detail : 'No change to this song' });
+      }
+    } else if (kind !== 'silent') {
+      // Something changes it: which DSP isn't known when the rules say none.
+      if (!dspStages.some((st) => !st.idle)) changes.push('DSP');
+      if (kind === 'rate') changes.push('sample rate');
+    }
+    if (kind !== 'silent') {
+      stages.push({
+        kind: 'check',
+        icon: 'check',
+        title: 'Checked',
+        detail: kind === 'same' ? 'The DSPs leave this song unchanged' : describeCheck(check),
+        grade: kind === 'same' ? 'lossless' : kind === 'rate' ? 'high' : 'enhanced',
+        note: kind === 'same' ? 'After the DSPs, the audio matches the file sample for sample.' : kind === 'gain' ? 'After the DSPs, the audio is the file at another level.' : 'After the DSPs, the audio differs from the file.',
+      });
+    }
   }
 
   // 4. Volume: anything below 0 dB scales the samples.
@@ -234,7 +299,7 @@ async function build(dopSeen) {
   else if (['Windows mixer', 'bit depth', 'sample rate', 'DSD to PCM'].some((c) => changes.includes(c))) quality = 'high';
   else if (changes.length) quality = 'enhanced';
   else quality = 'lossless';
-  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept };
+  return { quality, stages, outputInfo, changes, dsd: src.dsd, dsdKept, hasDsp: dspList.length > 0 };
 }
 
 /**

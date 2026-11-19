@@ -32,10 +32,12 @@ export function mountSidebar(root, app) {
     view.setMode(isPage(tab) ? 'albums' : tab, { load: playlists.activePlaylist?.name === name });
   };
   const navCollection = navItem('collection', 'Collection', () => {
+    if (backToTop(playlists.byName(COLLECTION))) return;
     leaveNowPlaying(COLLECTION);
     playlists.ensureCollection();
   });
   const navFavorites = navItem('heart', 'Favourites', () => {
+    if (backToTop(playlists.byName(FAVORITES))) return;
     leaveNowPlaying(FAVORITES);
     playlists.ensureFavorites();
   });
@@ -75,8 +77,11 @@ export function mountSidebar(root, app) {
     }
     view.setFilter(text);
   };
-  const runSearch = debounce(() => searchFor(search.value.trim()), 250);
+  // Search runs on Fusion's own index (view.js), so it can follow the typing
+  // closely; the short wait just skips the keys in between when typing fast.
+  const runSearch = debounce(() => searchFor(search.value.trim()), 60);
   search.addEventListener('input', runSearch);
+  search.addEventListener('focus', () => view.warmSearch());
   search.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       search.value = '';
@@ -114,6 +119,7 @@ export function mountSidebar(root, app) {
           role: 'option',
           title: `${p.name} - ${p.trackCount.toLocaleString()} songs`,
           onclick: () => {
+            if (backToTop(p)) return;
             playlists.willShow(p.index);
             if (isPage(view.mode)) view.setMode(isPage(store.get('view')) ? 'albums' : store.get('view'), { load: p.index === playlists.active });
             playlists.activate(p.index);
@@ -209,6 +215,19 @@ export function mountSidebar(root, app) {
   });
 
   return { focusSearch: () => search.focus() };
+}
+
+/**
+ * Clicking the playlist that's already showing: back to its top (out of an
+ * artist or genre page, else scrolled up). True if it was the one showing.
+ */
+function backToTop(p) {
+  if (!p || isPage(view.mode) || p.index !== playlists.shownIndex) return false;
+  if (view.drill) {
+    view.backTo = null; // to the playlist's own top, not back to where the page was opened from
+    view.closeDrill();
+  } else window.dispatchEvent(new Event('fusion:scrolltop'));
+  return true;
 }
 
 // Hovering a playlist: its tab made ready, so clicking it shows it at once.

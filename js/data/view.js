@@ -11,7 +11,7 @@ import { Emitter } from '../core/emitter.js';
 import { debounce, serialize } from '../core/util.js';
 import * as store from '../core/store.js';
 import { SORTS, VIEW_SORTS, sortDef } from '../core/store.js';
-import { TF, searchQuery } from './patterns.js';
+import { TF, searchQuery, searchWords, SEARCH_INDEX, foldText } from './patterns.js';
 import { playlists, COLLECTION, FAVORITES, PLAYBACK } from './playlists.js';
 import { MOOD_TF, favourites } from './favourites.js';
 import { versionsTF, parseVersions } from './versions.js';
@@ -50,6 +50,8 @@ class View extends Emitter {
   #warmTimer = 0;
   #trackCacheKey = '';
   #runsCache = new Map();
+  #searchIdx = new WeakMap(); // the runs it was cut from -> { fields, hay } per row
+  #idx = null; // the index the current search used (for ranking)
 
   async #groupRuns(pl, patterns) {
     const key = [pl.guid, pl.trackCount, this.#contentVersion, ...patterns].join('|');
@@ -63,6 +65,41 @@ class View extends Emitter {
     return p;
   }
 
+  /**
+   * Every song's searched text, kept by Fusion so search runs here as you
+   * type instead of asking foobar2000 each time: fields per row (for
+   * ranking) and the whole lot folded (for matching). Fetched in one call
+   * (getGroupRuns does it off the UI thread), and again when the playlist
+   * changes, like the other runs.
+   */
+  async #searchIndex(pl) {
+    const runs = await this.#groupRuns(pl, [SEARCH_INDEX]);
+    if (!runs) return null;
+    let idx = this.#searchIdx.get(runs);
+    if (!idx) {
+      const t0 = performance.now();
+      const fields = new Array(pl.trackCount);
+      const hay = new Array(pl.trackCount);
+      for (const r of runs) {
+        const f = String(r.key).split('\u001f');
+        const h = foldText(f.join(' '));
+        for (let i = r.start; i < r.start + r.count; i++) {
+          fields[i] = f;
+          hay[i] = h;
+        }
+      }
+      idx = { fields, hay };
+      this.#searchIdx.set(runs, idx);
+      logInfo(`search index for ${pl.name}: ${pl.trackCount} songs in ${Math.round(performance.now() - t0)} ms`);
+    }
+    return idx;
+  }
+
+  /** Get the search index ready (the search box was focused, or at launch). */
+  warmSearch(pl = playlists.byName(COLLECTION)) {
+    if (pl) this.#searchIndex(pl).catch(() => {});
+  }
+
   /** Fetch (in the background) what the Artists and Genres pages are cut from. */
   warmGroupRuns() {
     const pl = playlists.byName(COLLECTION);
@@ -72,7 +109,9 @@ class View extends Emitter {
     this.#groupRuns(pl, [TF.artistsMulti, albumKey])
       .then(() => this.#groupRuns(pl, [TF.genresMulti, albumKey]))
       // The Songs tab's order too (it's sorted here, from runs of its key).
-      .then(() => pl.isLocked && songsSort && this.#sortedRows(pl, songsSort.pattern, false));
+      .then(() => pl.isLocked && songsSort && this.#sortedRows(pl, songsSort.pattern, false))
+      // And the search index, so the first search is instant too.
+      .then(() => this.#searchIndex(pl));
   }
 
   #snapshotKey(mode = this.mode, drill = this.drill, filter = this.filter, pl = playlists.shownPlaylist) {
@@ -612,10 +651,25 @@ class View extends Emitter {
     this.reversed = pl.isLocked && desc && !clientGroups;
 
     let matched = null;
+    this.#idx = null;
     const q = this.filter ? searchQuery(this.filter) : '';
     if (q) {
-      const res = await tryCall('playlist.getMatchingRows', { playlist: pl.index, query: q });
-      matched = res ? res.items : [];
+      // Fusion's own index (instant); foobar2000's query if it can't be had.
+      const idx = await this.#searchIndex(pl).catch(() => null);
+      if (gen !== this.#generation) return;
+      if (idx) {
+        this.#idx = idx;
+        const words = searchWords(this.filter).map(foldText);
+        matched = [];
+        const hay = idx.hay;
+        for (let i = 0; i < hay.length; i++) {
+          const h = hay[i];
+          if (h && words.every((w) => h.includes(w))) matched.push(i);
+        }
+      } else {
+        const res = await tryCall('playlist.getMatchingRows', { playlist: pl.index, query: q });
+        matched = res ? res.items : [];
+      }
     }
     if (gen !== this.#generation) return;
 
@@ -723,8 +777,15 @@ class View extends Emitter {
   async #rankGroups(pl, groups, kind) {
     const q = this.filter.trim().toLowerCase();
     let texts;
+    const idx = this.#idx;
     if (kind === 'artists' || kind === 'genres') texts = groups.map((g) => [g.key]);
-    else {
+    else if (idx) {
+      // From the search index: album and album artist (no foobar2000 call).
+      texts = groups.map((g) => {
+        const f = idx.fields[firstRow(g)] || [];
+        return [f[2] || '', f[3] || f[1] || ''];
+      });
+    } else {
       texts = [];
       for (let i = 0; i < groups.length; i += 1000) {
         const chunk = groups.slice(i, i + 1000);
@@ -738,6 +799,8 @@ class View extends Emitter {
   /** Rows by how well their title / artist / album match the search. */
   async #rankRows(pl, rows, fields) {
     const q = this.filter.trim().toLowerCase();
+    // From the search index: title, artist, album, album artist.
+    if (this.#idx) return rankBy(rows, rows.map((r) => (this.#idx.fields[r] || []).slice(0, 4).map((x) => x || '')), q);
     const texts = [];
     const formats = Object.fromEntries(fields.map((f, i) => ['f' + i, `[${f}]`]));
     for (let i = 0; i < rows.length; i += 2000) {

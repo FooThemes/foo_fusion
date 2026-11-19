@@ -52,14 +52,29 @@ const SEARCH_FIELDS = ['%title%', '%artist%', '%album%', '%album artist%', '%gen
   ['title', 'artist', 'album', 'albumartist'].flatMap((f) => [`%${f}_en%`, `%${f}_rom%`]),
 );
 
-/** Build a foobar2000 query that matches every word in `text` somewhere. */
-export function searchQuery(text) {
-  const words = text
+/** The words of a search (quotes and brackets dropped). */
+export function searchWords(text) {
+  return text
     .trim()
     .split(/\s+/)
     .filter(Boolean)
     .map((w) => w.replace(/["()]/g, ''))
     .filter(Boolean);
+}
+
+/**
+ * Every searched field of a song in one string, \u001f between them: title,
+ * artist, album, album artist, genre, then the English and romanised ones.
+ * Fusion keeps it for every song and searches it itself, as you type.
+ */
+export const SEARCH_INDEX = SEARCH_FIELDS.map((f) => `[${f}]`).join('$char(31)');
+
+/** Text as search compares it: lower case, accents off ("é" finds "e"). */
+export const foldText = (t) => t.toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '');
+
+/** Build a foobar2000 query that matches every word in `text` somewhere. */
+export function searchQuery(text) {
+  const words = searchWords(text);
   if (!words.length) return '';
   return words
     .map((w) => `(${SEARCH_FIELDS.map((f) => `${f} HAS "${w}"`).join(' OR ')})`)

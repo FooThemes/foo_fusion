@@ -19,6 +19,7 @@ import { tabBar } from './tabs.js';
 import { openModal } from './modal.js';
 import { iconField } from './iconpicker.js';
 import { pickedIcon, setPickedIcon } from './plicon.js';
+import { folders } from '../data/folders.js';
 
 const HELP = {
   query: { file: 'Query Syntax Help.html', title: 'Query syntax' },
@@ -88,16 +89,21 @@ function remember(guid, def) {
 
 /** New autoplaylist. */
 /** New playlist dialog with Playlist / Autoplaylist tabs. */
-export async function newPlaylistDialog(tab = 'playlist') {
-  const def = await showDialog({ title: 'New', tabs: true, tab, name: '', query: '', sort: '', keepSorted: false });
+/** The New dialog. `folder`: the playlist folder it goes in (opened, so it shows). */
+export async function newPlaylistDialog(tab = 'playlist', { folder = null } = {}) {
+  const f = folder && folders.list.find((x) => x.id === folder);
+  const def = await showDialog({ title: f ? `New in ${f.name}` : 'New', tabs: true, tab, name: '', query: '', sort: '', keepSorted: false });
   if (!def) return;
+  let guid;
   if (def.kind === 'playlist') {
     const res = await playlists.create(def.name || 'New playlist');
-    const guid = res?.guid || playlists.list.find((p) => p.index === res?.index)?.guid;
+    guid = res?.guid || playlists.list.find((p) => p.index === res?.index)?.guid;
     if (guid && def.icon) setPickedIcon(guid, def.icon);
-    return;
+  } else guid = await createAuto(def);
+  if (f && guid) {
+    await folders.move([guid], f.id);
+    if (f.collapsed) folders.toggle(f.id, false);
   }
-  await createAuto(def);
 }
 
 export async function newAutoplaylist() {
@@ -111,6 +117,7 @@ async function createAuto(def) {
   if (def.icon) setPickedIcon(res.guid, def.icon);
   await playlists.refresh();
   playlists.activate(res.index);
+  return res.guid;
 }
 
 /** Edit an existing autoplaylist (falls back to foobar2000's editor). */

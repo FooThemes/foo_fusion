@@ -51,12 +51,12 @@ export class InlineAlbum {
       cols: 1,
       tileH: 0,
       rowTop: () => 0,
-      get tileW() {
-        // The panel puts its pointer at 40 + tileW / 2: aim it at the tile.
+      tileW: 0,
+      // The pointer goes under the middle of the clicked tile.
+      tileCenterX: () => {
         const t = self.tile;
         if (!t?.isConnected) return 0;
-        const x = t.getBoundingClientRect().left + t.offsetWidth / 2 - self.box.getBoundingClientRect().left;
-        return Math.max(0, (x - 40) * 2);
+        return Math.max(0, t.getBoundingClientRect().left + t.offsetWidth / 2 - self.box.getBoundingClientRect().left);
       },
       relayout: () => self.#resized(),
       collapse: () => self.close(),

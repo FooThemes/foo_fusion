@@ -275,11 +275,8 @@ async function build(dopSeen, check = null, chainFile = null) {
       // The DSPs Fusion can't judge by name are what changes it.
       const detail = kind === 'gain' ? `Changes the level: ${signed(check.db)} dB` : 'Changes the sound';
       for (const st of unknown) st.detail = st.icon === 'eq' && st.detail && st.detail !== 'Active' ? `${st.detail} · ${detail.replace(/^Changes the /, '')}` : detail;
-      if (!unknown.length && !dspStages.some((st) => !st.hidden)) {
-        changes.push('DSP');
-        const at = stages.findIndex((st) => st.kind === 'volume' || st.kind === 'output');
-        stages.splice(at < 0 ? stages.length : at, 0, { kind: 'dsp', icon: 'dsp', title: 'DSP chain', detail, grade: 'enhanced', note: '' });
-      }
+      // A difference none of the DSPs accounts for (each one ruled out for
+      // this song) isn't shown: the measurement alone can't say what did it.
     }
     // A different rate or channel count: the DSP that does it is named by the
     // rules above; nothing to add (the rest can't be compared then).

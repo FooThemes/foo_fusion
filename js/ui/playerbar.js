@@ -52,7 +52,9 @@ export function mountPlayerBar(root, app) {
   const length = el('span.pb-time');
   const fill = el('div.seek-fill');
   const knob = el('div.seek-knob');
-  const seek = el('div.seek', { role: 'slider', 'aria-label': 'Seek', tabindex: 0 }, el('div.seek-track', null, fill, knob));
+  // The time a click would go to, over the pointer.
+  const seekTip = el('div.seek-tip', { hidden: true, 'aria-hidden': 'true' });
+  const seek = el('div.seek', { role: 'slider', 'aria-label': 'Seek', tabindex: 0 }, el('div.seek-track', null, fill, knob), seekTip);
   const seekBox = el('div.pb-seek', null, elapsed, seek, length);
   const wave = mountWaveform(seek);
 
@@ -321,6 +323,24 @@ export function mountPlayerBar(root, app) {
     move(e);
     seek.addEventListener('pointermove', move);
     seek.addEventListener('pointerup', up);
+  });
+  // Hovering (or dragging): the time there, in a bubble over the pointer.
+  const showTip = (e) => {
+    if (!player.active || !player.canSeek || !player.duration) return void (seekTip.hidden = true);
+    const r = seek.getBoundingClientRect();
+    const f = clamp((e.clientX - r.left) / r.width, 0, 1);
+    seekTip.textContent = formatTime(f * player.duration);
+    seekTip.hidden = false;
+    // Kept inside the bar at its ends.
+    const half = seekTip.offsetWidth / 2;
+    seekTip.style.left = clamp(f * r.width, half, r.width - half) + 'px';
+  };
+  seek.addEventListener('pointermove', showTip);
+  seek.addEventListener('pointerenter', showTip);
+  seek.addEventListener('pointerleave', () => !dragging && (seekTip.hidden = true));
+  seek.addEventListener('lostpointercapture', (e) => {
+    const r = seek.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) seekTip.hidden = true;
   });
   seek.addEventListener('keydown', (e) => {
     if (!player.active) return;

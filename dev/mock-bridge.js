@@ -6,7 +6,7 @@
 // method does not declare (list generated from the component's docs into
 // api-params.json by tools/extract-api.py).
 
-import { TF } from '../js/data/patterns.js';
+import { TF, SEARCH_INDEX } from '../js/data/patterns.js';
 import { MOOD_TF } from '../js/data/favourites.js';
 
 const GENRES = ['Rock', 'Electronic', 'Jazz', 'Hip-Hop', 'Classical', 'Folk', 'Pop', 'Ambient', 'Metal', 'Soul'];
@@ -131,6 +131,13 @@ function tfEval(pattern, t) {
     [TF.trackNumber]: () => String(t.trackNumber).padStart(2, '0'),
   };
   if (map[pattern]) return map[pattern]();
+  // The search index: every searched field, \u001f between them.
+  if (pattern === SEARCH_INDEX) {
+    const v = (k, x) => t.versions?.[k]?.[x] || '';
+    return [t.title, t.artist, t.album, t.albumArtist, t.genre, v('title', 'en'), v('title', 'rom'), v('artist', 'en'), v('artist', 'rom'), v('album', 'en'), v('album', 'rom'), v('albumartist', 'en'), v('albumartist', 'rom')]
+      .map((x) => x || '')
+      .join('\u001f');
+  }
   // Every value of one tag: "$meta_sep(genre,'|||')".
   const ms = pattern.match(/^\$meta_sep\(([^,]+),'\|\|\|'\)$/);
   if (ms) {

@@ -8,7 +8,7 @@ import { tidyItems } from './dropdown.js';
 import { playlists } from '../data/playlists.js';
 import { view } from '../data/view.js';
 import { toast } from './toast.js';
-import { editAutoplaylist } from './autoplaylist.js';
+import { editAutoplaylist, newPlaylistDialog } from './autoplaylist.js';
 import { folders } from '../data/folders.js';
 import * as store from '../core/store.js';
 import { player } from '../data/player.js';
@@ -232,6 +232,8 @@ export function folderMenuItems(targets) {
 export function folderMenu(f) {
   return showMenu([
     { label: f.collapsed ? 'Expand' : 'Collapse', run: () => folders.toggle(f.id) },
+    { label: 'Create new playlist in folder…', run: () => newPlaylistDialog('playlist', { folder: f.id }) },
+    '-',
     { label: 'Rename folder…', run: async () => {
       const name = await promptText('Rename folder', f.name);
       if (name) folders.rename(f.id, name);

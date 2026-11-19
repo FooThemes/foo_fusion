@@ -2,7 +2,8 @@
 
   fusion-<version>.zip        the theme: a fusion/ folder to drop into
                               <foobar2000 profile>\\webview-ui\\, plus
-                              install.bat/install.ps1 (install/), which do it
+                              install.bat/install.ps1 (install/), which do it;
+                              includes the artist info script
   fusion-tools-<version>.zip  the artist/genre information script
 
 (The Picard plugins have their own repo and releases:
@@ -48,6 +49,9 @@ def main():
         add_tree(z, ROOT / 'js', 'fusion/js')
         z.write(ROOT / 'LICENSE', 'fusion/LICENSE')
         z.write(ROOT / 'README.md', 'fusion/README.md')
+        # The artist/genre information script, where Fusion looks for it
+        # (data/artistscript.js), so it works without setting its path.
+        z.write(ROOT / 'tools' / 'fusion-artist-info.py', 'fusion/tools/artist-info/fusion-artist-info.py')
         # Windows line endings for the installer, whatever git checked out.
         for name in ('install.bat', 'install.ps1'):
             text = (ROOT / 'install' / name).read_text(encoding='utf-8')

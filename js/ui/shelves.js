@@ -183,6 +183,9 @@ export class Shelves {
     const apply = (s) => {
       if (!s || !this.#wanted()) return;
       const shelves = order.map((id) => ({ id, items: pick(id, s) })).filter((x) => x.items.length);
+      // Every shelf turned on is empty (no play statistics yet, say): no
+      // band, no "All albums" heading, just the albums.
+      if (!shelves.length) return this.#hide();
       const sig = shelves.map((x) => `${x.id}:${x.items.map((i) => view.groups[i].key).join(',')}`).join('/');
       if (!force && sig === this.sig && this.shown) {
         this.shelves = shelves;

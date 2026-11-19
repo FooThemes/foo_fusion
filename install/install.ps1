@@ -4,7 +4,10 @@
 # - installs foo_ui_webview2 if it's missing or older than 2.1
 #   (a foo_ui_webview2*.fb2k-component next to this script is used if there
 #   is one, otherwise the latest release is downloaded from GitHub)
-# - copies Fusion into <profile>\webview-ui\fusion, keeping the cover cache
+# - offers to install the optional components that are missing
+# - copies Fusion (with the artist info script) into
+#   <profile>\webview-ui\fusion, keeping the cover cache and the script's
+#   settings
 # - backs up what it replaces to <profile>\fusion-backup\<date>\ and writes
 #   an uninstall script there
 #
@@ -81,19 +84,21 @@ function Add-AppFolder([string]$dir) {
 }
 
 function Add-Given([string]$path) {
-    $path = $path.Trim('"').TrimEnd('\')
-    if (-not (Test-Path $path)) { Fail "Folder not found: $path" }
+    $path = $path.Trim().Trim('"').TrimEnd('\')
+    if (-not (Test-Path $path)) { Say "Folder not found: $path" 'Red'; return $false }
     if ((Test-Path (Join-Path $path 'foobar2000.exe')) -or ((Test-Path $path -PathType Leaf) -and $path.ToLower().EndsWith('.exe'))) {
         Add-AppFolder $path
     } elseif ((Test-Path (Join-Path $path 'config.sqlite')) -or (Test-Path (Join-Path $path 'user-components-x64')) -or (Test-Path (Join-Path $path 'user-components'))) {
         Add-Candidate $path $null
     } else {
-        Fail "That doesn't look like a foobar2000 folder or profile: $path"
+        Say "That doesn't look like a foobar2000 folder or profile: $path" 'Red'
+        return $false
     }
+    return $true
 }
 
 if ($Foobar) {
-    Add-Given $Foobar
+    if (-not (Add-Given $Foobar)) { exit 1 }
 } else {
     foreach ($p in @(Get-Process foobar2000 -ErrorAction SilentlyContinue)) {
         try { if ($p.Path) { Add-AppFolder (Split-Path $p.Path) } } catch { }
@@ -123,29 +128,48 @@ if ($Foobar) {
 # Only profiles that exist (foobar2000 has to have been run once).
 $found = @($candidates | Where-Object { Test-Path $_.Profile })
 
-while ($found.Count -eq 0) {
-    Say "Couldn't find foobar2000. (It has to have been started at least once.)" 'Yellow'
-    $p = Read-Host 'Paste the foobar2000 folder (where foobar2000.exe is), or press Enter to quit'
-    if ([string]::IsNullOrWhiteSpace($p)) { exit 1 }
-    $candidates.Clear()
-    Add-Given $p
-    $found = @($candidates | Where-Object { Test-Path $_.Profile })
+# Asks for a foobar2000 folder until one works; $null if the user gives up.
+function Read-Folder {
+    while ($true) {
+        $p = Read-Host 'Paste the foobar2000 folder (where foobar2000.exe is), or press Enter to quit'
+        if ([string]::IsNullOrWhiteSpace($p)) { return $null }
+        $candidates.Clear()
+        if (-not (Add-Given $p)) { continue }
+        $got = @($candidates | Where-Object { Test-Path $_.Profile })
+        if ($got.Count -gt 0) { return $got[0] }
+        Say "That foobar2000 has no profile yet. Start it once, close it, then try again." 'Yellow'
+    }
 }
 
-if ($found.Count -eq 1) {
+$target = $null
+if ($Foobar -and $found.Count -eq 1) {
     $target = $found[0]
+} elseif ($found.Count -eq 0) {
+    Say "Couldn't find foobar2000. (It has to have been started at least once.)" 'Yellow'
+    $target = Read-Folder
 } else {
-    Say 'Found more than one foobar2000 profile:'
+    # Even with one found, ask: it may not be the copy the user means.
+    $word = if ($found.Count -eq 1) { 'this' } else { 'these' }
+    Say "Found $word foobar2000 install$(if ($found.Count -gt 1) { 's' }):"
     for ($i = 0; $i -lt $found.Count; $i++) {
-        $what = if ($found[$i].Exe) { Split-Path $found[$i].Exe } else { '(standard install)' }
-        Say ("  {0}. {1}   {2}" -f ($i + 1), $found[$i].Profile, $what)
+        $what = if ($found[$i].Exe) { Split-Path $found[$i].Exe } else { 'standard install' }
+        Say ("  {0}. {1}" -f ($i + 1), $what)
+        Say ("     profile: {0}" -f $found[$i].Profile) 'DarkGray'
     }
-    do {
-        $n = Read-Host "Which one? (1-$($found.Count))"
-        $ok = $n -match '^\d+$' -and [int]$n -ge 1 -and [int]$n -le $found.Count
-    } until ($ok)
-    $target = $found[[int]$n - 1]
+    Say '  O. Somewhere else'
+    $range = if ($found.Count -eq 1) { '1' } else { "1-$($found.Count)" }
+    while (-not $target) {
+        $n = (Read-Host "Install into which one? ($range, O for another folder, Enter for 1)").Trim().ToLower()
+        if ($n -eq '') { $n = '1' }
+        if ($n -eq 'o') {
+            $target = Read-Folder
+            if (-not $target) { exit 1 }
+        } elseif ($n -match '^\d+$' -and [int]$n -ge 1 -and [int]$n -le $found.Count) {
+            $target = $found[[int]$n - 1]
+        }
+    }
 }
+if (-not $target) { exit 1 }
 
 $profileDir = $target.Profile
 $exe = $target.Exe
@@ -202,10 +226,23 @@ $stamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
 $backup = Join-Path $profileDir "fusion-backup\$stamp"
 New-Item -ItemType Directory -Force -Path $backup | Out-Null
 $restoreTheme = $false
-$componentAction = 'none'   # none | added | replaced
-$webviewDir = Join-Path $componentsDir 'foo_ui_webview2'
+$changed = New-Object System.Collections.ArrayList   # @(name, 'added' | 'replaced')
 
-# --- foo_ui_webview2 -----------------------------------------------------------
+# --- Components ---------------------------------------------------------------
+
+# Where each component comes from. 'github' takes the newest release's
+# .fb2k-component; 'fb2k' reads the download link off its foobar2000.org page
+# (the link changes with every version); 'url' is a fixed download.
+$optional = @(
+    @{ Name = 'foo_playcount'; For = 'play counts, the shelves and Listening stats'; Kind = 'fb2k'; Page = 'https://www.foobar2000.org/components/view/foo_playcount' },
+    @{ Name = 'foo_enhanced_playcount'; For = 'the time-of-day chart'; Kind = 'fb2k'; Page = 'https://www.foobar2000.org/components/view/foo_enhanced_playcount' },
+    @{ Name = 'foo_openlyrics'; For = 'lyrics'; Kind = 'fb2k'; Page = 'https://www.foobar2000.org/components/view/foo_openlyrics' },
+    @{ Name = 'foo_outinfo'; For = 'the output side of the signal path'; Kind = 'url'; Page = 'https://foobar.hyv.fi/?view=foo_outinfo'; Url = 'https://foobar.hyv.fi/foo_outinfo.fb2k-component' }
+)
+$webview = @{ Name = 'foo_ui_webview2'; Kind = 'github'; Repo = $WebViewRepo; Page = "https://github.com/$WebViewRepo/releases" }
+
+$headers = @{ 'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) fusion-installer' }
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
 
 function Get-DllVersion([string]$dll) {
     try {
@@ -217,68 +254,129 @@ function Get-DllVersion([string]$dll) {
     return $null
 }
 
-function Get-WebViewPackage {
-    $local = Get-ChildItem -Path $here -Filter 'foo_ui_webview2*.fb2k-component' -ErrorAction SilentlyContinue |
+$appComponents = if ($exe) { Join-Path (Split-Path $exe) 'components' } else { $null }
+function Test-Installed([string]$name) {
+    (Test-Path (Join-Path $componentsDir "$name\$name.dll")) -or
+    ($appComponents -and (Test-Path (Join-Path $appComponents "$name.dll")))
+}
+
+# The .fb2k-component file for a component: one next to this script if there
+# is one, otherwise downloaded. $null if that fails.
+function Get-Package($c) {
+    $name = $c.Name
+    $local = Get-ChildItem -Path $here -Filter "$name*.fb2k-component" -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match ('^' + [regex]::Escape($name) + '([-_.]|$)') } |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($local) {
-        Say "Using $($local.Name) from this folder."
+        Say "  Using $($local.Name) from this folder."
         return $local.FullName
     }
-    Say "Downloading foo_ui_webview2 from github.com/$WebViewRepo ..."
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-        $headers = @{ 'User-Agent' = 'fusion-installer' }
-        $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$WebViewRepo/releases/latest" -Headers $headers
-        $asset = @($rel.assets | Where-Object { $_.name -like '*.fb2k-component' }) | Select-Object -First 1
-        if (-not $asset) { throw 'the latest release has no .fb2k-component file' }
-        $out = Join-Path $env:TEMP $asset.name
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $out -Headers $headers -UseBasicParsing
-        Say "Got $($asset.name) ($($rel.tag_name))."
+        switch ($c.Kind) {
+            'github' {
+                $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$($c.Repo)/releases/latest" -Headers $headers
+                $asset = @($rel.assets | Where-Object { $_.name -like '*.fb2k-component' }) | Select-Object -First 1
+                if (-not $asset) { throw 'the latest release has no .fb2k-component file' }
+                $url = $asset.browser_download_url
+            }
+            'fb2k' {
+                $page = Invoke-WebRequest -Uri $c.Page -Headers $headers -UseBasicParsing
+                $m = [regex]::Match($page.Content, 'href="([^"]*/getcomponent/[^"]+?\.fb2k-component)"')
+                if (-not $m.Success) { throw "no download link on $($c.Page)" }
+                $url = $m.Groups[1].Value
+                if ($url.StartsWith('/')) { $url = 'https://www.foobar2000.org' + $url }
+            }
+            default { $url = $c.Url }
+        }
+        $file = [IO.Path]::GetFileName(([uri]$url).AbsolutePath)
+        if (-not $file.EndsWith('.fb2k-component')) { $file = "$name.fb2k-component" }
+        $out = Join-Path $env:TEMP $file
+        Say "  Downloading $file ..."
+        Invoke-WebRequest -Uri $url -OutFile $out -Headers $headers -UseBasicParsing
         return $out
     } catch {
-        Say "Download failed: $($_.Exception.Message)" 'Red'
+        Say "  Download failed: $($_.Exception.Message)" 'Red'
         return $null
     }
 }
 
-function Install-WebView([string]$package) {
+# A .fb2k-component is a zip. 32-bit files sit at the top, with the 64-bit
+# DLLs in an x64 folder; anything else at the top (resources, licences) is
+# shared. Unpacked into <profile>\user-components(-x64)\<name>, the way
+# foobar2000's own Install button does it.
+function Expand-Component([string]$package, [string]$name, [string]$into) {
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $tmp = Join-Path $env:TEMP ("fusion-webview2-" + [guid]::NewGuid().ToString('N'))
+    $tmp = Join-Path $env:TEMP ("fusion-" + $name + "-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
     try {
-        # A .fb2k-component is a zip: 32-bit DLLs at the top, 64-bit ones in x64\.
         $zip = [IO.Compression.ZipFile]::OpenRead($package)
         try {
             foreach ($e in $zip.Entries) {
-                $name = $e.FullName.Replace('\', '/')
-                if ($name.EndsWith('/')) { continue }
-                $dest = Join-Path $tmp ($name.Replace('/', '\'))
-                New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
-                [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
+                $entry = $e.FullName.Replace('\', '/')
+                if ($entry.EndsWith('/')) { continue }
+                $to = Join-Path $tmp ($entry.Replace('/', '\'))
+                New-Item -ItemType Directory -Force -Path (Split-Path $to) | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $to, $true)
             }
         } finally { $zip.Dispose() }
 
-        $dllDir = if ($arch -eq 'x86') { $tmp } else { Join-Path $tmp 'x64' }
-        if (-not (Test-Path (Join-Path $dllDir 'foo_ui_webview2.dll'))) {
-            throw "the package has no $arch build of foo_ui_webview2.dll"
+        $archDirs = @('x64', 'arm64ec', 'arm64', 'x86')
+        if ($arch -ne 'x86' -and -not (Test-Path (Join-Path $tmp "x64\$name.dll"))) {
+            throw "the package has no 64-bit build"
         }
-        New-Item -ItemType Directory -Force -Path $webviewDir | Out-Null
-        Get-ChildItem $dllDir -File | Copy-Item -Destination $webviewDir -Force
-        $res = Join-Path $tmp 'foo_ui_webview2_resources'
-        if (Test-Path $res) { Copy-Item $res -Destination $webviewDir -Recurse -Force }
+        if ($arch -eq 'x86' -and -not (Test-Path (Join-Path $tmp "$name.dll"))) {
+            throw "the package has no 32-bit build"
+        }
+        New-Item -ItemType Directory -Force -Path $into | Out-Null
+        foreach ($item in Get-ChildItem $tmp -Force) {
+            if ($item.PSIsContainer -and $archDirs -contains $item.Name.ToLower()) { continue }
+            # For 64-bit, the 32-bit programs at the top stay behind.
+            if ($arch -ne 'x86' -and -not $item.PSIsContainer -and @('.dll', '.exe') -contains $item.Extension.ToLower()) { continue }
+            Copy-Item $item.FullName -Destination $into -Recurse -Force
+        }
+        if ($arch -ne 'x86') {
+            Get-ChildItem (Join-Path $tmp 'x64') -Force | Copy-Item -Destination $into -Recurse -Force
+        }
     } finally {
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
+# Download and install one component, backing up the old one. $true if it worked.
+function Install-Component($c) {
+    $name = $c.Name
+    $pkg = Get-Package $c
+    if (-not $pkg) { return $false }
+    $dir = Join-Path $componentsDir $name
+    $action = 'added'
+    if (Test-Path $dir) {
+        Copy-Item $dir -Destination (Join-Path $backup "components\$name") -Recurse -Force
+        Remove-Item $dir -Recurse -Force
+        $action = 'replaced'
+    }
+    try {
+        Expand-Component $pkg $name $dir
+    } catch {
+        Say "  Installing $name failed: $($_.Exception.Message)" 'Red'
+        if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
+        if ($action -eq 'replaced') { Copy-Item (Join-Path $backup "components\$name") -Destination $dir -Recurse -Force }
+        return $false
+    }
+    [void]$changed.Add(@($name, $action))
+    Say "  $name installed." 'Green'
+    return $true
+}
+
+$webviewAdded = $false
 Say ''
 if ($NoComponent) {
-    Say 'Skipping foo_ui_webview2 (-NoComponent).'
+    Say 'Skipping components (-NoComponent).'
 } elseif ($arch -eq 'arm64') {
     Say 'This is the ARM build of foobar2000. Install foo_ui_webview2 yourself (File > Preferences > Components > Install...), then run this again with -NoComponent.' 'Yellow'
 } else {
-    $dll = Join-Path $webviewDir 'foo_ui_webview2.dll'
+    # foo_ui_webview2: needed.
+    $dll = Join-Path $componentsDir 'foo_ui_webview2\foo_ui_webview2.dll'
     $have = if (Test-Path $dll) { Get-DllVersion $dll } else { $null }
     $need = $false
     if (-not (Test-Path $dll)) {
@@ -292,19 +390,27 @@ if ($NoComponent) {
         Say "foo_ui_webview2 $shown is installed." 'Green'
     }
     if ($need) {
-        $pkg = Get-WebViewPackage
-        if (-not $pkg) {
-            Fail "Couldn't get foo_ui_webview2. Download the .fb2k-component from https://github.com/$WebViewRepo/releases, put it next to install.bat and run it again."
+        $wasThere = Test-Path $dll
+        if (-not (Install-Component $webview)) {
+            Fail "Couldn't install foo_ui_webview2. Download the .fb2k-component from $($webview.Page), put it next to install.bat and run it again."
         }
-        if (Test-Path $webviewDir) {
-            Copy-Item $webviewDir -Destination (Join-Path $backup 'foo_ui_webview2') -Recurse -Force
-            $componentAction = 'replaced'
-            Remove-Item $webviewDir -Recurse -Force
-        } else {
-            $componentAction = 'added'
+        $webviewAdded = -not $wasThere
+    }
+
+    # The optional ones: offered one by one.
+    $missing = @($optional | Where-Object { -not (Test-Installed $_.Name) })
+    if ($missing.Count -gt 0) {
+        Say ''
+        Say 'Optional components (Fusion works without them):'
+        foreach ($c in $missing) {
+            if (Ask ("Install {0} for {1}?" -f $c.Name, $c.For)) {
+                if (-not (Install-Component $c)) {
+                    Say "  You can get it from $($c.Page)" 'Yellow'
+                }
+            }
         }
-        try { Install-WebView $pkg } catch { Fail "Installing foo_ui_webview2 failed: $($_.Exception.Message)" }
-        Say 'foo_ui_webview2 installed.' 'Green'
+    } else {
+        Say 'The optional components are all installed.' 'Green'
     }
 }
 
@@ -346,15 +452,20 @@ if ($fresh) {
 
 # --- Uninstall script ---------------------------------------------------------
 
+# One "name|added" or "name|replaced" per line (an array of arrays would
+# flatten when there's only one).
+$changedLines = ($changed | ForEach-Object { "    $(Quote ($_[0] + '|' + $_[1]))" }) -join ",`r`n"
 $u = @"
 # Undoes the Fusion install of $stamp.
 `$ErrorActionPreference = 'Stop'
 `$backup = $(Quote $backup)
 `$dest = $(Quote $dest)
-`$webviewDir = $(Quote $webviewDir)
+`$componentsDir = $(Quote $componentsDir)
 `$exe = $(Quote ([string]$exe))
 `$restoreTheme = `$$restoreTheme
-`$componentAction = '$componentAction'
+`$changed = @(
+$changedLines
+)
 
 while (@(Get-Process foobar2000 -ErrorAction SilentlyContinue | Where-Object { try { -not `$exe -or -not `$_.Path -or (`$_.Path -ieq `$exe) } catch { `$true } }).Count -gt 0) {
     Write-Host 'foobar2000 is running. Close it, then press Enter.' -ForegroundColor Yellow
@@ -373,13 +484,18 @@ if (`$restoreTheme) {
     Write-Host 'Removed Fusion (and its cover cache).' -ForegroundColor Green
 }
 
-if (`$componentAction -eq 'added') {
-    if (Test-Path `$webviewDir) { Remove-Item `$webviewDir -Recurse -Force }
-    Write-Host 'Removed foo_ui_webview2. foobar2000 will ask which interface to use next time it starts.' -ForegroundColor Green
-} elseif (`$componentAction -eq 'replaced') {
-    if (Test-Path `$webviewDir) { Remove-Item `$webviewDir -Recurse -Force }
-    Copy-Item (Join-Path `$backup 'foo_ui_webview2') -Destination `$webviewDir -Recurse -Force
-    Write-Host 'Put the previous foo_ui_webview2 back.' -ForegroundColor Green
+foreach (`$c in `$changed) {
+    if (-not `$c) { continue }
+    `$name, `$action = `$c.Split('|')
+    `$dir = Join-Path `$componentsDir `$name
+    if (Test-Path `$dir) { Remove-Item `$dir -Recurse -Force }
+    if (`$action -eq 'replaced') {
+        Copy-Item (Join-Path `$backup "components\`$name") -Destination `$dir -Recurse -Force
+        Write-Host "Put the previous `$name back." -ForegroundColor Green
+    } else {
+        Write-Host "Removed `$name." -ForegroundColor Green
+        if (`$name -eq 'foo_ui_webview2') { Write-Host '  foobar2000 will ask which interface to use next time it starts.' }
+    }
 }
 Write-Host 'Done.'
 "@
@@ -390,39 +506,30 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1"
 echo.
 pause
 '@
+Say ''
 Say "Backup and uninstall script: $backup"
-
-# --- Optional components ------------------------------------------------------
-
-$optional = @(
-    @('foo_playcount', 'play counts, the shelves and Listening stats', 'https://www.foobar2000.org/components/view/foo_playcount'),
-    @('foo_enhanced_playcount', 'the time-of-day chart', 'https://www.foobar2000.org/components/view/foo_enhanced_playcount'),
-    @('foo_openlyrics', 'lyrics', 'https://www.foobar2000.org/components/view/foo_openlyrics'),
-    @('foo_outinfo', 'the output side of the signal path', 'https://foobar.hyv.fi/?view=foo_outinfo')
-)
-$appComponents = if ($exe) { Join-Path (Split-Path $exe) 'components' } else { $null }
-$missing = @($optional | Where-Object {
-    $n = $_[0]
-    -not (Test-Path (Join-Path $componentsDir "$n\$n.dll")) -and
-    -not ($appComponents -and (Test-Path (Join-Path $appComponents "$n.dll")))
-})
-if ($missing.Count -gt 0) {
-    Say ''
-    Say 'Optional components you don''t have yet:'
-    foreach ($o in $missing) { Say ("  {0} - {1}`n    {2}" -f $o[0], $o[1], $o[2]) }
-}
 
 # --- Last steps ---------------------------------------------------------------
 
-Say ''
-if ($fresh -or $componentAction -eq 'added') {
-    Say 'Two things left to do in foobar2000:' 'Cyan'
-    Say '  1. Preferences > Display > Default User Interface: choose WebView2 UI'
-    Say '  2. Preferences > Display > WebView2 UI: set the template to fusion, then Apply'
-} else {
-    Say 'Start foobar2000 (or press Ctrl+Shift+F5 if it was already showing Fusion).' 'Cyan'
-}
-
+$started = $false
 if ($exe -and (Ask "`nStart foobar2000 now?")) {
     Start-Process -FilePath $exe
+    $started = $true
 }
+
+Say ''
+if ($fresh -or $webviewAdded) {
+    Say 'Two things left to do in foobar2000:' 'Cyan'
+    Say '  1. File > Preferences > Display > Default User Interface: choose WebView2 UI'
+    Say '  2. WebView2 UI has no menu bar until Fusion is on: right-click anywhere,'
+    Say '     File > Preferences..., then Display > WebView2 UI: set the template to'
+    Say '     fusion and click Apply'
+} elseif ($started) {
+    Say 'All done. Fusion is ready in foobar2000.' 'Cyan'
+} else {
+    Say 'All done. Start foobar2000 to use Fusion.' 'Cyan'
+}
+
+# Stay open (foobar2000 may have opened on top) until these have been read.
+Say ''
+[void](Read-Host 'Press Enter to close this window')

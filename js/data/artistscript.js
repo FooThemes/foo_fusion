@@ -10,14 +10,39 @@ import { refreshArtistInfo } from './artwork.js';
 import { forgetGenreInfo } from './genreinfo.js';
 import { logInfo } from '../core/log.js';
 
+// The copy that comes with Fusion (and install.bat puts in place):
+// <profile>\webview-ui\fusion\tools\artist-info\.
+let bundled = null;
+function bundledScript() {
+  bundled ||= tryCall('misc.getProfilePath').then(async (res) => {
+    const dir = (typeof res === 'string' ? res : res?.path || res?.profilePath || res?.directory || '').replace(/[\\/]$/, '');
+    if (!dir) return '';
+    const path = `${dir}\\webview-ui\\fusion\\tools\\artist-info\\fusion-artist-info.py`;
+    return (await tryCall('file.exists', { path }))?.exists ? path : '';
+  });
+  return bundled;
+}
+
+/**
+ * Where the script is: the one set in Settings, else Fusion's own copy
+ * (which then becomes the setting, so it shows there). '' if neither.
+ */
+export async function artistScriptPath() {
+  const set = String(store.get('artistScript') || '').trim().replace(/^"|"$/g, '');
+  if (/\.py$/i.test(set)) return set;
+  const own = await bundledScript();
+  if (own) store.set('artistScript', own);
+  return own;
+}
+
 /**
  * mode: 'new' (look up artists not done yet), 'refresh' (everything again,
  * filling in existing artist.nfo files) or 'report'. Resolves once started;
  * throws with a readable message when it can't be.
  */
 export async function runArtistScript(mode) {
-  const script = String(store.get('artistScript') || '').trim().replace(/^"|"$/g, '');
-  if (!/\.py$/i.test(script)) throw new Error('Set the location of fusion-artist-info.py first');
+  const script = await artistScriptPath();
+  if (!script) throw new Error('Set the location of fusion-artist-info.py first');
   // The lists are written fresh each time, so the script sees the library as it is now.
   if (mode === 'genres' || mode === 'genres-refresh') await exportGenres();
   else await exportArtists();

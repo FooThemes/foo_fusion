@@ -187,7 +187,8 @@ extract it anywhere and run **install.bat**. It:
   cover cache if Fusion was already there
 - backs up whatever it replaces to `<profile>\fusion-backup\<date>\`, along
   with an **uninstall.bat** that puts it all back
-- lists the optional components you don't have yet
+- offers to install each optional component you don't have yet (downloaded
+  from foobar2000.org, or from the author's site for foo_outinfo)
 
 foobar2000 has to be closed while it runs. On a first install you then do
 steps 3 and 4 below.
@@ -200,14 +201,18 @@ By hand:
    folder, so you end up with `webview-ui\fusion\index.html`.
    - Portable install: `<foobar2000 folder>\profile\webview-ui\fusion\`
    - Standard install: `%APPDATA%\foobar2000-v2\webview-ui\fusion\`
-3. **Preferences → Display → Default User Interface**: choose **WebView2 UI**.
-4. **Preferences → Display → WebView2 UI**: set the template to **fusion** and
-   click **Apply**.
+3. **File → Preferences → Display → Default User Interface**: choose
+   **WebView2 UI**.
+4. WebView2 UI's own page has no menu bar, so right-click anywhere and choose
+   **File → Preferences…**. Then **Display → WebView2 UI**: set the template
+   to **fusion** and click **Apply**.
 
 The first time it runs, Fusion makes a **Collection** autoplaylist (your whole
 library) unless you already have one.
 
-`fusion-tools-<version>.zip` on the same page has the artist info script.
+The artist info script comes with Fusion, in `fusion\tools\artist-info\`,
+and Fusion finds it there by itself (it's also in `fusion-tools-<version>.zip`
+if you'd rather keep it somewhere else).
 The Picard plugins (Language Variants, Genre Tidy and Only These Tags) are in
 [FooThemes/PicardPlugins](https://github.com/FooThemes/PicardPlugins).
 

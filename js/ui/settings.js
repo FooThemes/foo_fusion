@@ -12,7 +12,7 @@ import { forgetLyrics } from '../data/lyrics.js';
 import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
 import { forgetGenreInfo } from '../data/genreinfo.js';
-import { runArtistScript } from '../data/artistscript.js';
+import { runArtistScript, artistScriptPath } from '../data/artistscript.js';
 import { toast } from './toast.js';
 import { VERSION } from '../version.js';
 import { TEXT_KINDS } from '../data/versions.js';
@@ -221,8 +221,8 @@ export function mountSettings(root, app) {
   // these pages show), asked for when they're not set yet.
   async function startScript(mode, message) {
     const genres = mode.startsWith('genres');
-    if (!/\.py$/i.test(String(store.get('artistScript') || '').trim().replace(/^"|"$/g, ''))) {
-      const path = await promptPath('Where is the artist script?', 'Fusion runs fusion-artist-info.py (in Fusion’s tools folder) with Python. Its settings file sits beside it.', {
+    if (!(await artistScriptPath())) {
+      const path = await promptPath('Where is the artist script?', 'Fusion runs fusion-artist-info.py with Python (it comes in Fusion’s zip, in fusion\\tools\\artist-info). Its settings file sits beside it.', {
         folder: false,
         placeholder: 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py',
         filter: { name: 'Python script', extensions: ['py'] },
@@ -249,7 +249,13 @@ export function mountSettings(root, app) {
   }
 
   function scriptField() {
-    return pathField('Script', 'artistScript', 'Where fusion-artist-info.py is (its settings file sits beside it). Needs Python.', 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py', { folder: false, filter: { name: 'Python script', extensions: ['py'] } });
+    const field = pathField('Script', 'artistScript', 'Where fusion-artist-info.py is (its settings file sits beside it). Needs Python.', 'e.g. C:\\Tools\\artist-info\\fusion-artist-info.py', { folder: false, filter: { name: 'Python script', extensions: ['py'] } });
+    // Not set yet: Fusion's own copy, when it's there.
+    artistScriptPath().then((path) => {
+      const input = field.querySelector('input');
+      if (path && input && !input.value) input.value = path;
+    });
+    return field;
   }
 
   // A path box with a Browse button (the system's picker).

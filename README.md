@@ -159,15 +159,20 @@ again brings the full window back.
 ## Requirements
 
 - Windows 10 or 11 (both come with the WebView2 runtime)
-- foobar2000 v2.0 or later
-- foo_ui_webview2 v2.1 or later
+- [foobar2000](https://www.foobar2000.org/download) v2.0 or later
+- [foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2/releases)
+  v2.1 or later
 
 Optional:
 
-- foo_playcount for play counts, the shelves and Listening stats
-- foo_enhanced_playcount for the time-of-day chart
-- foo_openlyrics for lyrics
-- foo_outinfo for the output side of the signal path
+- [foo_playcount](https://www.foobar2000.org/components/view/foo_playcount)
+  for play counts, the shelves and Listening stats
+- [foo_enhanced_playcount](https://www.foobar2000.org/components/view/foo_enhanced_playcount)
+  for the time-of-day chart
+- [foo_openlyrics](https://www.foobar2000.org/components/view/foo_openlyrics)
+  for lyrics
+- [foo_outinfo](https://foobar.hyv.fi/?view=foo_outinfo) for the output side
+  of the signal path
 
 ## Install
 

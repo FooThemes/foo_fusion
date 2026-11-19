@@ -135,6 +135,8 @@ const DEFAULTS = {
   ], // [shelf, shown], in order (see ui/shelves.js)
   miniOnTop: true, // the mini player stays above other windows
   diagnostics: false, // Settings > More: timings and details in fusion.log
+  updateCheck: true, // Settings > More: look for a newer Fusion on start
+  updateNotified: '', // the newest version already pointed out on start (once each)
   hidePlaceholderArtists: true, // no tiles for [unknown], [dialogue]…
   dimEditionTags: true, // grey out '(Single)', '(Deluxe Edition)'… at the end of titles
   dimWords: 'Single, EP, Deluxe, Edition, Remaster, Remastered, Live, Bonus, Expanded, Anniversary, Reissue, Demo, Acoustic, Instrumental, Mono, Version, Remix, Radio Edit',

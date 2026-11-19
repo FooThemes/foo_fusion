@@ -386,6 +386,20 @@
   color: var(--text2);
 }
 
+/* "3.0.3 is out", after the version: opens the release page. */
+.set-about-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.set-about-link:hover {
+  text-decoration: underline;
+}
+
 /* Track info panel */
 #info-panel {
   position: relative;

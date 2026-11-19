@@ -13,6 +13,7 @@ import { refreshArt } from '../data/artwork.js';
 import { forgetArtistInfo } from '../data/artistinfo.js';
 import { forgetGenreInfo } from '../data/genreinfo.js';
 import { runArtistScript, artistScriptPath } from '../data/artistscript.js';
+import { checkForUpdate, lastUpdateCheck } from '../data/update.js';
 import { toast } from './toast.js';
 import { VERSION } from '../version.js';
 import { TEXT_KINDS } from '../data/versions.js';
@@ -199,6 +200,8 @@ export function mountSettings(root, app) {
         toggle('Mini player stays on top', 'miniOnTop', 'Alt+M, or the mini player button in the play bar, shrinks the window to just the play bar. The pin in its corner switches this too.'),
         toggle('Diagnostics', 'diagnostics', 'Write timings and other details to fusion.log in foobar2000’s profile folder, for tracking down slowness or a fault. Warnings and errors are logged either way.'),
         link('info', 'Open the log file', openLog),
+        toggle('Check for updates when Fusion starts', 'updateCheck', 'Asks GitHub for the latest release, and says so (once) when there’s a newer one'),
+        link('refresh', 'Check for updates', checkUpdates),
         link('reset', 'Reset Fusion settings', async () => {
           if (await confirmDialog('Reset settings?', 'All Fusion settings go back to their defaults. Your playlists and library are not affected.', 'Reset')) store.reset();
         }),
@@ -206,6 +209,15 @@ export function mountSettings(root, app) {
       about(),
     ],
   };
+
+  async function checkUpdates() {
+    toast('Checking for updates…');
+    const u = await checkForUpdate();
+    if (!u) return toast("Couldn't reach GitHub to check for updates", 5000);
+    if (!u.newer) return toast(`Fusion ${VERSION} is the latest version`, 4000);
+    store.set('updateNotified', u.version);
+    toast(`Fusion ${u.version} is out (you have ${VERSION})`, 15000, { label: 'Get it', run: () => tryCall('shell.openExternal', { url: u.url }) });
+  }
 
   /** fusion.log, in foobar2000's profile folder: opened, or shown in Explorer. */
   async function openLog() {
@@ -305,6 +317,10 @@ export function mountSettings(root, app) {
   let hostVersions = null;
   function about() {
     const line = el('p.set-about', { text: `Fusion ${VERSION}` });
+    const u = lastUpdateCheck();
+    if (u?.newer) {
+      line.append(' · ', el('button.set-about-link', { text: `${u.version} is out`, onclick: () => tryCall('shell.openExternal', { url: u.url }) }));
+    }
     const fb = el('p.set-about');
     const plugin = el('p.set-about');
     const fill = (v) => {

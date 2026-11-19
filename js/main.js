@@ -24,6 +24,8 @@ import { VERSION } from './version.js';
 import { installDiagnostics } from './core/diag.js';
 import { installTooltips } from './ui/tooltip.js';
 import { initArtCache } from './data/artcache.js';
+import { checkForUpdate } from './data/update.js';
+import { toast } from './ui/toast.js';
 
 async function boot() {
   if (!window.fb2k) {
@@ -132,6 +134,17 @@ async function boot() {
   document.body.classList.add('ready');
   logInfo(`ready in ${Math.round(performance.now() - t0)} ms, ${innerWidth}x${innerHeight} @${devicePixelRatio}x: ${view.playlist?.name} (${view.playlist?.trackCount} tracks, ${view.groups.length} groups)`, view.playlist);
   tryCall('window.setTitle', { title: 'foobar2000' });
+
+  // A newer Fusion? Said once per version, a little after start (not in the
+  // way of the first screen). Settings > More can check again any time.
+  if (store.get('updateCheck') !== false && window.fb2k) {
+    setTimeout(async () => {
+      const u = await checkForUpdate();
+      if (!u?.newer || store.get('updateNotified') === u.version) return;
+      store.set('updateNotified', u.version);
+      toast(`Fusion ${u.version} is out (you have ${VERSION})`, 15000, { label: 'Get it', run: () => tryCall('shell.openExternal', { url: u.url }) });
+    }, 5000);
+  }
 }
 
 function applyTheme() {

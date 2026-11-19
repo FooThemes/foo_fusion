@@ -677,6 +677,26 @@ body.no-sidebar #sidebar {
   animation: toast-in 0.18s ease;
 }
 
+.toast.has-action {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.toast-action {
+  padding: 4px 10px;
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast-action:hover {
+  filter: brightness(1.1);
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

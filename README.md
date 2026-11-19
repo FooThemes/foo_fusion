@@ -176,11 +176,28 @@ Optional:
 
 ## Install
 
+The easy way: download `fusion-<version>.zip` from [Releases](../../releases),
+extract it anywhere and run **install.bat**. It:
+
+- finds foobar2000 (portable or standard install; it asks if there's more than
+  one)
+- installs foo_ui_webview2 if it's missing or too old, downloading it from its
+  GitHub releases (or using a `.fb2k-component` you put next to install.bat)
+- copies Fusion into the profile's `webview-ui\fusion` folder, keeping the
+  cover cache if Fusion was already there
+- backs up whatever it replaces to `<profile>\fusion-backup\<date>\`, along
+  with an **uninstall.bat** that puts it all back
+- lists the optional components you don't have yet
+
+foobar2000 has to be closed while it runs. On a first install you then do
+steps 3 and 4 below.
+
+By hand:
+
 1. Install foo_ui_webview2: **File → Preferences → Components → Install…**,
    pick the `.fb2k-component` file, then restart foobar2000.
-2. Download `fusion-<version>.zip` from [Releases](../../releases) and extract
-   the `fusion` folder into your profile's `webview-ui` folder, so you end up
-   with `webview-ui\fusion\index.html`.
+2. Extract the `fusion` folder from the zip into your profile's `webview-ui`
+   folder, so you end up with `webview-ui\fusion\index.html`.
    - Portable install: `<foobar2000 folder>\profile\webview-ui\fusion\`
    - Standard install: `%APPDATA%\foobar2000-v2\webview-ui\fusion\`
 3. **Preferences → Display → Default User Interface**: choose **WebView2 UI**.
@@ -199,9 +216,10 @@ The Picard plugins (Language Variants, Genre Tidy and Only These Tags) are in
 Updating foobar2000 or foo_ui_webview2 leaves Fusion and its settings alone;
 both live in your profile.
 
-To update Fusion, extract the new zip over `webview-ui\fusion\` and replace
-the files. Don't delete the folder first, as the cover cache is in there. Then
-press **Ctrl+Shift+F5** or restart foobar2000.
+To update Fusion, run install.bat from the new zip, or extract the new zip's
+`fusion` folder over `webview-ui\fusion\` and replace the files. Don't
+delete the folder first, as the cover cache is in there. Then press
+**Ctrl+Shift+F5** or restart foobar2000.
 
 ## Troubleshooting
 

@@ -31,6 +31,12 @@ jobs:
         run: |
           v=$(sed -n "s/.*VERSION = '\(.*\)'.*/\1/p" js/version.js)
           [ "${TAG#v}" = "$v" ] || { echo "Tag $TAG but js/version.js says $v"; exit 1; }
+      - name: Check install.ps1 parses
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/install/install.ps1", [ref]$null, [ref]$errors)
+          if ($errors) { $errors | ForEach-Object { Write-Host $_ }; exit 1 }
       - name: Build
         run: python dev/tools/release.py
       - name: Publish

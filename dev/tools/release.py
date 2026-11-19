@@ -1,7 +1,8 @@
 """Build the release downloads into dist/:
 
   fusion-<version>.zip        the theme: a fusion/ folder to drop into
-                              <foobar2000 profile>\\webview-ui\\
+                              <foobar2000 profile>\\webview-ui\\, plus
+                              install.bat/install.ps1 (install/), which do it
   fusion-tools-<version>.zip  the artist/genre information script
 
 (The Picard plugins have their own repo and releases:
@@ -47,6 +48,10 @@ def main():
         add_tree(z, ROOT / 'js', 'fusion/js')
         z.write(ROOT / 'LICENSE', 'fusion/LICENSE')
         z.write(ROOT / 'README.md', 'fusion/README.md')
+        # Windows line endings for the installer, whatever git checked out.
+        for name in ('install.bat', 'install.ps1'):
+            text = (ROOT / 'install' / name).read_text(encoding='utf-8')
+            z.writestr(name, text.replace('\r\n', '\n').replace('\n', '\r\n'))
 
     tools = DIST / f'fusion-tools-{v}.zip'
     with zipfile.ZipFile(tools, 'w', zipfile.ZIP_DEFLATED) as z:
